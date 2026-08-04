@@ -1,0 +1,39 @@
+{
+	"$schema": "./node_modules/oxlint/configuration_schema.json",
+	"ignorePatterns": [
+		"**/node_modules/**",
+		"**/dist/**",
+		"**/dist-electron/**",
+		"**/release/**",
+		"**/routeTree.gen.ts",
+		"**/*.tsbuildinfo"
+	],
+	"options": {
+		"typeAware": true,
+		"typeCheck": true
+	},
+	"plugins": ["oxc", "eslint", "unicorn", "typescript", "react", "react-perf"],
+	"categories": {
+		"correctness": "error",
+		"suspicious": "warn"
+	},
+	"rules": {
+		"eslint/no-shadow": "off",
+		"typescript/consistent-type-imports": "error",
+		"typescript/no-unsafe-type-assertion": "off",
+		"typescript/unbound-method": "off",
+		"typescript/consistent-return": "off",
+		"unicorn/require-post-message-target-origin": "off",
+		"unicorn/no-array-sort": "off",
+		"react/react-in-jsx-scope": "off",
+		"react/jsx-no-comment-textnodes": "off"
+	},
+	"overrides": [
+		{
+			"files": ["**/*.test.ts"],
+			"rules": {
+				"unicorn/consistent-function-scoping": "off"
+			}
+		}
+	]
+}

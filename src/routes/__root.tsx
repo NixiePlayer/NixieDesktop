@@ -1,0 +1,62 @@
+import { createRootRoute, useRouter } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
+import { AppShell } from "#/components/app-shell";
+import { SignInView } from "#/components/sign-in";
+import { Button } from "#/components/ui/button";
+import { Toaster } from "#/components/ui/toast";
+import { TooltipProvider } from "#/components/ui/tooltip";
+import { dropHeldPages } from "#/lib/api";
+import { resetLibrary } from "#/lib/library";
+import { applyTheme } from "#/lib/theme";
+import { PlayerProvider } from "#/player";
+import type { AuthState } from "#/shared/contracts";
+import "../styles.css";
+
+export const Route = createRootRoute({
+	component: RootComponent,
+	errorComponent: ({ error, reset }) => (
+		<div className="flex flex-col items-start gap-3 py-12">
+			<h1 className="text-2xl font-bold">Something went wrong</h1>
+			<p className="text-muted-foreground text-sm">{error.message}</p>
+			<Button onClick={reset}>Try again</Button>
+		</div>
+	),
+});
+
+function RootComponent() {
+	// Undefined until the first auth answer arrives, so the shell never flashes before the gate.
+	const [auth, setAuth] = useState<AuthState>();
+	const router = useRouter();
+
+	// Loaders already ran against the signed-out bridge and cached empty pages, so every auth
+	// change has to drop that data or the shell renders an empty feed until staleTime expires.
+	const changeAuth = (next: AuthState) => {
+		setAuth(next);
+		// Another account holds other playlists and other releases, and that store outlives the shell.
+		resetLibrary();
+		// So do the feeds and mixes held outside the router's cache, which invalidating does not reach.
+		dropHeldPages();
+		void router.invalidate();
+	};
+
+	useEffect(() => {
+		const bridge = window.noctune;
+		if (!bridge) return setAuth({ status: "signed-out" });
+		void bridge.auth.state().then(setAuth);
+		void bridge.local.load().then((state) => applyTheme(state.settings.theme));
+	}, []);
+
+	return (
+		<PlayerProvider>
+			<TooltipProvider>
+				{auth &&
+					(auth.status === "authenticated" ? (
+						<AppShell auth={auth} onAuthChange={changeAuth} />
+					) : (
+						<SignInView onSignedIn={changeAuth} />
+					))}
+				<Toaster />
+			</TooltipProvider>
+		</PlayerProvider>
+	);
+}

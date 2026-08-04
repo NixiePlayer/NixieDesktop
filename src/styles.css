@@ -1,0 +1,227 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "@fontsource-variable/inter";
+
+/* Theme is driven by data-theme on <html>. When it is unset the OS preference decides,
+   which avoids a flash of the wrong theme before settings load over IPC. */
+@custom-variant dark {
+	&:where([data-theme="dark"], [data-theme="dark"] *) {
+		@slot;
+	}
+
+	@media (prefers-color-scheme: dark) {
+		&:where(:root:not([data-theme]), :root:not([data-theme]) *) {
+			@slot;
+		}
+	}
+}
+
+@theme inline {
+	--font-sans: "Inter Variable", sans-serif;
+	--color-sidebar-ring: var(--sidebar-ring);
+	--color-sidebar-border: var(--sidebar-border);
+	--color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+	--color-sidebar-accent: var(--sidebar-accent);
+	--color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+	--color-sidebar-primary: var(--sidebar-primary);
+	--color-sidebar-foreground: var(--sidebar-foreground);
+	--color-sidebar: var(--sidebar);
+	--color-ring: var(--ring);
+	--color-input: var(--input);
+	--color-border: var(--border);
+	--color-destructive: var(--destructive);
+	--color-accent-foreground: var(--accent-foreground);
+	--color-accent: var(--accent);
+	--color-muted-foreground: var(--muted-foreground);
+	--color-muted: var(--muted);
+	--color-secondary-foreground: var(--secondary-foreground);
+	--color-secondary: var(--secondary);
+	--color-primary-foreground: var(--primary-foreground);
+	--color-primary: var(--primary);
+	--color-popover-foreground: var(--popover-foreground);
+	--color-popover: var(--popover);
+	--color-card-foreground: var(--card-foreground);
+	--color-card: var(--card);
+	--color-foreground: var(--foreground);
+	--color-background: var(--background);
+	--radius-sm: calc(var(--radius) * 0.5);
+	--radius-md: calc(var(--radius) * 0.75);
+	--radius-lg: var(--radius);
+	--radius-xl: calc(var(--radius) * 1.5);
+}
+
+:root {
+	--radius: 0.5rem;
+	color-scheme: light;
+	--background: #ffffff;
+	--foreground: #0f0f0f;
+	--card: #f9f9f9;
+	--card-foreground: #0f0f0f;
+	--popover: #ffffff;
+	--popover-foreground: #0f0f0f;
+	--primary: #cc0000;
+	--primary-foreground: #ffffff;
+	--secondary: #f2f2f2;
+	--secondary-foreground: #0f0f0f;
+	--muted: #f2f2f2;
+	--muted-foreground: #606060;
+	--accent: #e5e5e5;
+	--accent-foreground: #0f0f0f;
+	--destructive: #cc0000;
+	--border: rgb(0 0 0 / 10%);
+	--input: rgb(0 0 0 / 14%);
+	--ring: #cc0000;
+	--sidebar: #ffffff;
+	--sidebar-foreground: #0f0f0f;
+	--sidebar-primary: #cc0000;
+	--sidebar-primary-foreground: #ffffff;
+	--sidebar-accent: #f2f2f2;
+	--sidebar-accent-foreground: #0f0f0f;
+	--sidebar-border: rgb(0 0 0 / 10%);
+	--sidebar-ring: #cc0000;
+}
+
+/* Dark tokens are written twice on purpose: once for the explicit choice, once for the
+   OS default while data-theme is still unset. CSS has no way to share a property set. */
+:root[data-theme="dark"] {
+	color-scheme: dark;
+	--background: #0f0f0f;
+	--foreground: #f1f1f1;
+	--card: #1f1f1f;
+	--card-foreground: #f1f1f1;
+	--popover: #282828;
+	--popover-foreground: #f1f1f1;
+	--primary: #ff0033;
+	--primary-foreground: #ffffff;
+	--secondary: #272727;
+	--secondary-foreground: #f1f1f1;
+	--muted: #272727;
+	--muted-foreground: #aaaaaa;
+	--accent: #3f3f3f;
+	--accent-foreground: #f1f1f1;
+	--destructive: #ff0033;
+	--border: rgb(255 255 255 / 10%);
+	--input: rgb(255 255 255 / 14%);
+	--ring: #ff0033;
+	--sidebar: #0f0f0f;
+	--sidebar-foreground: #f1f1f1;
+	--sidebar-primary: #ff0033;
+	--sidebar-primary-foreground: #ffffff;
+	--sidebar-accent: #272727;
+	--sidebar-accent-foreground: #f1f1f1;
+	--sidebar-border: rgb(255 255 255 / 10%);
+	--sidebar-ring: #ff0033;
+}
+
+@media (prefers-color-scheme: dark) {
+	:root:not([data-theme]) {
+		color-scheme: dark;
+		--background: #0f0f0f;
+		--foreground: #f1f1f1;
+		--card: #1f1f1f;
+		--card-foreground: #f1f1f1;
+		--popover: #282828;
+		--popover-foreground: #f1f1f1;
+		--primary: #ff0033;
+		--primary-foreground: #ffffff;
+		--secondary: #272727;
+		--secondary-foreground: #f1f1f1;
+		--muted: #272727;
+		--muted-foreground: #aaaaaa;
+		--accent: #3f3f3f;
+		--accent-foreground: #f1f1f1;
+		--destructive: #ff0033;
+		--border: rgb(255 255 255 / 10%);
+		--input: rgb(255 255 255 / 14%);
+		--ring: #ff0033;
+		--sidebar: #0f0f0f;
+		--sidebar-foreground: #f1f1f1;
+		--sidebar-primary: #ff0033;
+		--sidebar-primary-foreground: #ffffff;
+		--sidebar-accent: #272727;
+		--sidebar-accent-foreground: #f1f1f1;
+		--sidebar-border: rgb(255 255 255 / 10%);
+		--sidebar-ring: #ff0033;
+	}
+}
+
+@layer base {
+	* {
+		@apply border-border outline-ring/50;
+		box-sizing: border-box;
+	}
+
+	html,
+	body,
+	#app {
+		height: 100%;
+		overflow: hidden;
+	}
+
+	html {
+		@apply bg-background font-sans;
+	}
+
+	body {
+		@apply bg-background text-foreground;
+		margin: 0;
+		text-rendering: optimizeLegibility;
+	}
+
+	button:not([disabled]),
+	[role="button"]:not([disabled]) {
+		cursor: pointer;
+	}
+}
+
+/* Tab focus is not painted. Every ring, border swap and outline in the app draws with --ring,
+   so blanking it here covers all of them at once, and this block sits outside every Tailwind
+   layer, which beats the utilities that set them without needing !important. */
+*:focus-visible {
+	outline: none;
+	--ring: transparent;
+}
+
+/* The frameless window is moved by dragging the top bar, so interactive children opt out. */
+.drag-region {
+	-webkit-app-region: drag;
+}
+
+.drag-region button,
+.drag-region a,
+.drag-region input,
+.drag-region [role="button"],
+/* The search dropdown hangs off the title bar, and its rows are divs, so without this a click
+   on a result drags the window instead of selecting it. */
+.drag-region [data-slot="command-list"] {
+	-webkit-app-region: no-drag;
+}
+
+/* Now-playing indicator: three bars whose heights encode nothing but "audio is running". */
+@keyframes equalizer {
+	0%,
+	100% {
+		transform: scaleY(0.3);
+	}
+
+	50% {
+		transform: scaleY(1);
+	}
+}
+
+.equalizer-bar {
+	animation: equalizer 0.9s ease-in-out infinite;
+	transform-origin: bottom;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.01ms !important;
+		scroll-behavior: auto !important;
+	}
+}
