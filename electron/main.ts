@@ -619,9 +619,10 @@ async function createWindow() {
 void app
 	.whenReady()
 	.then(async () => {
-		// Packaged builds get the icon from electron-builder, but development runs the stock Electron
-		// binary, which brings its own dock icon along.
-		if (process.env.VITE_DEV_SERVER_URL) app.dock?.setIcon(join(app.getAppPath(), "build/icon.png"));
+		// Packaged builds get `build/icon.icns` from electron-builder, but development runs the stock
+		// Electron binary, which brings its own dock icon along. It gets the blue mark rather than the
+		// red one, so a development window is never mistaken for the installed app beside it.
+		if (process.env.VITE_DEV_SERVER_URL) app.dock?.setIcon(join(app.getAppPath(), "build/icon-dev.png"));
 		await mkdir(app.getPath("userData"), { recursive: true });
 		stateStore = new StateStore(app.getPath("userData"));
 		logger = new LocalLogger(app.getPath("userData"));

@@ -1,5 +1,7 @@
 import { ChevronRight, CircleAlert, Globe } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
+import markDev from "#/assets/logo-dev.png";
+import markProd from "#/assets/logo.png";
 import type { AuthState, BrowserAccount } from "#/shared/contracts";
 import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
 import { Button } from "./ui/button";
@@ -13,35 +15,11 @@ const GRAIN =
 	"url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")";
 
 /**
- * The app icon's own cabinet, the same paths `build/icon.svg` draws, on lucide's 24x24 grid so it
- * takes `currentColor` and a size utility like every other icon here. The viewBox is cropped to the
- * cabinet's bounding box (x 6..18, y 4..21.6) rather than the grid, since a glyph that fills half
- * its box reads as a smaller badge than the neighbouring lucide ones.
+ * The app icon itself, which is a full-colour mark with a background of its own rather than a glyph
+ * taking `currentColor`, so it is drawn as the badge instead of sitting inside one. Development gets
+ * the blue mark the dock is showing it under, for the same reason the dock does.
  */
-function NoctuneMark({ className }: { className?: string }) {
-	return (
-		<svg
-			viewBox="5.4 3.4 13.2 18.8"
-			fill="none"
-			stroke="currentColor"
-			strokeWidth="1.4"
-			strokeLinecap="round"
-			strokeLinejoin="round"
-			className={className}
-			aria-hidden
-		>
-			<path d="M6 20V10a6 6 0 0 1 12 0v10z" />
-			<path d="M7.8 11a4.2 4.2 0 0 1 8.4 0" />
-			<circle cx="12" cy="12.6" r="1.3" />
-			<path d="M6 14.8h12" />
-			<path d="M9 16.2v2.4" />
-			<path d="M12 16.2v2.4" />
-			<path d="M15 16.2v2.4" />
-			<path d="M8.5 20v1.6" />
-			<path d="M15.5 20v1.6" />
-		</svg>
-	);
-}
+const MARK = import.meta.env.DEV ? markDev : markProd;
 
 /** Decoration only. There is no session yet, so there is no artwork to draw this from. */
 function HeroPanel() {
@@ -56,9 +34,7 @@ function HeroPanel() {
 				className="pointer-events-none absolute inset-0 opacity-15 mix-blend-overlay"
 				style={{ backgroundImage: GRAIN }}
 			/>
-			<span className="bg-primary text-primary-foreground relative flex size-11 items-center justify-center rounded-xl">
-				<NoctuneMark className="size-6" />
-			</span>
+			<img src={MARK} alt="" className="relative size-11 rounded-xl" />
 			<div className="relative flex flex-col gap-4">
 				<p className="max-w-md text-5xl font-bold tracking-tight text-balance">Everything you already listen to.</p>
 				<p className="text-muted-foreground max-w-sm">
@@ -156,9 +132,7 @@ export function SignInView({ onSignedIn }: { onSignedIn: (auth: AuthState) => vo
 			<main className="flex min-h-0 flex-1 items-center justify-center overflow-y-auto px-6 py-14">
 				<div className="flex w-full max-w-sm flex-col gap-6">
 					<div className="flex flex-col gap-3">
-						<span className="bg-primary text-primary-foreground flex size-11 items-center justify-center rounded-xl lg:hidden">
-							<NoctuneMark className="size-6" />
-						</span>
+						<img src={MARK} alt="" className="size-11 rounded-xl lg:hidden" />
 						<h1 className="text-2xl font-bold tracking-tight">Continue with a signed-in browser</h1>
 						<p className="text-muted-foreground text-sm">
 							Noctune continues the YouTube session you are already signed in to in your browser. Google refuses to sign
