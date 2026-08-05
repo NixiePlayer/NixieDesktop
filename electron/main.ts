@@ -18,7 +18,17 @@ import {
 	shell,
 	type IpcMainInvokeEvent,
 } from "electron";
-import type { AudioQuality, AuthState, OfflineTrack, PersistedState, Track } from "../src/shared/contracts";
+// Destructured from the default export rather than imported by name: electron-updater is CommonJS,
+// and a named import of it from an ES module resolves to nothing at runtime.
+import electronUpdater from "electron-updater";
+import type {
+	AudioQuality,
+	AuthState,
+	OfflineTrack,
+	PersistedState,
+	Track,
+	UpdateState,
+} from "../src/shared/contracts";
 import { artistNames } from "../src/shared/entities";
 import {
 	validateBrowserAccount,
@@ -363,6 +373,71 @@ function browserIcon(browser: string) {
 	return icon;
 }
 
+const { autoUpdater } = electronUpdater;
+
+/**
+ * The updater's whole state, held here rather than in the renderer: the check runs at startup and
+ * the About tab is opened minutes later, so a page that only listened would show nothing at all
+ * until something changed. It reads this once on mount and follows `update:state` after that.
+ */
+let updateState: UpdateState = { status: "unsupported" };
+
+function setUpdateState(next: UpdateState) {
+	updateState = next;
+	mainWindow?.webContents.send("update:state", next);
+}
+
+/**
+ * A music player is left running for days, so a check made only at startup is one most installs
+ * never make twice. Six hours is slow enough to be free and fast enough that a release published
+ * this morning is offered this afternoon.
+ */
+const UPDATE_INTERVAL_MS = 6 * 60 * 60 * 1000;
+
+/**
+ * A development build has no feed and no signature, so it is told so once and never asks. Every
+ * other state arrives from the events below, including the failures: `checkForUpdates` rejects and
+ * emits `error` for the same failure, and the row reads the event.
+ */
+function configureUpdater() {
+	if (!app.isPackaged) return;
+	// On, so the only thing ever asked of the listener is the restart. It is also what makes "later"
+	// free rather than a deferral: `autoInstallOnAppQuit` is electron-updater's default, so a build
+	// downloaded and left alone installs itself the next time Noctune is quit, with no second prompt
+	// and no second download.
+	autoUpdater.autoDownload = true;
+	// electron-updater's own logger writes the feed URL and the cache path it downloads into, which
+	// is a filesystem path in a log this app promises not to write. Its failures go through
+	// `LocalLogger` instead, one line naming the reason.
+	autoUpdater.logger = null;
+	autoUpdater.on("checking-for-update", () => setUpdateState({ status: "checking" }));
+	autoUpdater.on("update-available", (info) => setUpdateState({ status: "available", version: info.version }));
+	autoUpdater.on("update-not-available", () => setUpdateState({ status: "current" }));
+	autoUpdater.on("download-progress", ({ percent }) =>
+		// Spread, so the version the row is naming survives the progress ticks.
+		setUpdateState({ ...updateState, status: "downloading", percent: Math.round(percent) })
+	);
+	autoUpdater.on("update-downloaded", (info) => setUpdateState({ status: "ready", version: info.version }));
+	autoUpdater.on("error", (error: Error) => {
+		void logger.write("error", `update check failed: ${error.message}`);
+		setUpdateState({ status: "error" });
+	});
+	checkForUpdates();
+	setInterval(checkForUpdates, UPDATE_INTERVAL_MS);
+}
+
+function checkForUpdates() {
+	if (!app.isPackaged) {
+		// Answered rather than ignored. The renderer puts the row in "checking" on the press rather than
+		// on the answer, so a check that pushed nothing back would leave it there for good.
+		setUpdateState({ status: "unsupported" });
+		return;
+	}
+	setUpdateState({ status: "checking" });
+	// Caught rather than surfaced: the `error` event has already put the reason on the row.
+	void autoUpdater.checkForUpdates().catch(() => undefined);
+}
+
 function registerIpc() {
 	handle("auth:state", () => authState());
 	handle("auth:browsers", async () => {
@@ -519,6 +594,12 @@ function registerIpc() {
 		return readFile(join(app.getAppPath(), name), "utf8");
 	});
 	handle("local:export-diagnostics", exportDiagnostics);
+
+	handle("update:state", () => updateState);
+	handle("update:check", () => checkForUpdates());
+	// Quitting runs the `before-quit` handler below, which saves the session before the installer
+	// takes over and relaunches the app.
+	handle("update:install", () => autoUpdater.quitAndInstall());
 
 	handle("app:info", () => ({
 		version: app.getVersion(),
@@ -682,6 +763,9 @@ void app
 		registerIpc();
 		installMenu();
 		await createWindow();
+		// After the window, so the first state reaches a renderer that exists, and not awaited: a
+		// GitHub that cannot be reached must not hold up the app it is checking.
+		configureUpdater();
 		await logger.write("info", "Application started");
 		app.on("activate", () => {
 			if (BrowserWindow.getAllWindows().length === 0) void createWindow();

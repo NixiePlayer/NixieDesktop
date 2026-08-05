@@ -119,12 +119,15 @@ its own.
    - `NOCTUNE_RELEASE_GATES_ACCEPTED`, `auth,range,pcm,lyrics-rights`
 
 4. Delete the `.p12` from disk.
-5. Run the workflow from the Actions tab, it is `workflow_dispatch` only.
+5. Cut a release with `pnpm release:patch` (or `:minor`, `:major`). The tag it pushes is what runs
+   the workflow, there is nothing to start from the Actions tab.
 
-The artifacts land on the workflow run, not on a Releases page. To publish a downloadable release
-instead, the build step takes `--publish always` with `GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}` in its
-env and `permissions: contents: write` on the job. electron-builder infers the GitHub provider from
-the `repository` field in `package.json` and creates a draft release for you to publish.
+No token has to be created for the publish itself. `GH_TOKEN` in the build step is the
+`secrets.GITHUB_TOKEN` Actions mints for the run, and `permissions: contents: write` on the job is
+what lets it write a release. electron-builder infers the GitHub provider from the `repository`
+field in `package.json`, uploads the DMGs, the ZIPs and the `latest-mac.yml` the installed app
+reads for updates, and leaves the release a draft until the step after it attaches the generated
+notes and publishes it.
 
 ## Certificate maintenance
 

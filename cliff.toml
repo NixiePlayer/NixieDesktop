@@ -1,0 +1,39 @@
+# Release notes, generated from the Conventional Commits behind a tag by `git-cliff` in
+# `.github/workflows/release.yml`. Only the body is used: the workflow strips the header, and
+# GitHub prints the tag's own name above the notes it is given.
+
+[changelog]
+header = ""
+body = """
+{% for group, commits in commits | group_by(attribute="group") %}
+### {{ group }}
+{% for commit in commits %}
+- {% if commit.breaking %}**Breaking:** {% endif %}\
+{% if commit.scope %}**{{ commit.scope }}**: {% endif %}\
+{{ commit.message | upper_first }} ({{ commit.id | truncate(length=7, end="") }})
+{%- endfor %}
+{% endfor %}
+"""
+footer = ""
+trim = true
+
+[git]
+conventional_commits = true
+# Anything that is not a Conventional Commit is dropped rather than filed under a heading nobody
+# wrote. The repository requires the format, so what this drops is a mistake, not a category.
+filter_commits = true
+# Only version tags count. `pre-noctune-history` is a marker, not a release, and `--latest` would
+# otherwise measure a range from it.
+tag_pattern = "v[0-9]*"
+commit_parsers = [
+	# The bump commit `pnpm release:*` writes is about the release, not in it.
+	{ message = "^chore\\(release\\)", skip = true },
+	# The HTML comment orders the headings and renders as nothing: `group_by` would otherwise sort
+	# them alphabetically and lead the notes with "Documentation".
+	{ message = "^feat", group = "<!-- 1 -->Features" },
+	{ message = "^fix", group = "<!-- 2 -->Fixes" },
+	{ message = "^perf", group = "<!-- 3 -->Performance" },
+	{ message = "^refactor", group = "<!-- 4 -->Refactors" },
+	{ message = "^docs", group = "<!-- 5 -->Documentation" },
+	{ message = "^(chore|build|ci|style|test)", skip = true },
+]

@@ -336,6 +336,19 @@ export interface AppInfo {
 	arch: string;
 }
 
+/**
+ * What the About tab's update row is showing. Main owns it and pushes every change, since the
+ * startup check runs long before that page is opened and a renderer would otherwise have missed
+ * the events that led here. "unsupported" is a development build, which has no feed to ask.
+ */
+export interface UpdateState {
+	status: "unsupported" | "checking" | "current" | "available" | "downloading" | "ready" | "error";
+	/** The version being offered, once one is. */
+	version?: string;
+	/** Whole percent of the download, while it runs. */
+	percent?: number;
+}
+
 /** The documents shipped inside the app bundle, named rather than pathed. */
 export type BundledDocument = "LICENSE" | "PRIVACY.md" | "SECURITY.md" | "THIRD_PARTY_NOTICES.md";
 
@@ -386,6 +399,14 @@ export interface NoctuneBridge {
 	};
 	app: {
 		info(): Promise<AppInfo>;
+	};
+	update: {
+		/** The state as main holds it now, for a page that mounted after the events. */
+		state(): Promise<UpdateState>;
+		/** Both report through `onState` rather than resolving with anything. */
+		check(): Promise<void>;
+		install(): Promise<void>;
+		onState(listener: (state: UpdateState) => void): () => void;
 	};
 }
 

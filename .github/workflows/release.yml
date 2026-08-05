@@ -1,36 +1,51 @@
 name: macOS release
 
+# `pnpm release:patch` (or `:minor`, `:major`) writes the bump commit, the tag and the push, and
+# this is what the tag arriving here starts.
 on:
-  workflow_dispatch:
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
+
+# electron-builder creates the release and the step after it publishes the release, both of which
+# write to this repository. Nothing else here needs a token.
+permissions:
+  contents: write
 
 jobs:
-  build:
+  release:
     runs-on: macos-15
-    strategy:
-      matrix:
-        arch: [x64, arm64]
     steps:
       - uses: actions/checkout@v4
+        with:
+          # git-cliff reads every commit between this tag and the one before it.
+          fetch-depth: 0
       - uses: pnpm/action-setup@v4
         with:
           version: 11.16.0
       - uses: actions/setup-node@v4
         with:
-          node-version: 24.15.0
+          node-version: 26
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm check
       - run: pnpm release:gate
         env:
           NOCTUNE_RELEASE_GATES_ACCEPTED: ${{ secrets.NOCTUNE_RELEASE_GATES_ACCEPTED }}
-      - run: pnpm exec electron-builder --mac --${{ matrix.arch }} -c.mac.notarize=true --publish never
+      # Both architectures in one run, so one `latest-mac.yml` names both. Two jobs publishing that
+      # file would leave whichever finished last as the update feed every installed copy reads, and
+      # the other architecture would be offered a build it cannot run.
+      - run: pnpm exec electron-builder --mac --x64 --arm64 -c.mac.notarize=true --publish always
         env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_LINK: ${{ secrets.CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-      - uses: actions/upload-artifact@v4
-        with:
-          name: noctune-${{ matrix.arch }}
-          path: release/*
+      # The draft is what makes this order work: nothing can update to a release that is still a
+      # draft, so the notes are written onto it and it is published in one move, with every
+      # artifact already attached.
+      - run: pnpm dlx git-cliff@2.13.1 --latest --strip all --output NOTES.md
+      - run: gh release edit "$GITHUB_REF_NAME" --notes-file NOTES.md --draft=false --latest
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

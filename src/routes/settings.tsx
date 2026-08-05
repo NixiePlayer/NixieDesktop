@@ -29,6 +29,7 @@ import { toast } from "#/components/ui/toast";
 import { dropHeldPages, queryMusic } from "#/lib/api";
 import { formatBytes, plural } from "#/lib/format";
 import { applyTheme } from "#/lib/theme";
+import { checkForUpdates, useUpdateState } from "#/lib/updates";
 import { cn } from "#/lib/utils";
 import type { AppInfo, NormalizationLevel, Settings } from "#/shared/contracts";
 import { defaultState } from "#/shared/defaults";
@@ -235,6 +236,103 @@ function useAppInfo() {
 			.catch(() => undefined);
 	}, []);
 	return info;
+}
+
+/**
+ * The one row on this page that can change the build it is describing. Main owns the state and the
+ * whole update lifecycle, so this reads it once on mount and follows the pushes after that: the
+ * startup check has usually settled long before anyone opens this tab.
+ *
+ * Every state draws a row, including the "unsupported" one this starts on: an updater that only
+ * appears once it has something to say is one nobody can ask, and the answer "nothing to install"
+ * is worth as much as the offer to install something. In a packaged build that state lasts until
+ * main answers, which is a beat; a development build stays there, since there is no feed to ask.
+ */
+function UpdateSetting() {
+	const state = useUpdateState();
+	const update = window.noctune?.update;
+	const version = state.version ?? "";
+	// Held once because it is written twice: the downloading button is sized against it, so a reworded
+	// button would otherwise leave the bar the width of a sentence nobody prints any more.
+	const restart = "Restart now";
+	// Nothing rests on "available" now that the download starts itself: it is the first tick of the
+	// download, a beat before the first percent, so it reads as one state rather than two.
+	const downloading = {
+		label: `Downloading Noctune ${version}`,
+		description: "Keep listening, this runs in the background.",
+		control: (
+			// The button is the bar: a hard-edged gradient fills it from the left as the download runs,
+			// so the number has something behind it moving at its own pace rather than a figure ticking
+			// in place. It is `backgroundImage` rather than `background`, which would drop the variant's
+			// own base colour and leave the unfilled half a hole in the row, and `--primary` because the
+			// seek bar is the one progress indicator this app already draws.
+			//
+			// It is also sized off the button that replaces it rather than off its own text, which is one
+			// character shorter at 100% than at 8% and shorter again than the words landing in its place:
+			// the bar would shrink as it filled and the row would step twice on the way to the restart.
+			// The stack is a grid so the two share a cell, which needs no measurement and no magic width.
+			<Button
+				variant="outline"
+				disabled
+				className="grid tabular-nums"
+				style={{
+					backgroundImage: `linear-gradient(to right, var(--primary) ${state.percent ?? 0}%, transparent 0)`,
+				}}
+			>
+				<span aria-hidden className="invisible col-start-1 row-start-1">
+					{restart}
+				</span>
+				<span className="col-start-1 row-start-1 text-center">{state.percent ?? 0}%</span>
+			</Button>
+		),
+	};
+	const row = {
+		unsupported: {
+			label: "Check for updates",
+			description: "A development build has no release feed behind it, so this answers nothing.",
+			control: (
+				<Button variant="outline" onClick={checkForUpdates}>
+					Check now
+				</Button>
+			),
+		},
+		checking: {
+			label: "Checking for updates",
+			description: "Asking GitHub what the latest release is.",
+			control: (
+				<Button variant="outline" disabled>
+					Checking
+				</Button>
+			),
+		},
+		current: {
+			label: "Up to date",
+			description: "This is the latest release.",
+			control: (
+				<Button variant="outline" onClick={checkForUpdates}>
+					Check again
+				</Button>
+			),
+		},
+		available: downloading,
+		downloading,
+		ready: {
+			label: `Noctune ${version} is ready`,
+			description: "Restarting installs it, and so does quitting Noctune later.",
+			control: <Button onClick={() => void update?.install()}>{restart}</Button>,
+		},
+		error: {
+			label: "Could not check for updates",
+			description: "GitHub could not be reached. Every release is on the repository as well.",
+			control: (
+				<Button variant="outline" onClick={checkForUpdates}>
+					Try again
+				</Button>
+			),
+		},
+	}[state.status];
+
+	return <Setting label={row.label} description={row.description} control={row.control} />;
 }
 
 function SettingsPage() {
@@ -628,6 +726,7 @@ function SettingsPage() {
 									</Button>
 								}
 							/>
+							<UpdateSetting />
 							<LinkRow
 								href={issueUrl}
 								label="Report an issue"

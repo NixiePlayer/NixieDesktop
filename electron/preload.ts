@@ -10,6 +10,7 @@ import type {
 	NoctuneBridge,
 	PersistedState,
 	Track,
+	UpdateState,
 } from "../src/shared/contracts";
 
 let mediaCommandListener: ((command: MediaCommand) => void) | undefined;
@@ -77,6 +78,16 @@ const bridge: NoctuneBridge = {
 	},
 	app: {
 		info: () => ipcRenderer.invoke("app:info"),
+	},
+	update: {
+		state: () => ipcRenderer.invoke("update:state"),
+		check: () => ipcRenderer.invoke("update:check"),
+		install: () => ipcRenderer.invoke("update:install"),
+		onState: (listener: (state: UpdateState) => void) => {
+			const handler = (_event: unknown, state: UpdateState) => listener(state);
+			ipcRenderer.on("update:state", handler);
+			return () => ipcRenderer.off("update:state", handler);
+		},
 	},
 };
 

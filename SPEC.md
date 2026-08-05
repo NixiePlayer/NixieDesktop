@@ -171,7 +171,7 @@ The app is an independent client. It is not affiliated with, endorsed by, or spo
 
 ## Technical constraints
 
-- Use Node 24.15.0 and pnpm 11.16.0 with exact dependency versions.
+- Use Node 26 and pnpm 11.16.0 with exact dependency versions.
 - Build the desktop application with Electron, React, TypeScript, Vite, TanStack Router, Tailwind CSS, and shadcn/Base UI.
 - Keep privileged integrations in `electron/`, serializable cross-process contracts and pure logic in `src/shared/`, and file routes in `src/routes/`.
 - Use `youtubei.js` 17.2.0 for private InnerTube access.

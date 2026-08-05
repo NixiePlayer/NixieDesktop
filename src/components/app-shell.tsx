@@ -16,6 +16,7 @@ import {
 import { useEffect, useRef, useState } from "react";
 import { queryMusic, rememberSearch } from "#/lib/api";
 import { usePlaylists } from "#/lib/library";
+import { useUpdateState } from "#/lib/updates";
 import { cn } from "#/lib/utils";
 import { usePlayer, useSystemIntegration } from "#/player";
 import type { AuthState, MusicEntity, Track } from "#/shared/contracts";
@@ -204,6 +205,8 @@ function NavRail({ open }: { open: boolean }) {
 	// The same list the "Save to playlist" submenu offers, so a playlist created, renamed or deleted
 	// anywhere shows here without either side knowing about the other.
 	const playlists = usePlaylists();
+	// The rail is also what starts the renderer's half of the updater, since it outlives every page.
+	const ready = useUpdateState().status === "ready";
 
 	const itemClass =
 		"flex h-10 items-center gap-4 rounded-lg px-3 text-sm transition-colors hover:bg-accent data-[status=active]:bg-accent data-[status=active]:font-medium";
@@ -255,7 +258,16 @@ function NavRail({ open }: { open: boolean }) {
 				))}
 
 			<Link to="/settings" className={cn(itemClass, "mt-auto")} title={open ? undefined : "Settings"}>
-				<Settings className="size-5 shrink-0" />
+				<span className="relative shrink-0">
+					<Settings className="size-5" />
+					{ready && (
+						<>
+							{/* What is left once the toast is dismissed: the About row is where the restart is. */}
+							<span className="bg-primary border-sidebar absolute -top-0.5 -right-0.5 size-2.5 rounded-full border-2" />
+							<span className="sr-only">Update ready</span>
+						</>
+					)}
+				</span>
 				{open && <span>Settings</span>}
 			</Link>
 		</nav>
