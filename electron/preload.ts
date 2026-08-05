@@ -24,7 +24,13 @@ window.addEventListener(
 	(event) => {
 		if (event.key !== " " || event.repeat || event.metaKey || event.ctrlKey || event.altKey) return;
 		const target = event.target as HTMLElement | null;
-		if (target?.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target?.tagName ?? "")) return;
+		// A slider's thumb is a hidden range input that takes focus on click, and space types nothing into it,
+		// so exempting it is what keeps a seek from silencing the toggle until something else is clicked.
+		const typing =
+			target?.isContentEditable ||
+			(["INPUT", "TEXTAREA", "SELECT"].includes(target?.tagName ?? "") &&
+				(target as HTMLInputElement | null)?.type !== "range");
+		if (typing) return;
 		if (target?.closest('[role="menu"],[role="menuitem"],[aria-haspopup="menu"]')) return;
 		event.preventDefault();
 		dispatchMediaCommand({ type: "toggle" });
