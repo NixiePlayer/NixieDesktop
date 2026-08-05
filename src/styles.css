@@ -173,6 +173,14 @@
 	[role="button"]:not([disabled]) {
 		cursor: pointer;
 	}
+
+	/* Nothing in the app is a drag source. Artwork dragged out lands in another app as a file,
+	   and a link dragged out lands as its URL, so both are refused. Covering the anchor matters:
+	   refusing the image alone hands the drag to the link wrapping it. */
+	img,
+	a {
+		-webkit-user-drag: none;
+	}
 }
 
 /* Tab focus is not painted. Every ring, border swap and outline in the app draws with --ring,
