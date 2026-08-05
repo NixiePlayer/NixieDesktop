@@ -1,7 +1,7 @@
 {
 	"name": "noctune",
 	"version": "0.1.0",
-	"description": "A local-first macOS client for YouTube Music, with gapless playback, offline downloads, and synced lyrics.",
+	"description": "A local-first desktop client for YouTube Music, with gapless playback, offline downloads, and synced lyrics.",
 	"author": "Edoardo Ranghieri",
 	"license": "MIT",
 	"repository": {

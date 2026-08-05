@@ -1,4 +1,8 @@
-# Signing and notarizing Noctune
+# Signing and notarizing Noctune for macOS
+
+This is the macOS half of the release. Notarization, stapling, Gatekeeper and the Developer ID
+certificate are Apple's alone, and every command here needs a Mac to run on. Windows and Linux
+artifacts are signed their own way and are not covered by this document.
 
 Everything below assumes the repository as it stands: there is no `mac.identity` in the build
 config and no entitlements file, because electron-builder finds the certificate in your keychain by

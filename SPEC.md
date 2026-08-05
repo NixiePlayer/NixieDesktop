@@ -2,17 +2,17 @@
 
 ## Purpose
 
-Noctune is a private, local-first macOS desktop music player for a user's YouTube Music account. It combines YouTube Music browsing and library access with a calm, familiar interface, synchronized lyrics, persistent playback, playlist management, and Spotify-like loudness normalization.
+Noctune is a private, local-first desktop music player for a user's YouTube Music account, for macOS, Windows, and Linux. It combines YouTube Music browsing and library access with a calm, familiar interface, synchronized lyrics, persistent playback, playlist management, and Spotify-like loudness normalization.
 
 The app is an independent client. It is not affiliated with, endorsed by, or sponsored by YouTube, Google, Spotify, or LRCLIB.
 
 ## Product goals
 
 - Make a YouTube Music account feel like a polished native desktop music library.
-- Keep account credentials, playback state, and analysis data on the user's Mac.
+- Keep account credentials, playback state, and analysis data on the user's own computer.
 - Provide consistent perceived volume without clipping or changing gain during a track.
 - Make search, browsing, queue control, and playlist editing fast from one persistent shell.
-- Ship as a signed and notarized macOS app for Apple silicon and Intel Macs.
+- Ship a signed desktop app for macOS, Windows, and Linux. macOS is the first target, notarized for Apple silicon and Intel.
 
 ## Experience and visual direction
 
@@ -21,7 +21,7 @@ The app is an independent client. It is not affiliated with, endorsed by, or spo
 - Use a single red accent on neutral surfaces: `#ff0033` on `#0f0f0f` in dark, `#cc0000` on `#ffffff` in light. Reserve red for fills, the active state, and playback progress. Never use it for body text.
 - Use Inter for every role. Set weight and size, not a second typeface.
 - Present artwork as squares with an 8px radius. Circles are for artists only.
-- Provide dark, light, and system themes. Resolve `system` to a concrete theme before the first paint and follow live macOS appearance changes.
+- Provide dark, light, and system themes. Resolve `system` to a concrete theme before the first paint and follow live system appearance changes.
 - Keep a collapsible navigation rail, persistent top bar, main content area, and bottom player visible across routes. Open the lyrics and queue panel from the player bar rather than reserving space for it.
 - Show playback progress as a full-width line along the top edge of the player bar, and mark the playing row with an animated level indicator rather than a text badge.
 - Limit motion to state that is genuinely changing, and respect `prefers-reduced-motion`.
@@ -89,7 +89,7 @@ The app is an independent client. It is not affiliated with, endorsed by, or spo
 - Preload the next track on a second audio element for faster transitions.
 - Keep the current track, queue, queue index, position, volume, repeat mode, shuffle state, and normalization state locally.
 - Restore the previous session in a paused state after restart.
-- Support macOS application-menu playback commands and browser Media Session commands.
+- Support native application-menu playback commands and browser Media Session commands.
 - Prefer Opus audio and fall back to AAC.
 - Offer Data Saver, Balanced, and Highest Available quality choices.
 - Show loading and playback error states without crashing the application.
@@ -176,9 +176,9 @@ The app is an independent client. It is not affiliated with, endorsed by, or spo
 - Keep privileged integrations in `electron/`, serializable cross-process contracts and pure logic in `src/shared/`, and file routes in `src/routes/`.
 - Use `youtubei.js` 17.2.0 for private InnerTube access.
 - Use the custom secure protocol for packaged assets, artwork, lyrics access, and media streaming.
-- Package the app with an ASAR archive, hardened runtime, application icon, and macOS music-app category.
-- Produce unsigned local app directories for development and signed DMG and ZIP artifacts for release.
-- Target both `arm64` and `x64` macOS builds.
+- Package the app with an ASAR archive and an application icon, plus the macOS hardened runtime and music-app category.
+- Produce unsigned local app directories for development and signed release artifacts for each platform, DMG and ZIP on macOS.
+- Target both `arm64` and `x64` on every platform.
 
 ## Verification and release requirements
 
@@ -190,7 +190,7 @@ The app is an independent client. It is not affiliated with, endorsed by, or spo
   - PCM playback has been tested.
   - Lyrics rights have been reviewed.
   - Media resolution and restricted decipher evaluation gates pass.
-- Signed release artifacts must be notarized when Apple credentials are configured.
+- macOS release artifacts must be notarized when Apple credentials are configured.
 
 ## Explicit non-goals
 

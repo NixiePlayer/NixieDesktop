@@ -76,6 +76,11 @@ protocol.registerSchemesAsPrivileged([
 // late and the menu bar and About panel both still said "Electron".
 app.setName("Noctune");
 
+// `release()` is a kernel version and says nothing about which system it came from, so the diagnostics
+// line names the platform itself. An unrecognised one prints its own `process.platform`, which is the
+// only honest thing left to say about it.
+const OS_NAMES: Record<string, string> = { darwin: "macOS", win32: "Windows", linux: "Linux" };
+
 // Nothing upstream needs to know this is Electron, and YouTube serves cut-down responses to clients
 // that say so, so every request goes out as the plain Chrome underneath.
 app.userAgentFallback = app.userAgentFallback.replace(/\s(?:noctune|Electron)\/\S+/gi, "");
@@ -218,8 +223,9 @@ async function authState(): Promise<AuthState> {
 
 /**
  * Google rejects sign-in from any embedded browser, whatever it claims to be, and its OAuth device
- * tokens are refused by every InnerTube endpoint. Adopting the session from a real browser on this
- * Mac is what is left, so the account arrives already signed in and nobody handles a cookie by hand.
+ * tokens are refused by every InnerTube endpoint. Adopting the session from a real browser already
+ * on this computer is what is left, so the account arrives already signed in and nobody handles a
+ * cookie by hand.
  */
 async function importFromBrowser(account: unknown) {
 	validateBrowserAccount(account);
@@ -480,7 +486,7 @@ function registerIpc() {
 		version: app.getVersion(),
 		electron: process.versions.electron,
 		chrome: process.versions.chrome,
-		os: `macOS ${release()}`,
+		os: `${OS_NAMES[process.platform] ?? process.platform} ${release()}`,
 		arch: process.arch,
 	}));
 }

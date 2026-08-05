@@ -331,7 +331,7 @@ export interface AppInfo {
 	version: string;
 	electron: string;
 	chrome: string;
-	/** Already formatted for display, e.g. "macOS 25.6.0". */
+	/** Already formatted for display, e.g. "macOS 25.6.0", "Windows 10.0.26100", "Linux 6.8.0". */
 	os: string;
 	arch: string;
 }

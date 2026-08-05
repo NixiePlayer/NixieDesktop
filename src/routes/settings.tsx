@@ -85,7 +85,7 @@ function Section({ title, description, children }: { title: string; description:
 
 /**
  * One card of settings under the scope it belongs to. This page is the only one in the app whose
- * rows do not all reach the same distance: a theme is this Mac's and nothing else's, while pausing
+ * rows do not all reach the same distance: a theme is this computer's and nothing else's, while pausing
  * watch history reaches every device signed in to the account. YouTube Music's own settings page
  * never has to say so, because everything on it is account-wide. Here the heading carries it, and
  * nothing else does: no badge on the row, no second colour.
@@ -266,7 +266,10 @@ function SettingsPage() {
 	};
 
 	const clearDownloads = () => {
-		if (!downloads?.count || !window.confirm(`Remove ${plural(downloads.count, "downloaded track")} from this Mac?`)) {
+		if (
+			!downloads?.count ||
+			!window.confirm(`Remove ${plural(downloads.count, "downloaded track")} from this computer?`)
+		) {
 			return;
 		}
 		void window.noctune?.local.clear("downloads").then(() => {
@@ -324,7 +327,7 @@ function SettingsPage() {
 
 				<TabsContent value="general">
 					<Section title="General" description="How Noctune looks, and what YouTube Music sends it.">
-						<ScopeGroup scope="On this Mac">
+						<ScopeGroup scope="On this computer">
 							<Setting label="Theme" description="System follows your device's appearance.">
 								<div className="flex flex-wrap gap-2">
 									{themes.map((option) => (
@@ -408,7 +411,7 @@ function SettingsPage() {
 
 				<TabsContent value="playback">
 					<Section title="Playback" description="How Noctune streams and levels what you play.">
-						<ScopeGroup scope="On this Mac">
+						<ScopeGroup scope="On this computer">
 							<Setting
 								label="Volume normalization"
 								description="Holds tracks near one loudness, using the levels YouTube measured. Louder targets attenuate less; nothing is ever boosted."
@@ -487,9 +490,9 @@ function SettingsPage() {
 				<TabsContent value="downloads">
 					<Section
 						title="Downloads"
-						description="Tracks saved to this Mac so they play without a connection. They live with the app and go when it does."
+						description="Tracks saved to this computer so they play without a connection. They live with the app and go when it does."
 					>
-						<ScopeGroup scope="On this Mac">
+						<ScopeGroup scope="On this computer">
 							<Setting
 								label="Saved for offline listening"
 								description={
@@ -515,7 +518,7 @@ function SettingsPage() {
 						title="Privacy"
 						description="Noctune has no account service, backend, telemetry, or media cache. Nothing here leaves this device except what the rows below send to the account you linked."
 					>
-						<ScopeGroup scope="On this Mac">
+						<ScopeGroup scope="On this computer">
 							<Setting
 								label="Report plays to YouTube"
 								description="Tells YouTube Music what you played, which is what personalises your home feed. Turning this off leaves the feed on whatever it already knows about you."
@@ -619,7 +622,7 @@ function SettingsPage() {
 							<DocumentRow
 								name="PRIVACY.md"
 								title="Privacy"
-								description="What is stored on this Mac, and the one thing that leaves it."
+								description="What is stored on this computer, and the one thing that leaves it."
 							/>
 							<DocumentRow
 								name="SECURITY.md"
