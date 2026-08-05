@@ -25,6 +25,20 @@ const plist = join(to, "Contents", "Info.plist");
 for (const key of ["CFBundleName", "CFBundleDisplayName"]) {
 	execFileSync("plutil", ["-replace", key, "-string", "Noctune (Dev)", plist]);
 }
+// `app.dock.setIcon` reaches the Dock and nothing else: every other place macOS draws an app, the
+// notification's leading icon included, reads the bundle's own icon file, which is Electron's. The
+// blue development mark is written over it here. `sips` refuses to write an icns at 1024, so it is
+// resampled to 512 on the way, which is far more than anything drawing it asks for.
+execFileSync("sips", [
+	"-s",
+	"format",
+	"icns",
+	"-Z",
+	"512",
+	join(root, "build", "icon-dev.png"),
+	"--out",
+	join(to, "Contents", "Resources", "electron.icns"),
+]);
 // Editing that plist breaks the seal on the ad-hoc signature Electron ships with, and an app whose
 // signature does not validate is refused by UNUserNotificationCenter: every notification comes back
 // as UNErrorDomain 1 and macOS never asks for permission, since it will not register the app at all.

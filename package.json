@@ -20,7 +20,7 @@
 		"#/*": "./src/*"
 	},
 	"scripts": {
-		"dev": "vite dev --port 3000",
+		"dev": "node scripts/dev-app-name.mjs && vite dev --port 3000",
 		"postinstall": "node scripts/dev-app-name.mjs",
 		"generate-routes": "tsr generate",
 		"build": "vite build",
