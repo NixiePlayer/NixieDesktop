@@ -67,6 +67,7 @@ tanstackIntent:
 
 - Never use em dashes anywhere in this repository, including code, comments, documentation, tests, commit messages, and generated content. Use commas, colons, parentheses, or regular hyphens instead.
 - Keep this `AGENTS.md` current. Update the relevant instructions whenever repository structure, commands, conventions, or workflows change.
+- Write every commit as a Conventional Commit (`type(scope): subject`), with a scope whenever the change has an obvious one (`player`, `electron`, `explore`, `settings`, and so on) and none when it spans the repository. Add a body whenever the subject line cannot carry the reasoning on its own: what was wrong, why this change, what it costs.
 
 ## Noctune architecture
 
