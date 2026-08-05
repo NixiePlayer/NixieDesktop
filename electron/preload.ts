@@ -63,6 +63,7 @@ const bridge: NoctuneBridge = {
 		},
 		position: (positionSeconds: number) => ipcRenderer.send("player:position", positionSeconds),
 		notify: (track: Track) => ipcRenderer.invoke("player:notify", track),
+		notifyRefused: () => ipcRenderer.invoke("player:notify-refused"),
 	},
 	local: {
 		load: () => ipcRenderer.invoke("local:load"),

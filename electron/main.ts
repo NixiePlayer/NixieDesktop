@@ -148,6 +148,16 @@ async function artworkIcon(url: string | undefined) {
 }
 
 /**
+ * Whether the platform refused the last banner. Nothing here can ask it in advance: Electron exposes
+ * no authorization status, macOS keeps its own behind a framework call, and a permission that is
+ * merely unasked is granted by the first `show()` rather than refused by it. So the only honest
+ * signal is a show that comes back failed, and the setting reads this so a switch that is on and
+ * silent says why. A show that lands clears it, since permission is granted in System Settings while
+ * the app is running and nothing tells us it changed.
+ */
+let notificationsRefused = false;
+
+/**
  * Names the track the queue moved to on its own. Nothing is drawn while the window has focus: the
  * player is on screen and already says so, and this exists for the times it is not. macOS suppresses
  * a banner from the frontmost app anyway, so this only makes that deliberate.
@@ -155,8 +165,18 @@ async function artworkIcon(url: string | undefined) {
  * ponytail: silent, and no actions on it. The one sound this app makes is the music.
  */
 async function notifyTrackChange(track: Track) {
-	if (!Notification.isSupported() || stateStore.snapshot.settings.notifyTrackChange === false) return;
-	if (mainWindow?.isFocused()) return;
+	const skipped = !Notification.isSupported()
+		? "unsupported"
+		: stateStore.snapshot.settings.notifyTrackChange === false
+			? "setting off"
+			: mainWindow?.isFocused()
+				? "window focused"
+				: undefined;
+	// Every reason this draws nothing is silent by design, which leaves no way to tell a gate from a
+	// queue move that never asked. Development says which, and names no track: a line reading nothing
+	// at all is the answer that the renderer never called, and is worth as much as the others.
+	if (!app.isPackaged) void logger.write("info", `notify: ${skipped ?? "showing"}`);
+	if (skipped) return;
 	const detail = [artistNames(track.artists), track.album?.title].filter(Boolean).join(" · ");
 	const notification = new Notification({
 		title: track.title,
@@ -167,6 +187,13 @@ async function notifyTrackChange(track: Track) {
 	notification.on("click", () => {
 		mainWindow?.show();
 		mainWindow?.focus();
+	});
+	notification.on("show", () => {
+		notificationsRefused = false;
+	});
+	notification.on("failed", (_event, error) => {
+		notificationsRefused = true;
+		void logger.write("warn", `notification refused: ${error}`);
 	});
 	notification.show();
 }
@@ -417,6 +444,7 @@ function registerIpc() {
 		validateTrack(track);
 		return notifyTrackChange(track);
 	});
+	handle("player:notify-refused", () => notificationsRefused);
 
 	handle("local:load", () => stateStore.snapshot);
 	handle("local:save", (_event, value) => {

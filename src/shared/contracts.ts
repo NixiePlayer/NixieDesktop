@@ -366,6 +366,11 @@ export interface NoctuneBridge {
 		position(positionSeconds: number): void;
 		/** Announces a track the queue moved to on its own. Main decides whether anything is shown. */
 		notify(track: Track): Promise<void>;
+		/**
+		 * Whether the platform refused the last banner it was asked to draw. False until one is, since
+		 * nothing can ask whether the app is allowed to post one before trying.
+		 */
+		notifyRefused(): Promise<boolean>;
 	};
 	local: {
 		load(): Promise<PersistedState>;

@@ -210,6 +210,22 @@ function useDownloads() {
 	return { downloads: state, refresh: read };
 }
 
+/**
+ * Whether the system has refused a banner. Read on mount rather than pushed: this is the only page
+ * that shows it, and a refusal that happens while it is open is one the reader is not being notified
+ * about anyway, since nothing is drawn while Noctune has focus.
+ */
+function useNotificationsRefused() {
+	const [refused, setRefused] = useState(false);
+	useEffect(() => {
+		void window.noctune?.player
+			.notifyRefused()
+			.then(setRefused)
+			.catch(() => undefined);
+	}, []);
+	return refused;
+}
+
 function useAppInfo() {
 	const [info, setInfo] = useState<AppInfo>();
 	useEffect(() => {
@@ -235,6 +251,7 @@ function SettingsPage() {
 	);
 	const { downloads, refresh: refreshDownloads } = useDownloads();
 	const info = useAppInfo();
+	const notificationsRefused = useNotificationsRefused();
 
 	useEffect(() => {
 		void window.noctune?.local.load().then((state) => setSettings(state.settings));
@@ -351,7 +368,14 @@ function SettingsPage() {
 										onCheckedChange={(on) => save({ ...settings, notifyTrackChange: on })}
 									/>
 								}
-							/>
+							>
+								{notificationsRefused && settings.notifyTrackChange !== false && (
+									<p className="text-destructive text-sm">
+										Your system refused the last one. Allow notifications for Noctune in System Settings, under
+										Notifications.
+									</p>
+								)}
+							</Setting>
 							<Setting
 								label="Content region"
 								description="Decides which charts, new releases and recommendations you are shown. This is not the app's language."
