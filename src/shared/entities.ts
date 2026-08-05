@@ -103,7 +103,9 @@ export function artistNames(artists: Artist[]): string {
 export function entitySubtitle(item: MusicEntity): string {
 	if (isPlaylistItem(item)) return artistNames(item.track.artists);
 	if (isTrack(item) || isAlbum(item)) return artistNames(item.artists);
-	if (isArtist(item)) return "Artist";
+	// Upstream's own line under an artist's name where it states one, the kind where it does not, so
+	// every caller that would otherwise print "Artist" twice keeps testing the subtitle against it.
+	if (isArtist(item)) return item.listeners ?? "Artist";
 	// A search row knows nothing about its length, and "0 tracks" reads as an empty playlist.
 	return (
 		item.description ??

@@ -203,8 +203,9 @@ function TopResult({
 	// A release or an artist carries no songs on a search row, so playing one opens it first.
 	const playEntity = () => (track ? engine.play(track, queue, context) : playCollection(engine, item, title));
 
-	// The kind is the line above, so an artist would otherwise read "Artist" twice.
-	const subtitle = isArtist(item) ? undefined : entitySubtitle(item);
+	// The kind is the line above, so an artist upstream states no count for would read "Artist" twice.
+	const detail = entitySubtitle(item);
+	const subtitle = detail === entityKind(item) ? undefined : detail;
 	const meta = [
 		isAlbum(item) ? item.year : undefined,
 		isAlbum(item) && item.trackCount ? `${item.trackCount} songs` : undefined,
@@ -235,7 +236,13 @@ function TopResult({
 		<div className="flex min-w-0 flex-col gap-1 text-left">
 			<span className="text-muted-foreground text-xs font-medium tracking-wide uppercase">{entityKind(item)}</span>
 			<span className="truncate text-4xl font-bold tracking-tight group-hover/open:underline">{title}</span>
-			{subtitle && <span className="truncate text-sm font-medium">{subtitle}</span>}
+			{/* A byline names people and reads at full weight. An artist's line is a count, which is
+			    muted here for the same reason the meta line under it is. */}
+			{subtitle && (
+				<span className={cn("truncate text-sm font-medium", isArtist(item) && "text-muted-foreground")}>
+					{subtitle}
+				</span>
+			)}
 			{(meta || (track && track.explicit)) && (
 				<span className="text-muted-foreground flex items-center gap-2 text-sm">
 					{meta}

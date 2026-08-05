@@ -15,6 +15,7 @@ import {
 	feedContinuation,
 	libraryTarget,
 	pruneCache,
+	monthlyListeners,
 	topSongsPlaylist,
 	withAlbumHeader,
 	withArtistHeader,
@@ -1132,6 +1133,38 @@ describe("artist header", () => {
 	});
 });
 
+describe("listener counts", () => {
+	const listeners = (nodes: unknown[]) =>
+		extractEntities({ contents: nodes }, (url) => url)
+			.filter(isArtist)
+			.map((artist) => artist.listeners);
+
+	it("reads the count out of a row and a card, and states none for a channel", () => {
+		expect(
+			listeners([
+				// A search row leads its subtitle with the kind, a card states the count alone, and a
+				// channel row states a handle instead: only a segment opening with a digit is a count.
+				{ id: "UC_a", item_type: "artist", title: "Caparezza", subtitle: { text: "Artist • 806K monthly listeners" } },
+				{ id: "UC_b", item_type: "artist", title: "Frankie hi-nrg mc", subtitle: { text: "7.71K subscribers" } },
+				{ id: "UC_c", item_type: "artist", title: "Fan page", subtitle: { text: "Profile • @fanpage" } },
+			])
+		).toEqual(["806K monthly listeners", "7.71K subscribers", undefined]);
+	});
+
+	it("reads the artist page's own count off the raw header the parse drops", () => {
+		const data = {
+			header: {
+				musicImmersiveHeaderRenderer: {
+					title: { runs: [{ text: "Caparezza" }] },
+					monthlyListenerCount: { runs: [{ text: "806K monthly listeners" }] },
+				},
+			},
+		};
+		expect(monthlyListeners(data)).toBe("806K monthly listeners");
+		expect(monthlyListeners({ header: {} })).toBeUndefined();
+	});
+});
+
 describe("top song lengths", () => {
 	/** An artist page: one list shelf pointing at the playlist of the same songs, then carousels. */
 	const artistPage = {
@@ -1284,6 +1317,12 @@ describe("search top result", () => {
 			artworkUrl: "https://example.test/ram.jpg",
 			explicit: undefined,
 		});
+	});
+
+	it("keeps the listener count an artist card states beside its kind", () => {
+		expect(
+			top(card(browse("UC_caparezza", "MUSIC_PAGE_TYPE_ARTIST"), { text: "Artist • 806K monthly listeners" }))[0]
+		).toMatchObject({ id: "UC_caparezza", listeners: "806K monthly listeners" });
 	});
 
 	it("does not leave the same result in the list twice", () => {

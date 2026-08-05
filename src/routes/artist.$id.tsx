@@ -127,9 +127,11 @@ function ArtistPage() {
 				<header className={cn("flex flex-col gap-2 pb-8", banner && "-mt-52")}>
 					<span className="text-muted-foreground text-xs font-medium tracking-wide uppercase">Artist</span>
 					<h1 className="text-4xl leading-tight font-bold tracking-tight">{title}</h1>
-					{/* Not a count of what the shelves happen to render: an artist page lists a handful of top
-					    songs and a handful of releases, so counting those claims a catalogue size that is
-					    not this artist's. */}
+					{/* Upstream's own line and upstream's own figure, worded and abbreviated where it was
+					    counted. Not a count of what the shelves happen to render: an artist page lists a
+					    handful of top songs and a handful of releases, so counting those claims a catalogue
+					    size that is not this artist's. */}
+					{artist?.listeners && <p className="text-muted-foreground text-sm">{artist.listeners}</p>}
 					{artist?.description && (
 						<p className="text-muted-foreground line-clamp-2 max-w-3xl text-sm">{artist.description}</p>
 					)}

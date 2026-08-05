@@ -387,7 +387,9 @@ function SearchField({ inputRef }: { inputRef: React.RefObject<HTMLInputElement 
 													<span className="truncate">{entityTitle(item)}</span>
 													<span className="text-muted-foreground truncate text-xs">
 														{entityKind(item)}
-														{!isArtist(item) && entitySubtitle(item) && ` • ${entitySubtitle(item)}`}
+														{entitySubtitle(item) !== entityKind(item) &&
+															entitySubtitle(item) &&
+															` • ${entitySubtitle(item)}`}
 													</span>
 												</span>
 											</CommandItem>

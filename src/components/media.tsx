@@ -581,16 +581,18 @@ export function MediaRow({
 }
 
 /**
- * "Song • Daft Punk • 96M plays", "Album • 2013", the line under a mixed row. An artist is only ever
- * itself. The play count reads here rather than beside the length, because upstream leaves it out of
- * as many rows as it leaves out a duration and a column that empty is worse than a longer line.
+ * "Song • Daft Punk • 96M plays", "Album • 2013", "Artist • 806K monthly listeners", the line under a
+ * mixed row. The play count reads here rather than beside the length, because upstream leaves it out
+ * of as many rows as it leaves out a duration and a column that empty is worse than a longer line.
  */
 export function EntityDetail({ item }: { item: MusicEntity }) {
-	if (isArtist(item)) return "Artist";
 	// Only a song or a release names artists, and only those become links. Everything else keeps the
 	// one line upstream gave it.
 	const artists = isTrack(item) || isAlbum(item) ? item.artists : undefined;
-	const subtitle = artists?.length ? undefined : entitySubtitle(item);
+	const detail = artists?.length ? undefined : entitySubtitle(item);
+	// An artist upstream states no count for falls back to its own kind, which the line already opens
+	// with: "Artist • Artist" is what printing it anyway reads as.
+	const subtitle = detail === entityKind(item) ? undefined : detail;
 	// Named here rather than left to a column header, since this is one line and not a table.
 	const plays = isTrack(item) && item.plays ? expandPlays(item.plays) : undefined;
 

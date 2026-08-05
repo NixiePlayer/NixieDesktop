@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { readdir, rm, stat, unlink } from "node:fs/promises";
 import { join } from "node:path";
-import { Innertube, UniversalCache } from "youtubei.js";
+import { Innertube, UniversalCache, YTMusic } from "youtubei.js";
 import type { AccountSettingEndpoints } from "../src/shared/account-settings";
 import { extractAccountSettings } from "../src/shared/account-settings";
 import type {
@@ -214,6 +214,30 @@ function playsFrom(node: UnknownRecord): string | undefined {
 }
 
 /**
+ * The line YouTube Music prints under an artist's name, its own wording and its own figure: monthly
+ * listeners where it knows one, subscribers where it does not, and nothing at all for a channel row
+ * ("Profile • @handle"). It arrives as one subtitle segment beside the kind, so the segment opening
+ * with a digit is the count, the same test `playsFrom` makes for the same reason: the wording is
+ * localised and pre-abbreviated ("806K ascoltatori mensili"), so it is only ever shown.
+ */
+function listenersFrom(node: UnknownRecord): string | undefined {
+	return text(node.subtitle)
+		?.split("•")
+		.map((part) => part.trim())
+		.find((part) => /^\d/.test(part));
+}
+
+/**
+ * The same line on the artist's own page, which states it in the raw response and nowhere in the
+ * parse: `MusicImmersiveHeader` copies the fields it declares and has no property for this one, so
+ * it is read off the browse response before the wrapper is built around it.
+ */
+export function monthlyListeners(data: unknown): string | undefined {
+	const header = record(data) && record(data.header) ? data.header.musicImmersiveHeaderRenderer : undefined;
+	return record(header) ? text(header.monthlyListenerCount) : undefined;
+}
+
+/**
  * Where a chart puts the row, as upstream numbers it. It has to come from the response rather than
  * from the row's position: a row of a kind `extractEntities` has no entity for is dropped on the way
  * here, and counting the survivors off then renumbers everything under the first one dropped.
@@ -407,14 +431,27 @@ export class YouTubeAdapter {
 				};
 			}
 			case "artist": {
-				const source = await client.music.getArtist(request.id);
+				// `music.getArtist` is this call and this constructor, and it is split open here for the one
+				// field the parse throws away: `monthlyListenerCount` sits on the immersive header beside
+				// the title, `MusicImmersiveHeader` has no property for it, and asking for it separately
+				// would be a second round trip for a line the page has already been answered with.
+				const response = await client.actions.execute("/browse", {
+					browseId: request.id,
+					client: "YTMUSIC",
+					parse: false,
+				});
+				const source = new YTMusic.Artist(response, client.actions);
 				// Videos are skipped for the same reason search skips them: an artist page carries a shelf
 				// of music videos, lyric uploads and live clips beside its top songs, and the page renders
 				// one flat song list, so those arrive as tracks with no release and no length (the top
 				// songs playlist below does not hold them either) and read as duplicate rows of the songs.
 				const page = this.#page(source, true);
-				const items = withArtistHeader(request.id, source.header, page.items, (url) =>
-					this.#resources.registerArtwork(url)
+				const items = withArtistHeader(
+					request.id,
+					source.header,
+					page.items,
+					(url) => this.#resources.registerArtwork(url),
+					monthlyListeners(response.data)
 				);
 				// The shelves are kept beside the flat page for the "See all" each one states: upstream
 				// draws the releases as its own "Albums" and "Singles", and the browse behind that button
@@ -1148,7 +1185,13 @@ export function extractEntities(
 			}
 			case "artist":
 			case "library_artist": {
-				const artist: Artist = { id, name: title, artworkUrl: artwork, rank: rankFrom(node) };
+				const artist: Artist = {
+					id,
+					name: title,
+					artworkUrl: artwork,
+					rank: rankFrom(node),
+					listeners: listenersFrom(node),
+				};
 				items.push(artist);
 			}
 		}
@@ -1287,7 +1330,9 @@ export function withSearchTopResult(
 	} else {
 		switch (pageType) {
 			case "MUSIC_PAGE_TYPE_ARTIST":
-				top = { id, name: title, artworkUrl: artwork } satisfies Artist;
+				// The card states the count in the same subtitle a row does ("Artist • 806K monthly
+				// listeners"), so the top result names it the way every other artist here does.
+				top = { id, name: title, artworkUrl: artwork, listeners: listenersFrom(card) } satisfies Artist;
 				break;
 			case "MUSIC_PAGE_TYPE_ALBUM":
 				top = { id, title, artists, artworkUrl: artwork, explicit: explicitFrom(card) || undefined } satisfies Album;
@@ -1363,7 +1408,8 @@ export function withArtistHeader(
 	id: string,
 	header: unknown,
 	items: MusicEntity[],
-	registerArtwork: (url: string) => string
+	registerArtwork: (url: string) => string,
+	listeners?: string
 ): MusicEntity[] {
 	if (!record(header)) return items;
 	const name = firstString(header, "title", "name");
@@ -1377,6 +1423,7 @@ export function withArtistHeader(
 		bannerUrl: image ? registerArtwork(atBannerSize(image.url)) : undefined,
 		shuffle: watchTarget(header.play_button),
 		radio: watchTarget(header.start_radio_button),
+		listeners,
 	};
 	return [artist, ...items];
 }

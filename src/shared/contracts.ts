@@ -28,6 +28,12 @@ export interface Artist {
 	radio?: WatchTarget;
 	/** Its place in the chart it was listed in. Only a chart row states one. */
 	rank?: number;
+	/**
+	 * The line under the name on YouTube Music: monthly listeners where upstream knows one, subscribers
+	 * where it does not. Localised and already abbreviated ("806K monthly listeners"), so it is only
+	 * ever shown, never compared.
+	 */
+	listeners?: string;
 }
 
 export interface Album {
