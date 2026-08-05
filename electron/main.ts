@@ -622,7 +622,11 @@ void app
 		// Packaged builds get `build/icon.icns` from electron-builder, but development runs the stock
 		// Electron binary, which brings its own dock icon along. It gets the blue mark rather than the
 		// red one, so a development window is never mistaken for the installed app beside it.
-		if (process.env.VITE_DEV_SERVER_URL) app.dock?.setIcon(join(app.getAppPath(), "build/icon-dev.png"));
+		// ponytail: a missing dev mark is cosmetic, it must not take the startup chain down with it.
+		if (process.env.VITE_DEV_SERVER_URL)
+			try {
+				app.dock?.setIcon(join(app.getAppPath(), "build/icon-dev.png"));
+			} catch {}
 		await mkdir(app.getPath("userData"), { recursive: true });
 		stateStore = new StateStore(app.getPath("userData"));
 		logger = new LocalLogger(app.getPath("userData"));
