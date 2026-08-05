@@ -615,7 +615,7 @@ function SettingsPage() {
 						</p>
 
 						<ScopeGroup scope="Noctune">
-							<DocumentRow name="LICENSE" title="Licence" description="Noctune is released under the MIT licence." />
+							<DocumentRow name="LICENSE" title="License" description="Noctune is released under the MIT license." />
 							<DocumentRow
 								name="PRIVACY.md"
 								title="Privacy"
