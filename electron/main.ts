@@ -72,9 +72,19 @@ protocol.registerSchemesAsPrivileged([
 	},
 ]);
 
+// A development window sits beside an installed one, so it says so in the app menu and the About
+// panel. The Dock label and the Cmd-Tab entry read the bundle instead, which is what
+// `scripts/dev-app-name.mjs` writes. The released app is just "Noctune": its own prerelease state is
+// on the icon, and nothing has to be renamed back at 1.0.
+const APP_NAME = process.env.VITE_DEV_SERVER_URL ? "Noctune (Dev)" : "Noctune";
+
 // macOS reads the name once, while the first menu is built, so setting this after `whenReady` was too
 // late and the menu bar and About panel both still said "Electron".
-app.setName("Noctune");
+app.setName(APP_NAME);
+// The data path is pinned to the plain name. Electron derives it from the app name, so "(Dev)" would
+// name the directory too, and a development run has always read the same session, downloads and
+// playback state as the installed app.
+app.setPath("userData", join(app.getPath("appData"), "Noctune"));
 
 // `release()` is a kernel version and says nothing about which system it came from, so the diagnostics
 // line names the platform itself. An unrecognised one prints its own `process.platform`, which is the
@@ -530,7 +540,7 @@ function installMenu() {
 	Menu.setApplicationMenu(
 		Menu.buildFromTemplate([
 			{
-				label: "Noctune",
+				label: APP_NAME,
 				submenu: [
 					{ role: "about" },
 					{ type: "separator" },

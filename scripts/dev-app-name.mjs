@@ -20,8 +20,10 @@ if (existsSync(from)) renameSync(from, to);
 writeFileSync(join(root, "node_modules", "electron", "path.txt"), "Noctune.app/Contents/MacOS/Electron");
 
 const plist = join(to, "Contents", "Info.plist");
+// The bundle path stays `Noctune.app` because `path.txt` above points at it, but the two name keys
+// carry the channel, so a development window is never mistaken for the installed app beside it.
 for (const key of ["CFBundleName", "CFBundleDisplayName"]) {
-	execFileSync("plutil", ["-replace", key, "-string", "Noctune", plist]);
+	execFileSync("plutil", ["-replace", key, "-string", "Noctune (Dev)", plist]);
 }
 // Editing that plist breaks the seal on the ad-hoc signature Electron ships with, and an app whose
 // signature does not validate is refused by UNUserNotificationCenter: every notification comes back
