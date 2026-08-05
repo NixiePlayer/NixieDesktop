@@ -969,8 +969,15 @@ export function extractExploreData(
 		if (mood >= 0) {
 			const section = sections[mood];
 			if (section?.type === "navigation") {
-				const target = shortcuts.find((shortcut) => shortcut.label === section.title);
-				if (target) section.more = { ...target, label: "Browse all", title: section.title };
+				// What the section adopts, the grid gives up: the shortcut and the section's own "Browse
+				// all" lead to the same browse, so leaving both draws one destination twice, a tile and a
+				// heading apart. A response whose labels no longer match keeps both, as it always did.
+				const index = shortcuts.findIndex((shortcut) => shortcut.label === section.title);
+				const target = shortcuts[index];
+				if (target) {
+					section.more = { ...target, label: "Browse all", title: section.title };
+					shortcuts.splice(index, 1);
+				}
 			}
 			if (mood > 0) sections.unshift(...sections.splice(mood, 1));
 		}

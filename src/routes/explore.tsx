@@ -156,8 +156,9 @@ function ExplorePending() {
 				</div>
 			) : (
 				<>
-					<div className="grid gap-2 sm:grid-cols-3">
-						{Array.from({ length: 3 }, (_, index) => (
+					{/* Two, since the moods shortcut is the one a section below adopts as its own header. */}
+					<div className="grid gap-2 sm:grid-cols-[repeat(auto-fit,minmax(14rem,1fr))]">
+						{Array.from({ length: 2 }, (_, index) => (
 							<Skeleton key={index} className="h-24 rounded-xl" />
 						))}
 					</div>
@@ -176,8 +177,10 @@ function ExplorePending() {
 
 function Shortcuts({ items }: { items: BrowseTarget[] }) {
 	if (!items.length) return null;
+	// Auto-fit rather than a fixed three: the grid holds whatever upstream sends less whatever a section
+	// below already leads to, so its count is not something to hard-code a column track for.
 	return (
-		<nav className="grid gap-2 sm:grid-cols-3" aria-label="Explore shortcuts">
+		<nav className="grid gap-2 sm:grid-cols-[repeat(auto-fit,minmax(14rem,1fr))]" aria-label="Explore shortcuts">
 			{items.map((item) => {
 				const Icon = shortcutIcons[item.browseId] ?? Compass;
 				return (

@@ -163,10 +163,11 @@ describe("Explore shelves", () => {
 
 	it("preserves shortcuts, shelf metadata, targets, and promoted mood order", () => {
 		const data = extractExploreData(explore, (url) => `secure:${url}`, true);
+		// The moods shortcut is gone from the grid, since the section below leads to the same browse. The
+		// `more` assertion under this one is where it went: adopted, not dropped.
 		expect(data.shortcuts.map(({ label, browseId, params }) => ({ label, browseId, params }))).toEqual([
 			{ label: "New releases", browseId: "FEmusic_new_releases", params: undefined },
 			{ label: "Charts", browseId: "FEmusic_charts", params: undefined },
-			{ label: "Moods & genres", browseId: "FEmusic_moods_and_genres", params: "ggMPOgE%3D" },
 		]);
 		expect(data.sections.map(({ title }) => title)).toEqual(["Moods & genres", "New albums & singles", "Trending"]);
 		expect(data.sections[0]).toMatchObject({
