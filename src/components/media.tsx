@@ -1,4 +1,4 @@
-import { Link } from "@tanstack/react-router";
+import { Link, useMatchRoute } from "@tanstack/react-router";
 import { ChevronLeft, ChevronRight, Music, Play, ThumbsDown, ThumbsUp } from "lucide-react";
 import { Fragment, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { expandPlays, formatDuration } from "#/lib/format";
@@ -136,8 +136,12 @@ export function TrackLink({
 	className?: string;
 	children?: React.ReactNode;
 }) {
+	const matchRoute = useMatchRoute();
 	const id = trackAlbumId(track);
-	if (!id) return <span className={className}>{children}</span>;
+	// Nowhere deeper to go: upstream named no release, or the reader is already on it. Either way the
+	// title is plain text that does not stop the click, so a row underneath it plays as if the click
+	// had landed anywhere else on the row.
+	if (!id || matchRoute({ to: "/album/$id", params: { id } })) return <span className={className}>{children}</span>;
 	return (
 		<Link to="/album/$id" params={{ id }} className={className} onClick={(event) => event.stopPropagation()}>
 			{children}
