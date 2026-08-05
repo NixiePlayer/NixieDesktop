@@ -75,7 +75,10 @@ function SearchPage() {
 
 	// The top bar owns query entry now, so this page is only results and their filter.
 	return (
-		<div>
+		// The block below splits on the column's own width, not the window's: the rail and the Now panel
+		// each open without the window changing size, so `lg` still promised two columns in a column
+		// with room for one, and the top result's text was squeezed out of existence.
+		<div className="@container">
 			<PageTitle>{q ? `Results for ${q}` : "Search"}</PageTitle>
 
 			<Tabs
@@ -96,8 +99,11 @@ function SearchPage() {
 			{q && items.length ? (
 				<div className="flex flex-col gap-10">
 					{/* The card and the artist's top songs read as one block, and split in half rather
-					    than each running the full width. Below `lg` the songs wrap under the card. */}
-					<div className={cn("grid gap-x-8 gap-y-10", artistId && artist && "lg:grid-cols-2")}>
+					    than each running the full width. Under 896px of column the songs wrap below the
+					    card: half of anything narrower is the artwork and a few characters. The number
+					    clears the step the rail's labels make at 960px (a 304px column becomes 464px as
+					    the window narrows), which would otherwise split the block as the window shrinks. */}
+					<div className={cn("grid gap-x-8 gap-y-10", artistId && artist && "@4xl:grid-cols-2")}>
 						{top && <TopResult item={top} queue={toTracks(items)} context={context} details={artist} />}
 						{artistId && artist && (
 							<Await promise={artist} fallback={<Skeleton className="h-56 w-full rounded-xl" />}>
