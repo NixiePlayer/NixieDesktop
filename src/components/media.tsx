@@ -454,7 +454,9 @@ export function MediaShelf({
 	headerAction?: React.ReactNode;
 	layout?: "cards" | "ranked";
 }) {
-	const rows = Math.min(Math.max(layout === "ranked" ? (itemsPerColumn ?? 4) : (itemsPerColumn ?? 1), 1), 4);
+	// Upstream never asks for more than four, so the ceiling is only ever reached by a caller of ours:
+	// a destination's song shelf, which is fifty rows and wants the extra one.
+	const rows = Math.min(Math.max(layout === "ranked" ? (itemsPerColumn ?? 4) : (itemsPerColumn ?? 1), 1), 5);
 	const asRows = layout === "ranked" || rows > 1;
 	const { rail, edges, updateEdges, scroll } = useHorizontalRail(items.length, `${layout}-${rows}`);
 

@@ -20,7 +20,7 @@ import { heldFeeds, queryMusic } from "#/lib/api";
 import { cn } from "#/lib/utils";
 import { usePlayer } from "#/player";
 import type { BrowseTarget, ExploreSection, MusicEntity, MusicSection, Page } from "#/shared/contracts";
-import { entityArtwork, isAlbum, isArtist, isPlaylist, isTrack } from "#/shared/entities";
+import { entityArtwork, entityRank, isAlbum, isArtist, isPlaylist, isTrack } from "#/shared/entities";
 import { validateMusicQuery } from "#/shared/validation";
 
 /**
@@ -338,6 +338,21 @@ function LandingSection({ section }: { section: ExploreSection }) {
 function DestinationSection({ section, pageTitle }: { section: ExploreSection; pageTitle: string }) {
 	if (section.type === "navigation") return <GenreGrid section={section} compact={section.layout === "genres"} />;
 	const context = { type: "explore" as const, title: section.title };
+	// A chart states its own places and stays a full-width list. A shelf upstream never numbered is not
+	// a chart: a genre's "Songs" is fifty rows of list, which is the whole page scrolled past whatever
+	// follows it, so it rails five to a column and is numbered nowhere, since nothing ranked it.
+	if (section.layout === "ranked" && !section.items.some((item) => entityRank(item) !== undefined))
+		return (
+			<MediaShelf
+				title={section.title}
+				strapline={section.strapline}
+				artworkUrl={section.artworkUrl}
+				itemsPerColumn={5}
+				items={section.items}
+				context={context}
+				headerAction={<BrowseAction target={section.more} />}
+			/>
+		);
 	// A destination's lead shelf can carry the page's own name: Charts is a shelf called "Charts"
 	// under a header that says "Charts". The h1 above has already said it, so the shelf says it once.
 	const heading = section.title === pageTitle ? undefined : section.title;
