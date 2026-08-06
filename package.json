@@ -123,9 +123,10 @@
 			]
 		},
 		"dmg": {
+			"sign": true,
 			"writeUpdateInfo": false
 		},
 		"afterSign": "scripts/staple.mjs",
-		"afterAllArtifactBuild": "scripts/name-dmgs.mjs"
+		"afterAllArtifactBuild": "scripts/finish-dmgs.mjs"
 	}
 }

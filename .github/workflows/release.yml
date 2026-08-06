@@ -44,10 +44,13 @@ jobs:
       # the other architecture would be offered a build it cannot run.
       #
       # `--publish never` is what leaves those publishers with nothing to race over, and it is also
-      # what lets `scripts/name-dmgs.mjs` rename the DMGs: publishing from inside the build uploads
-      # each artifact as it lands, which is before the hook that renames them has run. The feed is
-      # written either way, since electron-builder generates it from the artifacts rather than from
-      # the upload.
+      # what lets `scripts/finish-dmgs.mjs` rename the DMGs: publishing from inside the build
+      # uploads each artifact as it lands, which is before the hook that renames them has run. The
+      # feed is written either way, since electron-builder generates it from the artifacts rather
+      # than from the upload.
+      #
+      # That same hook is where the two disk images are notarized and stapled, and it runs before
+      # this step returns, so the upload below can only ever attach signed and ticketed ones.
       - run: pnpm exec electron-builder --mac --x64 --arm64 -c.mac.notarize=true --publish never
         env:
           CSC_LINK: ${{ secrets.CSC_LINK }}

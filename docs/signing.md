@@ -64,15 +64,31 @@ pnpm dist
 ```
 
 That runs the release gates, builds, signs with the keychain identity, notarizes, staples the
-ticket to the app, and produces the DMG and ZIP for both architectures under `release/`. The DMGs
-are named `Noctune-<version>-intel.dmg` and `Noctune-<version>-applesilicon.dmg`, which
-`scripts/name-dmgs.mjs` does after the build, since electron-builder itself names the Intel one
-after no architecture at all. The ZIPs beside them keep `arm64` in the name on purpose: that
-substring is how the updater tells the two apart. `release/` ends up holding exactly what a release
-publishes, those four plus the two ZIP blockmaps and `latest-mac.yml`, so a local build is the
-release rehearsed.
+ticket to the app, and produces the DMG and ZIP for both architectures under `release/`. Each disk
+image is then signed with the same identity, submitted to Apple in its own right, and stapled: it
+is the file a reader double-clicks, and Gatekeeper judges it before the app inside it is ever
+reached. The DMGs are named `Noctune-<version>-intel.dmg` and
+`Noctune-<version>-applesilicon.dmg`, which `scripts/finish-dmgs.mjs` does after the build, since
+electron-builder itself names the Intel one after no architecture at all. That same hook is what
+notarizes them, and it renames first so the file Apple mints a ticket for is the file that ships.
+The ZIPs beside them keep `arm64` in the name on purpose: that substring is how the updater tells
+the two apart. `release/` ends up holding exactly what a release publishes, those four plus the two
+ZIP blockmaps and `latest-mac.yml`, so a local build is the release rehearsed.
 
-Verify the result:
+Verify the image first, in the order a reader meets it:
+
+```sh
+codesign --verify --strict --verbose=2 release/Noctune-<version>-applesilicon.dmg
+xcrun stapler validate release/Noctune-<version>-applesilicon.dmg
+spctl -a -vvv -t open --context context:primary-signature release/Noctune-<version>-applesilicon.dmg
+```
+
+`spctl` must report `accepted` with `source=Notarized Developer ID`. An image that is signed but
+carries no ticket is rejected the same way an unsigned one is, and `-t open` with that context is
+the assessment macOS actually makes on a downloaded disk image, which `-t install` and `-t exec` do
+not stand in for.
+
+Then the app inside it:
 
 ```sh
 codesign -dv --verbose=4 release/mac-arm64/Noctune.app 2>&1 | grep -E "Authority|Runtime"
@@ -80,13 +96,16 @@ spctl -a -vvv -t install release/mac-arm64/Noctune.app
 xcrun stapler validate release/mac-arm64/Noctune.app
 ```
 
-`spctl` must report `source=Notarized Developer ID`. `stapler validate` must report that the ticket
-is present, which is what lets a downloaded copy open on a Mac that is offline or behind a firewall.
-`release/mac-arm64` is the arm64 slice and `release/mac` the x64 one, and both ship, so run those
-three against each.
+`spctl` must report `source=Notarized Developer ID` here too. `stapler validate` must report that
+the ticket is present, which is what lets a downloaded copy open on a Mac that is offline or behind
+a firewall. `release/mac-arm64` is the arm64 slice and `release/mac` the x64 one, and both ship, so
+run all six against each. Mounting the image with `hdiutil attach` and running the app checks
+against `/Volumes/Noctune <version>-arm64/Noctune.app` is the same thing done to the copy that
+actually ships, and worth it once before a release.
 
-Notarization takes a few minutes per architecture and the build waits on Apple, so `pnpm dist` is
-not the command for ordinary iteration. The first submission a team ever makes is the exception
+`pnpm dist` makes four submissions, an app and an image per architecture, and the two images go up
+together rather than one after the other, so the wait is roughly three round trips rather than
+four. It is still minutes of waiting on Apple, so this is not the command for ordinary iteration. The first submission a team ever makes is the exception
 worth knowing about before you sit through it: with no history behind the account Apple vets it
 apart from the routine path, and hours rather than minutes is normal. Every submission after it
 goes at the usual speed. Run a long one under `caffeinate -is pnpm dist`, since a Mac that sleeps
@@ -109,9 +128,10 @@ xcrun notarytool info <submission-id> --apple-id "$APPLE_ID" --team-id "$APPLE_T
 ```
 
 `Accepted` there means Apple did its part and only the packaging was lost. `xcrun stapler staple`
-attaches the ticket to the app already sitting in `release/`, which is the one thing
-`scripts/staple.mjs` never got to do, and re-running `pnpm dist` is safe: it submits afresh, which
-by then is the fast path.
+attaches the ticket to the file already sitting in `release/`, whichever submission was dropped:
+the app, which is what `scripts/staple.mjs` never got to do, or the disk image, which is
+`scripts/finish-dmgs.mjs`. Re-running `pnpm dist` is safe either way: it submits afresh, which by
+then is the fast path.
 
 ## 4. Local builds that skip all of it
 
@@ -120,7 +140,9 @@ pnpm package
 ```
 
 builds an ad-hoc signed app directory and never contacts Apple, even with the credentials sitting in
-`electron-builder.env`. `mac.notarize` is `false` in the config and only `pnpm dist` turns it on
+`electron-builder.env`. It builds no disk image either, since `--dir` is only the app directory, so
+`dmg.sign` has nothing to reach and needs no switch of its own. `mac.notarize` is `false` in the
+config and only `pnpm dist` turns it on
 with `-c.mac.notarize=true`. That direction is the one that works: electron-builder coerces only
 `mac.identity` from a string to a boolean, so a `false` passed as a CLI flag would arrive as the
 truthy string `"false"`, while the skip test is a strict `=== false`.
