@@ -68,6 +68,7 @@ tanstackIntent:
 - Never use em dashes anywhere in this repository, including code, comments, documentation, tests, commit messages, and generated content. Use commas, colons, parentheses, or regular hyphens instead.
 - Keep this `AGENTS.md` current. Update the relevant instructions whenever repository structure, commands, conventions, or workflows change.
 - Write every commit as a Conventional Commit (`type(scope): subject`), with a scope whenever the change has an obvious one (`player`, `electron`, `explore`, `settings`, and so on) and none when it spans the repository. Add a body whenever the subject line cannot carry the reasoning on its own: what was wrong, why this change, what it costs.
+- `README.md` and `CONTRIBUTING.md` are the outward-facing pair and restate nothing this file explains: the README says what the app is, why it exists and how to run it, and `CONTRIBUTING.md` points here for the reasoning behind any rule it states. A convention changed here has to be changed there too, since a contributor reads that file and never this one. The README's screenshots live in `docs/screenshots/` at 1440x900, and `docs/banner.png` is a 2400x600 render with no generator committed: it was drawn from a throwaway HTML file, so a new one is drawn again rather than regenerated.
 
 ## Noctune architecture
 
