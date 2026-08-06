@@ -64,7 +64,12 @@ pnpm dist
 ```
 
 That runs the release gates, builds, signs with the keychain identity, notarizes, staples the
-ticket to the app, and produces the DMG and ZIP for both architectures under `release/`.
+ticket to the app, and produces the DMG and ZIP for both architectures under `release/`. The DMGs
+are named `Noctune-<version>-intel.dmg` and `Noctune-<version>-applesilicon.dmg`, which
+`scripts/name-dmgs.mjs` does after the build, since electron-builder itself names the Intel one
+after no architecture at all. The ZIPs beside them keep `arm64` in the name on purpose: that
+substring is how the updater tells the two apart. The same four files are what a release publishes,
+so a local build is the release rehearsed.
 
 Verify the result:
 

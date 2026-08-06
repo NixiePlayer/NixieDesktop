@@ -31,25 +31,36 @@ jobs:
       - run: pnpm release:gate
         env:
           NOCTUNE_RELEASE_GATES_ACCEPTED: ${{ secrets.NOCTUNE_RELEASE_GATES_ACCEPTED }}
-      # The draft is created here rather than left to electron-builder, which runs a publisher per
-      # architecture and starts both before either has created anything. A draft is not keyed to
-      # its tag, so the second one is not refused: v0.1.1 produced two drafts, the artifacts split
-      # between them, and the step below published the one holding a single blockmap. Creating it
-      # first leaves them nothing to race over, since both find it by tag.
+      # The one release everything else here attaches to. electron-builder is not allowed to create
+      # it: it runs a publisher per architecture and starts both before either has created
+      # anything, and a draft is not keyed to its tag, so GitHub refuses neither. v0.1.1 produced
+      # two drafts for one tag, split its nine artifacts between them, and the publish step below
+      # picked the one holding a single blockmap.
       - run: gh release create "$GITHUB_REF_NAME" --draft --title "$GITHUB_REF_NAME" --notes ""
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       # Both architectures in one run, so one `latest-mac.yml` names both. Two jobs publishing that
       # file would leave whichever finished last as the update feed every installed copy reads, and
       # the other architecture would be offered a build it cannot run.
-      - run: pnpm exec electron-builder --mac --x64 --arm64 -c.mac.notarize=true --publish always
+      #
+      # `--publish never` is what leaves those publishers with nothing to race over, and it is also
+      # what lets `scripts/name-dmgs.mjs` rename the DMGs: publishing from inside the build uploads
+      # each artifact as it lands, which is before the hook that renames them has run. The feed is
+      # written either way, since electron-builder generates it from the artifacts rather than from
+      # the upload.
+      - run: pnpm exec electron-builder --mac --x64 --arm64 -c.mac.notarize=true --publish never
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_LINK: ${{ secrets.CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      # Named one glob at a time rather than as `release/*`, which also holds the two unpacked app
+      # bundles and electron-builder's own scratch files. A glob that matches nothing is passed
+      # through as itself and fails the upload, which is the loud half of the same choice.
+      - run: gh release upload "$GITHUB_REF_NAME" release/latest-mac.yml release/*.dmg release/*.zip release/*.blockmap
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       # The draft is what makes this order work: nothing can update to a release that is still a
       # draft, so the notes are written onto it and it is published in one move, with every
       # artifact already attached.

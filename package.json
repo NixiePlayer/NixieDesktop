@@ -122,6 +122,10 @@
 				}
 			]
 		},
-		"afterSign": "scripts/staple.mjs"
+		"dmg": {
+			"writeUpdateInfo": false
+		},
+		"afterSign": "scripts/staple.mjs",
+		"afterAllArtifactBuild": "scripts/name-dmgs.mjs"
 	}
 }
