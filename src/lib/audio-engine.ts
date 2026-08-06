@@ -1,5 +1,6 @@
 import type { NoctuneBridge, PlaybackSnapshot, QueueContext, Settings, Track } from "#/shared/contracts";
 import { defaultState } from "#/shared/defaults";
+import { isTrack } from "#/shared/entities";
 import { dbToLinear, normalizationGainDb, normalizationTargets, volumeGain } from "#/shared/normalization";
 import { nextQueueIndex } from "#/shared/queue";
 
@@ -90,6 +91,8 @@ export function createAudioEngine(deps: AudioEngineDeps = {}): AudioEngine {
 	let handoffTimer: ReturnType<typeof setTimeout> | undefined;
 	let loadingTimer: ReturnType<typeof setTimeout> | undefined;
 	let handoff = false;
+	/** The one extension in flight, shared so the boundary never asks for a second radio. */
+	let extending: Promise<boolean> | undefined;
 	/** Set by the two callers of `move` nobody pressed, and read by `play` on the same tick. */
 	let autoAdvanced = false;
 	let restoreTo = 0;
@@ -238,6 +241,49 @@ export function createAudioEngine(deps: AudioEngineDeps = {}): AudioEngine {
 	}
 
 	/**
+	 * Autoplay: a queue that has run out is grown with the radio YouTube Music builds around its own
+	 * last row, so listening does not end at the bottom of an album. The seed is the queue's last
+	 * track and not the one playing, because those differ exactly when it matters: the queue is
+	 * extended while the last track is still playing, and seeding off the current one would answer
+	 * for a song several rows back and repeat what has just been heard.
+	 *
+	 * The whole page goes in rather than a slice. That is what upstream's own queue does, and
+	 * `extractQueueTracks` already caps it, so trimming here would only mean asking again sooner.
+	 * Rows already in the queue are dropped: a radio seeded off the last track tends to open on it.
+	 *
+	 * One in-flight promise is shared, since both the preload and the boundary can reach the end of
+	 * the queue, and two radios for one seed are two different hundred-song orders. A failure is
+	 * false, never a throw: a radio that will not load costs the extension and nothing else.
+	 */
+	function extendQueue(): Promise<boolean> {
+		return (extending ??= (async () => {
+			const { currentTrack, queue } = state.playback;
+			const last = queue[queue.length - 1];
+			if (!currentTrack || !last) return false;
+			const token = generation;
+			try {
+				// Settings are read fresh here for the same reason `play` reads them: the settings page
+				// writes straight to the store and has no way back into the engine.
+				const stored = await getBridge()?.local.load();
+				if (!stored || stored.settings.autoplay === false || token !== generation) return false;
+				// Optional the whole way down like `report`: the engine's own tests run against a bridge
+				// with no music surface at all, and playback has to survive one.
+				const page = await getBridge()?.music?.query?.({ type: "radio", id: last.id });
+				if (!page || token !== generation) return false;
+				const held = new Set(state.playback.queue.map((item) => item.id));
+				const rows = page.items.filter(isTrack).filter((item) => !held.has(item.id));
+				if (!rows.length) return false;
+				update({ queue: [...state.playback.queue, ...rows] });
+				return true;
+			} catch {
+				return false;
+			}
+		})().finally(() => {
+			extending = undefined;
+		}));
+	}
+
+	/**
 	 * Prepares whatever `move("next")` will actually play, which is not the row after this one:
 	 * repeat "one" replays this track, repeat "all" wraps off the end, and shuffle jumps. Preparing
 	 * `queueIndex + 1` regardless meant those three all missed the fast path and resolved a stream
@@ -246,7 +292,17 @@ export function createAudioEngine(deps: AudioEngineDeps = {}): AudioEngine {
 	function preloadNext(token: number, settings: Settings) {
 		const { queueIndex, queue, repeat, shuffle } = state.playback;
 		const result = nextQueueIndex(queueIndex, queue.length, repeat, "next", random, shuffle);
-		if (result.shouldStop) return;
+		if (result.shouldStop) {
+			// The extension happens here, a whole track before the queue actually runs out, rather than
+			// at the boundary: a radio fetched once the deck has drained is silence for as long as the
+			// round trip takes, while one fetched now leaves time to preload its first row and hand off
+			// to it gaplessly. Re-entering cannot loop, since appended rows are exactly what stops
+			// `nextQueueIndex` reporting `shouldStop` again.
+			void extendQueue().then((grew) => {
+				if (grew && token === generation) preloadNext(token, settings);
+			});
+			return;
+		}
 		const upcoming = queue[result.index];
 		if (!upcoming) return;
 		const deck = active === 0 ? 1 : 0;
@@ -440,7 +496,17 @@ export function createAudioEngine(deps: AudioEngineDeps = {}): AudioEngine {
 				? nextQueueIndex(queueIndex, queue.length, repeat, direction, random, shuffle)
 				: { index: decided, shouldStop: false };
 		if (result.shouldStop && direction === "next") {
+			// Reaching here at all means the extension `preloadNext` fired a track ago has not landed,
+			// so the deck has drained with nothing to move to: pausing is the honest state right now,
+			// and it is also what a listener who is watching sees stop. The in-flight promise is then
+			// awaited rather than a fresh one started, since a second call would be a second radio for
+			// one seed, and a settled `false` is an answer already given. `auto` is carried through the
+			// re-entry so the track the queue reached on its own still announces itself.
 			pause();
+			const token = generation;
+			void extending?.then((grew) => {
+				if (grew && token === generation) move("next", auto);
+			});
 			return;
 		}
 		const track = queue[result.index];

@@ -573,6 +573,16 @@ function SettingsPage() {
 								</div>
 							</Setting>
 							<Setting
+								label="Autoplay"
+								description="Keeps playing when the queue runs out, on a radio YouTube Music seeds from the track that just finished. Turning this off stops Noctune at the end of the queue."
+								control={
+									<Switch
+										checked={settings.autoplay !== false}
+										onCheckedChange={(on) => void save({ ...settings, autoplay: on })}
+									/>
+								}
+							/>
+							<Setting
 								label="Audio quality"
 								description="Opus is preferred, AAC is the fallback."
 								control={

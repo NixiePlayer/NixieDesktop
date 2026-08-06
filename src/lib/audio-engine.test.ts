@@ -55,11 +55,14 @@ interface Harness {
 	position: ReturnType<typeof vi.fn>;
 	notify: ReturnType<typeof vi.fn>;
 	command: ReturnType<typeof vi.fn>;
+	query: ReturnType<typeof vi.fn>;
 	saved: PersistedState[];
 	stored: PersistedState;
 }
 
-function harness(options: { resolveDelay?: number; withoutMusic?: boolean } = {}): Harness {
+function harness(
+	options: { resolveDelay?: number; withoutMusic?: boolean; radio?: Track[]; radioDelay?: number } = {}
+): Harness {
 	const audio: [FakeAudio, FakeAudio] = [new FakeAudio(), new FakeAudio()];
 	const gains: { value: number }[] = [];
 	const log: string[] = [];
@@ -79,6 +82,12 @@ function harness(options: { resolveDelay?: number; withoutMusic?: boolean } = {}
 	});
 
 	const command = vi.fn(async () => ({ ok: true as const }));
+	// Autoplay's radio. Answers nothing by default, so a test that says nothing about autoplay still
+	// runs out of queue exactly as it did before it existed.
+	const query = vi.fn(async () => {
+		if (options.radioDelay) await new Promise((done) => setTimeout(done, options.radioDelay));
+		return { items: options.radio ?? [] };
+	});
 	const bridge = {
 		local: {
 			load: async () => structuredClone(stored),
@@ -89,7 +98,7 @@ function harness(options: { resolveDelay?: number; withoutMusic?: boolean } = {}
 		player: { resolve, position, notify },
 		// A bridge with no music surface is the shape this ran against before history reporting, and
 		// playback has to survive it: the report is optional the whole way down.
-		...(options.withoutMusic ? {} : { music: { command } }),
+		...(options.withoutMusic ? {} : { music: { command, query } }),
 	} as unknown as NoctuneBridge;
 
 	const makeGain = () => {
@@ -136,7 +145,19 @@ function harness(options: { resolveDelay?: number; withoutMusic?: boolean } = {}
 		};
 	});
 
-	return { engine: createAudioEngine(deps), audio, gains, log, resolve, position, notify, command, saved, stored };
+	return {
+		engine: createAudioEngine(deps),
+		audio,
+		gains,
+		log,
+		resolve,
+		position,
+		notify,
+		command,
+		query,
+		saved,
+		stored,
+	};
 }
 
 describe("audio engine", () => {
@@ -424,6 +445,76 @@ describe("audio engine", () => {
 		audio[0].dispatch("ended");
 
 		expect(engine.getSnapshot().playback.status).toBe("paused");
+	});
+
+	it("extends a queue that has run out with a radio seeded off its last track", async () => {
+		const { engine, audio, query } = harness({ radio: [track("r1"), track("r2")] });
+		await engine.start();
+		const queue = [track("t1"), track("t2")];
+		await engine.play(queue[1], queue);
+
+		// The extension lands while the last track is still playing, which is what leaves time to
+		// preload the row it will hand off to.
+		await vi.waitFor(() => expect(engine.getSnapshot().playback.queue).toHaveLength(4));
+		expect(query).toHaveBeenCalledExactlyOnceWith({ type: "radio", id: "t2" });
+
+		audio[0].dispatch("ended");
+		await vi.waitFor(() => expect(engine.getSnapshot().playback.status).toBe("playing"));
+		expect(engine.getSnapshot().playback.currentTrack?.id).toBe("r1");
+	});
+
+	it("stops at the end of the queue when autoplay is off, without asking for a radio", async () => {
+		const { engine, audio, query, stored } = harness({ radio: [track("r1")] });
+		stored.settings.autoplay = false;
+		await engine.start();
+		const queue = [track("t1")];
+		await engine.play(queue[0], queue);
+
+		audio[0].dispatch("ended");
+		await vi.waitFor(() => expect(engine.getSnapshot().playback.status).toBe("paused"));
+		expect(query).not.toHaveBeenCalled();
+		expect(engine.getSnapshot().playback.queue).toHaveLength(1);
+	});
+
+	it("drops radio rows the queue already holds", async () => {
+		const { engine } = harness({ radio: [track("t1"), track("t2"), track("r1")] });
+		await engine.start();
+		const queue = [track("t1"), track("t2")];
+		await engine.play(queue[1], queue);
+
+		// A radio seeded off the last track tends to open on it, and on its neighbours.
+		await vi.waitFor(() => expect(engine.getSnapshot().playback.queue).toHaveLength(3));
+		expect(engine.getSnapshot().playback.queue.map((item) => item.id)).toEqual(["t1", "t2", "r1"]);
+	});
+
+	it("pauses rather than erroring when the radio will not load", async () => {
+		const { engine, audio, query } = harness();
+		query.mockRejectedValue(new Error("no radio"));
+		await engine.start();
+		const queue = [track("t1")];
+		await engine.play(queue[0], queue);
+
+		audio[0].dispatch("ended");
+		await vi.waitFor(() => expect(query).toHaveBeenCalled());
+		expect(engine.getSnapshot().playback.status).toBe("paused");
+		expect(engine.getSnapshot().playback.queue).toHaveLength(1);
+	});
+
+	it("asks for one radio when the boundary is reached before the extension lands", async () => {
+		const { engine, audio, query } = harness({ radio: [track("r1"), track("r2")], radioDelay: 20 });
+		await engine.start();
+		const queue = [track("t1")];
+		await engine.play(queue[0], queue);
+
+		// The deck drains with the fetch still in flight, so this is the race path: it pauses, waits on
+		// the promise the preload already started, and resumes onto what it appended.
+		audio[0].dispatch("ended");
+		expect(engine.getSnapshot().playback.status).toBe("paused");
+
+		await vi.waitFor(() => expect(engine.getSnapshot().playback.status).toBe("playing"));
+		expect(engine.getSnapshot().playback.currentTrack?.id).toBe("r1");
+		// One radio for one seed: `move` waits on the promise `preloadNext` started, never its own.
+		expect(query).toHaveBeenCalledTimes(1);
 	});
 
 	it("loads the deck on the first play of a restored session", async () => {

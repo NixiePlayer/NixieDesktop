@@ -260,6 +260,11 @@ export interface Settings {
 	 * own. Read as on unless it is exactly false, for the same reason `reportHistory` is.
 	 */
 	notifyTrackChange?: boolean;
+	/**
+	 * Whether a queue that has run out is extended with a radio seeded off its last track, so the
+	 * music keeps going. Read as on unless it is exactly false, for the same reason `reportHistory` is.
+	 */
+	autoplay?: boolean;
 }
 
 export interface WindowBounds {
