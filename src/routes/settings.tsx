@@ -4,6 +4,7 @@ import {
 	Download,
 	ExternalLink,
 	Gauge,
+	Heart,
 	Info,
 	Monitor,
 	Moon,
@@ -743,6 +744,26 @@ function SettingsPage() {
 								description="Opens a new issue on GitHub with this build's version already filled in."
 							/>
 						</ScopeGroup>
+
+						{/* The one row on this page asking for something, so it carries its own card rather than
+						    sitting in the group above, and the button is the page inverted: nothing else on the
+						    tab is filled, which is the whole of its prominence. */}
+						<div className="border-border flex flex-col gap-4 rounded-xl border p-5">
+							<div className="flex flex-col gap-1">
+								<p className="text-sm font-medium">Sponsor Noctune</p>
+								<p className="text-muted-foreground text-sm">
+									Noctune is free and open source. A sponsorship covers what shipping it costs, starting with the Apple
+									Developer account that signs and notarizes every release, and keeps the work going.
+								</p>
+							</div>
+							<Button
+								className="bg-foreground text-background hover:bg-foreground/90 self-start"
+								render={<a href="https://github.com/sponsors/TheEdoRan" target="_blank" rel="noreferrer" />}
+							>
+								<Heart data-icon="inline-start" className="fill-pink-500 text-pink-500" />
+								Sponsor on GitHub
+							</Button>
+						</div>
 
 						<p className="text-muted-foreground max-w-2xl text-sm">
 							Noctune is an independent client and is not affiliated with, endorsed by, or sponsored by YouTube or
