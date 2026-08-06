@@ -20,14 +20,29 @@ export const normalizationTargets: Record<Exclude<NormalizationLevel, "off">, nu
 export const assumedIntegratedLufs = -9;
 
 /**
+ * The ceiling on the lift, and the reason there is one: YouTube publishes an integrated loudness
+ * and no true peak, so how much headroom sits above a track's samples is unknown. A quiet, dynamic
+ * master can already be peaking near full scale, and a lift sized off the loudness alone drives
+ * those peaks past 0 dBFS, where the destination clips them. 6 dB is the range that actually
+ * occurs: it carries a -19 LUFS master to -14 exactly.
+ *
+ * ponytail: fixed 6 dB ceiling, chosen because the true peak is unknowable from the response
+ * alone. Measuring it off the decoded stream, or putting a limiter on the master bus, would size
+ * each lift to its own headroom and let the cap go.
+ */
+export const maxBoostDb = 6;
+
+/**
  * YouTube publishes the integrated loudness it measured for every stream: the same number
  * stats for nerds shows as "content loudness", so no local analysis is needed.
  *
- * Gain is never positive. YouTube does not raise quiet tracks either, and without a true peak
- * measurement a boost can clip, so "Loud" only means less attenuation, not amplification.
+ * A track over the target is pulled all the way down to it, and a track under it is raised to it,
+ * capped at maxBoostDb. Attenuating only is half the job: a quiet master left where it was is the
+ * gap the listener reaches for the volume knob to close, which is what normalization exists to
+ * spare them.
  */
 export function normalizationGainDb(integratedLufs: number | undefined, targetLufs = normalizationTargets.normal) {
-	return Math.min(targetLufs - (integratedLufs ?? assumedIntegratedLufs), 0);
+	return Math.min(targetLufs - (integratedLufs ?? assumedIntegratedLufs), maxBoostDb);
 }
 
 export function dbToLinear(db: number) {

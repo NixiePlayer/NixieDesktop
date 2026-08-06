@@ -33,7 +33,7 @@ import { checkForUpdates, useUpdateState } from "#/lib/updates";
 import { cn } from "#/lib/utils";
 import type { AppInfo, NormalizationLevel, Settings } from "#/shared/contracts";
 import { defaultState } from "#/shared/defaults";
-import { normalizationTargets } from "#/shared/normalization";
+import { maxBoostDb, normalizationTargets } from "#/shared/normalization";
 import { regionCode } from "#/shared/regions";
 
 const themes = [
@@ -536,7 +536,7 @@ function SettingsPage() {
 						<ScopeGroup scope="On this computer">
 							<Setting
 								label="Volume normalization"
-								description="Holds tracks near one loudness, using the levels YouTube measured. Louder targets attenuate less; nothing is ever boosted."
+								description={`Holds tracks near one loudness, using the levels YouTube measured. Quiet tracks are brought up toward the target and loud ones held down, with the lift capped at ${maxBoostDb} dB so nothing clips.`}
 								control={
 									<Switch
 										checked={settings.normalization !== "off"}

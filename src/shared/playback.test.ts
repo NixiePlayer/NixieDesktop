@@ -1,17 +1,24 @@
 import { describe, expect, it } from "vitest";
-import { normalizationGainDb, normalizationTargets, volumeGain } from "./normalization";
+import { maxBoostDb, normalizationGainDb, normalizationTargets, volumeGain } from "./normalization";
 import { nextQueueIndex } from "./queue";
 
 describe("playback core", () => {
-	it("attenuates loud tracks to the target and leaves quiet ones alone", () => {
+	it("moves a track to the target from either side of it", () => {
 		// The stats for nerds example: content at -5.9 LUFS plays at -8.1 dB, which is 40%.
 		expect(normalizationGainDb(-5.9)).toBeCloseTo(-8.1, 5);
 		expect(normalizationGainDb(-10)).toBe(-4);
-		expect(normalizationGainDb(-18)).toBe(0);
-		// A louder target only attenuates less, it never boosts.
+		expect(normalizationGainDb(-18)).toBe(4);
+		expect(normalizationGainDb(-14)).toBe(0);
+		// Attenuation is uncapped: a brickwalled master goes down further than the lift ever goes up.
+		expect(normalizationGainDb(-3)).toBe(-11);
+		// The lift is capped, since the headroom above a quiet master's peaks is unmeasured.
+		expect(normalizationGainDb(-40)).toBe(maxBoostDb);
+		// Each named target moves the same track by its own difference.
 		expect(normalizationGainDb(-10, normalizationTargets.loud)).toBe(-1);
+		expect(normalizationGainDb(-10, normalizationTargets.normal)).toBe(-4);
 		expect(normalizationGainDb(-10, normalizationTargets.quiet)).toBe(-9);
-		expect(normalizationGainDb(-25, normalizationTargets.loud)).toBe(0);
+		expect(normalizationGainDb(-25, normalizationTargets.loud)).toBe(maxBoostDb);
+		expect(normalizationGainDb(-21, normalizationTargets.quiet)).toBe(2);
 	});
 
 	it("attenuates a stream that states no loudness rather than passing it through", () => {
