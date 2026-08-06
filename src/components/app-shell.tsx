@@ -18,7 +18,7 @@ import { queryMusic, rememberSearch } from "#/lib/api";
 import { usePlaylists } from "#/lib/library";
 import { useUpdateState } from "#/lib/updates";
 import { cn } from "#/lib/utils";
-import { usePlayer, useSystemIntegration } from "#/player";
+import { usePlayback, usePlayer, useSystemIntegration } from "#/player";
 import type { AuthState, MusicEntity, Track } from "#/shared/contracts";
 import {
 	autoPlaylist,
@@ -32,7 +32,7 @@ import {
 	trackAlbumId,
 } from "#/shared/entities";
 import { EntityContextMenu } from "./entity-menu";
-import { Artwork, entityRoute } from "./media";
+import { Artwork, entityRoute, PlayingBars } from "./media";
 import { NowPanel, type PanelTab } from "./now-panel";
 import { PlayerBar } from "./player-bar";
 import { NewPlaylistDialog } from "./playlist-dialog";
@@ -207,6 +207,7 @@ function NavRail({ open }: { open: boolean }) {
 	const playlists = usePlaylists();
 	// The rail is also what starts the renderer's half of the updater, since it outlives every page.
 	const ready = useUpdateState().status === "ready";
+	const { playback } = usePlayback();
 
 	const itemClass =
 		"flex h-10 items-center gap-4 rounded-lg px-3 text-sm transition-colors hover:bg-accent data-[status=active]:bg-accent data-[status=active]:font-medium";
@@ -254,6 +255,18 @@ function NavRail({ open }: { open: boolean }) {
 								{playlist.author ?? autoPlaylist(playlist.id)?.author}
 							</span>
 						</span>
+						{/* Which row the queue came from, which is the queue's own context and not the track on it:
+						    the same song sits in several playlists, and a radio or an album can be playing a song
+						    this playlist also holds, so a track-id test would light the wrong row, or several. The
+						    context carries the id `/playlist/$id` was opened with, which is the id this row links
+						    with, so there is nothing to normalize between them. The margin is on the wrapper rather
+						    than on the bars, since `PlayingBars` takes no class and this is its only caller that
+						    needs one. */}
+						{playback.context?.type === "playlist" && playback.context.id === playlist.id && playback.currentTrack && (
+							<span className="ml-auto shrink-0 pl-2">
+								<PlayingBars paused={playback.status !== "playing"} />
+							</span>
+						)}
 					</EntityContextMenu>
 				))}
 
