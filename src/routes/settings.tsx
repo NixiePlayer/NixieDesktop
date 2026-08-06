@@ -758,6 +758,7 @@ function SettingsPage() {
 							</div>
 							<Button
 								className="bg-foreground text-background hover:bg-foreground/90 self-start"
+								nativeButton={false}
 								render={<a href="https://github.com/sponsors/TheEdoRan" target="_blank" rel="noreferrer" />}
 							>
 								<Heart data-icon="inline-start" className="fill-pink-500 text-pink-500" />

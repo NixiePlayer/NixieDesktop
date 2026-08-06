@@ -194,6 +194,7 @@ function PlaylistPage() {
 						variant="ghost"
 						size="icon-sm"
 						aria-label="Close playlist search"
+						nativeButton={false}
 						render={<Link to="/playlist/$id" params={{ id }} search={{ find: undefined }} />}
 					>
 						<X />
