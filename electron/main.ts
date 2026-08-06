@@ -91,10 +91,11 @@ const APP_NAME = process.env.VITE_DEV_SERVER_URL ? "Noctune (Dev)" : "Noctune";
 // macOS reads the name once, while the first menu is built, so setting this after `whenReady` was too
 // late and the menu bar and About panel both still said "Electron".
 app.setName(APP_NAME);
-// The data path is pinned to the plain name. Electron derives it from the app name, so "(Dev)" would
-// name the directory too, and a development run has always read the same session, downloads and
-// playback state as the installed app.
-app.setPath("userData", join(app.getPath("appData"), "Noctune"));
+// The data path carries the channel, so a development run holds its own linked account, downloads,
+// playback state and cookies, and the two can be open at once: one profile directory shared between
+// two Chromium processes is two writers on the same cookie and Local Storage databases. It is set
+// rather than left to Electron so the packaged path stays `Noctune` whatever the bundle is called.
+app.setPath("userData", join(app.getPath("appData"), APP_NAME));
 
 // `release()` is a kernel version and says nothing about which system it came from, so the diagnostics
 // line names the platform itself. An unrecognised one prints its own `process.platform`, which is the
