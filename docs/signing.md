@@ -76,9 +76,36 @@ xcrun stapler validate release/mac-arm64/Noctune.app
 
 `spctl` must report `source=Notarized Developer ID`. `stapler validate` must report that the ticket
 is present, which is what lets a downloaded copy open on a Mac that is offline or behind a firewall.
+`release/mac-arm64` is the arm64 slice and `release/mac` the x64 one, and both ship, so run those
+three against each.
 
 Notarization takes a few minutes per architecture and the build waits on Apple, so `pnpm dist` is
-not the command for ordinary iteration.
+not the command for ordinary iteration. The first submission a team ever makes is the exception
+worth knowing about before you sit through it: with no history behind the account Apple vets it
+apart from the routine path, and hours rather than minutes is normal. Every submission after it
+goes at the usual speed. Run a long one under `caffeinate -is pnpm dist`, since a Mac that sleeps
+mid-wait drops the connection `notarytool` is holding open.
+
+That dropped connection is a failure mode of its own, and it does not mean what it says:
+
+```
+⨯ Failed to notarize via notarytool.  Failed with unexpected result:
+Error: HTTPError(statusCode: nil, error: ... Code=-1001 "The request timed out."
+```
+
+`-1001` is this Mac giving up on the HTTPS poll, not Apple rejecting the build. The submission
+carries on server side, and its id is in the failing URL, so ask about it rather than assume the
+worst:
+
+```sh
+xcrun notarytool info <submission-id> --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" \
+  --password "$APPLE_APP_SPECIFIC_PASSWORD"
+```
+
+`Accepted` there means Apple did its part and only the packaging was lost. `xcrun stapler staple`
+attaches the ticket to the app already sitting in `release/`, which is the one thing
+`scripts/staple.mjs` never got to do, and re-running `pnpm dist` is safe: it submits afresh, which
+by then is the fast path.
 
 ## 4. Local builds that skip all of it
 
@@ -119,8 +146,12 @@ its own.
    - `NOCTUNE_RELEASE_GATES_ACCEPTED`, `auth,range,pcm,lyrics-rights`
 
 4. Delete the `.p12` from disk.
-5. Cut a release with `pnpm release:patch` (or `:minor`, `:major`). The tag it pushes is what runs
-   the workflow, there is nothing to start from the Actions tab.
+5. Cut a release with `pnpm release:patch` (or `:minor`, `:major`), read what it is about to publish
+   with `pnpm release:notes`, then `pnpm release:push`. The tag arriving on the remote is what runs
+   the workflow, there is nothing to start from the Actions tab. Everything before that push is
+   local and free to redo: `pnpm release:retag` moves the tag onto a fix committed after the bump,
+   and the version stays the one nobody has seen. After the push it is a fact, and the only way out
+   of a bad release is the next one.
 
 No token has to be created for the publish itself. `GH_TOKEN` in the build step is the
 `secrets.GITHUB_TOKEN` Actions mints for the run, and `permissions: contents: write` on the job is
@@ -131,7 +162,43 @@ notes and publishes it.
 
 ## Certificate maintenance
 
-A Developer ID Application certificate is valid for five years, and expiry does not invalidate
-builds already notarized: the notarization ticket is what Gatekeeper checks, and it outlives the
-certificate. You only need a new certificate to sign something new. Renew it the same way as step 1,
-export it again for CI, and update `CSC_LINK`.
+Expiry costs nothing that is already shipped. The signature carries a secure timestamp, so
+Gatekeeper judges whether the certificate was valid when the app was signed rather than whether it
+is valid today, and the notarization ticket is Apple's own and outlives the certificate either way.
+An installed copy keeps opening indefinitely. What expiry costs is the ability to sign something
+new, which is to say the next release and nothing else.
+
+A Developer ID Application certificate is issued for five years, but a leaf cannot outlive the
+intermediate that signed it, and Apple's original `Developer ID Certification Authority` expires
+`Feb 1 22:12:15 2027 GMT`. One issued under it is truncated to that same second rather than given
+its term, which is why a certificate minted in August 2026 reads as under six months and looks like
+a mistake. The successor, `Developer ID Certification Authority, OU=G2`, runs to `Sep 17 2031`, so
+a certificate issued once Apple moves new issuance onto it gets the full term back. Read what you
+were actually given rather than assume either one:
+
+```sh
+security find-certificate -c "Developer ID Application" -p | openssl x509 -noout -dates
+```
+
+Renewing is step 1 over again, with two things to get right.
+
+The certificate must be issued under the **same team**. The designated requirement baked into every
+signed copy pins `certificate leaf[subject.OU]` to the team id and tests the intermediate by marker
+OID (`1.2.840.113635.100.6.2.6`), which both the original CA and G2 carry. So a same-team renewal
+satisfies the identical requirement and the intermediate change is invisible, which is what keeps
+`electron-updater` accepting the new build on every installed copy. A certificate from a different
+team produces an app that Squirrel.Mac refuses as an update, stranding every install on its current
+version with no remote way to fix it. Read the requirement off a build with `codesign -d -r-` if
+there is ever any doubt.
+
+Then **delete the expired identity from the keychain**. Renewal leaves two `Developer ID
+Application` identities in it, and step 1 requires exactly one, since nothing here names the
+certificate and electron-builder cannot choose between them. `security find-identity -v -p
+codesigning` is the check, and the build failure when there are two reads nothing like a
+certificate problem.
+
+Nothing in `electron-builder.env` changes: `APPLE_ID`, `APPLE_TEAM_ID` and the app-specific
+password all survive a renewal. Export the new certificate for CI as in step 5 and update
+`CSC_LINK`, plus `CSC_KEY_PASSWORD` if the new `.p12` takes a different password. Renew a few weeks
+early rather than on the day, since certificates overlap happily and the alternative is doing this
+under pressure with a release waiting.
