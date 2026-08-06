@@ -1,7 +1,7 @@
 import { Globe, Link2, Lock, Pencil, Plus } from "lucide-react";
 import { useState } from "react";
 import { addPlaylist } from "#/lib/library";
-import type { PlaylistPrivacy } from "#/shared/contracts";
+import type { Playlist, PlaylistPrivacy } from "#/shared/contracts";
 import { Button } from "./ui/button";
 import {
 	Dialog,
@@ -53,8 +53,26 @@ function readForm(form: HTMLFormElement) {
 	};
 }
 
-export function NewPlaylistDialog() {
-	const [open, setOpen] = useState(false);
+/**
+ * Left to itself this is the rail's `+` button and owns both its state and its trigger. A menu's
+ * "Save to playlist" submenu drives it instead: the item that opens it is gone by the time the
+ * dialog appears, so the state has to be held above the popup and there is no trigger to render.
+ */
+export function NewPlaylistDialog({
+	open: controlledOpen,
+	onOpenChange,
+	onCreated,
+}: {
+	open?: boolean;
+	onOpenChange?: (open: boolean) => void;
+	onCreated?: (playlist: Playlist) => void;
+}) {
+	const [ownOpen, setOwnOpen] = useState(false);
+	const open = controlledOpen ?? ownOpen;
+	const setOpen = (next: boolean) => {
+		setOwnOpen(next);
+		onOpenChange?.(next);
+	};
 	const [busy, setBusy] = useState(false);
 	const [privacy, setPrivacy] = useState<PlaylistPrivacy>("public");
 	const [collaborate, setCollaborate] = useState(false);
@@ -75,9 +93,11 @@ export function NewPlaylistDialog() {
 				}
 			}}
 		>
-			<DialogTrigger render={<Button variant="ghost" size="icon-sm" aria-label="New playlist" />}>
-				<Plus />
-			</DialogTrigger>
+			{controlledOpen === undefined && (
+				<DialogTrigger render={<Button variant="ghost" size="icon-sm" aria-label="New playlist" />}>
+					<Plus />
+				</DialogTrigger>
+			)}
 			<DialogContent>
 				<DialogHeader>
 					<DialogTitle>New playlist</DialogTitle>
@@ -98,9 +118,7 @@ export function NewPlaylistDialog() {
 								collaborate: shareable && collaborate,
 							})
 							.then((result) => {
-								// Straight into the store rather than back up to the rail: the submenu offering the
-								// same playlists is nowhere near that rail and has to see the new one too.
-								addPlaylist({
+								const playlist: Playlist = {
 									// The create endpoint answers with the playlist's own id, where a playlist is
 									// addressed by its browse id everywhere in this app: the same string under `VL`.
 									id: result.id ? `VL${result.id}` : title,
@@ -108,7 +126,11 @@ export function NewPlaylistDialog() {
 									description: description || undefined,
 									privacy,
 									itemCount: 0,
-								});
+								};
+								// Straight into the store rather than back up to the rail: the submenu offering the
+								// same playlists is nowhere near that rail and has to see the new one too.
+								addPlaylist(playlist);
+								onCreated?.(playlist);
 								setOpen(false);
 								toast.add({ title: "Playlist created", description: title, type: "success" });
 							})

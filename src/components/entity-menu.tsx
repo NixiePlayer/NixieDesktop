@@ -11,6 +11,7 @@ import {
 	ListPlus,
 	ListStart,
 	MoreHorizontal,
+	Plus,
 	Radio,
 	Search,
 	Shuffle,
@@ -21,7 +22,8 @@ import {
 	UserMinus,
 	UserPlus,
 } from "lucide-react";
-import type { ReactNode } from "react";
+import { type ReactNode, useState } from "react";
+import { NewPlaylistDialog } from "#/components/playlist-dialog";
 import { Button } from "#/components/ui/button";
 import {
 	DropdownMenu,
@@ -149,6 +151,21 @@ export async function playRadio(
 	if (starting === key) starting = undefined;
 }
 
+/**
+ * Put everything a menu subject holds into a playlist. A library holds playlists nobody but their
+ * owner can edit, and nothing upstream marks which ones those are, so being refused is a normal
+ * outcome rather than a fault worth hiding. Reporting and invalidation stay with the callers, which
+ * are components and are the only ones that know what to say about it.
+ */
+export async function addToPlaylist(item: Subject, playlist: Playlist) {
+	const tracks = await tracksOf(item);
+	await window.noctune?.music.command({
+		type: "playlist-add",
+		playlistId: playlist.id,
+		trackIds: tracks.slice(0, SAVE_LIMIT).map((one) => one.id),
+	});
+}
+
 /** Where the entity lives on the web player. A playlist id is stored with the `VL` browse prefix. */
 function shareUrl(item: Subject): string {
 	const base = "https://music.youtube.com";
@@ -165,17 +182,22 @@ function shareUrl(item: Subject): string {
  * `extra` is for whoever owns the list the row is in: a playlist page adds reordering and removal,
  * which mean nothing anywhere else. `queueIndex` is what tells a row it is *in* the queue, since
  * removing from the queue addresses a position and not a track.
+ *
+ * `onNewPlaylist` is a call back up to the root for the same reason: the dialog it opens cannot be
+ * mounted here.
  */
 function MenuItems({
 	item,
 	queueIndex,
 	extra,
 	downloaded,
+	onNewPlaylist,
 }: {
 	item: Subject;
 	queueIndex?: number;
 	extra?: ReactNode;
 	downloaded?: boolean;
+	onNewPlaylist: () => void;
 }) {
 	const engine = usePlayer();
 	const router = useRouter();
@@ -218,14 +240,7 @@ function MenuItems({
 
 	const save = (playlist: Playlist) =>
 		run(`Not added to ${playlist.title}`, async () => {
-			// A library holds playlists nobody but their owner can edit, and nothing upstream marks which
-			// ones those are, so being refused is a normal outcome rather than a fault worth hiding.
-			const tracks = await tracksOf(item);
-			await window.noctune?.music.command({
-				type: "playlist-add",
-				playlistId: playlist.id,
-				trackIds: tracks.slice(0, SAVE_LIMIT).map((one) => one.id),
-			});
+			await addToPlaylist(item, playlist);
 			toast.add({ title: "Saved", description: `Added to ${playlist.title}.`, type: "success" });
 			// The playlist now holds a song its cached page does not list.
 			void router.invalidate();
@@ -376,15 +391,18 @@ function MenuItems({
 							Save to playlist
 						</DropdownMenuSubTrigger>
 						<DropdownMenuSubContent className="max-w-64">
-							{playlists.length ? (
-								playlists.map((playlist) => (
-									<DropdownMenuItem key={playlist.id} onClick={() => void save(playlist)}>
-										<span className="truncate">{playlist.title}</span>
-									</DropdownMenuItem>
-								))
-							) : (
-								<DropdownMenuItem disabled>No playlists</DropdownMenuItem>
-							)}
+							{/* Also the whole submenu for an account holding no playlists yet, which is the one
+							    place where "you have none" and "make one" are the same answer. */}
+							<DropdownMenuItem onClick={onNewPlaylist}>
+								<Plus />
+								New playlist
+							</DropdownMenuItem>
+							{playlists.length > 0 && <DropdownMenuSeparator />}
+							{playlists.map((playlist) => (
+								<DropdownMenuItem key={playlist.id} onClick={() => void save(playlist)}>
+									<span className="truncate">{playlist.title}</span>
+								</DropdownMenuItem>
+							))}
 						</DropdownMenuSubContent>
 					</DropdownMenuSub>
 				)}
@@ -435,6 +453,30 @@ function MenuItems({
 }
 
 /**
+ * The submenu's "New playlist", held by whichever root the menu hangs off rather than by `MenuItems`.
+ * The items unmount with the popup, and the popup closes on the very click that opens the dialog, so
+ * a dialog mounted among them would be torn down before it drew. The root outlives both.
+ */
+function useNewPlaylist(item: Subject) {
+	const router = useRouter();
+	const [open, setOpen] = useState(false);
+	const dialog = (
+		<NewPlaylistDialog
+			open={open}
+			onOpenChange={setOpen}
+			onCreated={(playlist) =>
+				void run(`Not added to ${playlist.title}`, async () => {
+					await addToPlaylist(item, playlist);
+					// The dialog says the playlist was created; only a refusal to fill it needs a word here.
+					void router.invalidate();
+				})
+			}
+		/>
+	);
+	return { dialog, openNew: () => setOpen(true) };
+}
+
+/**
  * The row-level menu, the same one the player bar hangs off its now-playing track. Everything here is
  * either a local queue edit or one command upstream already accepts.
  */
@@ -465,25 +507,29 @@ export function EntityMenu({
 	className?: string;
 }) {
 	const entity = unwrap(item);
+	const { dialog, openNew } = useNewPlaylist(entity);
 
 	return (
-		<DropdownMenu>
-			<DropdownMenuTrigger
-				render={
-					<Button
-						variant="ghost"
-						size="icon-sm"
-						className={className}
-						aria-label={`Options for ${entityTitle(entity)}`}
-						// The row underneath plays on click, and the menu is not a way of asking for that.
-						onClick={(event) => event.stopPropagation()}
-					/>
-				}
-			>
-				<MoreHorizontal />
-			</DropdownMenuTrigger>
-			<MenuItems item={entity} queueIndex={queueIndex} extra={extra} />
-		</DropdownMenu>
+		<>
+			<DropdownMenu>
+				<DropdownMenuTrigger
+					render={
+						<Button
+							variant="ghost"
+							size="icon-sm"
+							className={className}
+							aria-label={`Options for ${entityTitle(entity)}`}
+							// The row underneath plays on click, and the menu is not a way of asking for that.
+							onClick={(event) => event.stopPropagation()}
+						/>
+					}
+				>
+					<MoreHorizontal />
+				</DropdownMenuTrigger>
+				<MenuItems item={entity} queueIndex={queueIndex} extra={extra} onNewPlaylist={openNew} />
+			</DropdownMenu>
+			{dialog}
+		</>
 	);
 }
 
@@ -507,11 +553,23 @@ export function EntityContextMenu({
 	downloaded?: boolean;
 }) {
 	const entity = unwrap(item);
+	const { dialog, openNew } = useNewPlaylist(entity);
 
 	return (
-		<ContextMenuPrimitive.Root>
-			<ContextMenuPrimitive.Trigger {...props}>{children}</ContextMenuPrimitive.Trigger>
-			<MenuItems item={entity} queueIndex={queueIndex} extra={extra} downloaded={downloaded} />
-		</ContextMenuPrimitive.Root>
+		// A fragment and not a wrapper: the row or card is the trigger, and an element around it is
+		// exactly what the `render` above avoids. A fragment adds nothing to the DOM.
+		<>
+			<ContextMenuPrimitive.Root>
+				<ContextMenuPrimitive.Trigger {...props}>{children}</ContextMenuPrimitive.Trigger>
+				<MenuItems
+					item={entity}
+					queueIndex={queueIndex}
+					extra={extra}
+					downloaded={downloaded}
+					onNewPlaylist={openNew}
+				/>
+			</ContextMenuPrimitive.Root>
+			{dialog}
+		</>
 	);
 }
