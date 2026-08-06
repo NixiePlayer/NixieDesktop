@@ -191,6 +191,17 @@
 	--ring: transparent;
 }
 
+/* A text field is the exception, and gets the accent back. Everything else here is reached by
+   tabbing, where the reader already knows what they landed on, but a field is reached by clicking
+   into it: with no ring at all nothing on screen says where the next keystroke will land. Giving
+   --ring back is enough, since the components already carry focus-visible:border-ring and
+   focus-visible:ring-ring/50. This deliberately reaches every Input and Textarea in the app, the
+   top bar's search field included: they are all places typing goes. */
+input:focus-visible,
+textarea:focus-visible {
+	--ring: var(--primary);
+}
+
 /* The frameless window is moved by dragging the top bar, so interactive children opt out. */
 .drag-region {
 	-webkit-app-region: drag;

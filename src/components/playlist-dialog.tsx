@@ -118,15 +118,29 @@ export function NewPlaylistDialog() {
 				>
 					<FieldGroup>
 						<Field>
-							<FieldLabel htmlFor="new-playlist-title">Title</FieldLabel>
-							<Input id="new-playlist-title" name="title" maxLength={150} required autoComplete="off" />
+							{/* Every field names its control through `aria-labelledby` rather than `htmlFor`: a label
+						    bound to a control forwards a click onto it, so a press on the word put the caret in
+						    the field or opened the select. The accessible name is the same either way. */}
+							<FieldLabel id="new-playlist-title-label">Title</FieldLabel>
+							<Input
+								aria-labelledby="new-playlist-title-label"
+								name="title"
+								maxLength={150}
+								required
+								autoComplete="off"
+							/>
 						</Field>
 						<Field>
-							<FieldLabel htmlFor="new-playlist-description">Description</FieldLabel>
-							<Textarea id="new-playlist-description" name="description" maxLength={5000} />
+							<FieldLabel id="new-playlist-description-label">Description</FieldLabel>
+							<Textarea
+								aria-labelledby="new-playlist-description-label"
+								name="description"
+								maxLength={5000}
+								className="resize-none"
+							/>
 						</Field>
 						<Field>
-							<FieldLabel htmlFor="new-playlist-privacy">Privacy</FieldLabel>
+							<FieldLabel id="new-playlist-privacy-label">Privacy</FieldLabel>
 							<Select
 								items={privacyLabels}
 								value={privacy}
@@ -135,7 +149,7 @@ export function NewPlaylistDialog() {
 									if (next === "private") setCollaborate(false);
 								}}
 							>
-								<SelectTrigger id="new-playlist-privacy">
+								<SelectTrigger aria-labelledby="new-playlist-privacy-label">
 									<SelectValue>
 										<PrivacyLabel privacy={privacy} />
 									</SelectValue>
@@ -154,9 +168,9 @@ export function NewPlaylistDialog() {
 							<FieldDescription>{privacies[privacy].hint}</FieldDescription>
 						</Field>
 						<Field orientation="horizontal">
-							<FieldLabel htmlFor="new-playlist-collaborate">Collaborate</FieldLabel>
+							<FieldLabel id="new-playlist-collaborate-label">Collaborate</FieldLabel>
 							<Switch
-								id="new-playlist-collaborate"
+								aria-labelledby="new-playlist-collaborate-label"
 								checked={shareable && collaborate}
 								disabled={!shareable}
 								onCheckedChange={setCollaborate}
@@ -220,22 +234,34 @@ export function EditPlaylistDialog({
 				>
 					<FieldGroup>
 						<Field>
-							<FieldLabel htmlFor="playlist-title">Name</FieldLabel>
-							<Input id="playlist-title" name="title" defaultValue={title} maxLength={150} required />
+							<FieldLabel id="playlist-title-label">Name</FieldLabel>
+							<Input
+								aria-labelledby="playlist-title-label"
+								name="title"
+								defaultValue={title}
+								maxLength={150}
+								required
+							/>
 						</Field>
 						<Field>
-							<FieldLabel htmlFor="playlist-description">Description</FieldLabel>
-							<Textarea id="playlist-description" name="description" defaultValue={description} maxLength={5000} />
+							<FieldLabel id="playlist-description-label">Description</FieldLabel>
+							<Textarea
+								aria-labelledby="playlist-description-label"
+								name="description"
+								defaultValue={description}
+								maxLength={5000}
+								className="resize-none"
+							/>
 						</Field>
 						{nextPrivacy && (
 							<Field>
-								<FieldLabel htmlFor="playlist-privacy">Privacy</FieldLabel>
+								<FieldLabel id="playlist-privacy-label">Privacy</FieldLabel>
 								<Select
 									items={privacyLabels}
 									value={nextPrivacy}
 									onValueChange={(value) => setNextPrivacy(value as PlaylistPrivacy)}
 								>
-									<SelectTrigger id="playlist-privacy">
+									<SelectTrigger aria-labelledby="playlist-privacy-label">
 										<SelectValue>
 											<PrivacyLabel privacy={nextPrivacy} />
 										</SelectValue>
