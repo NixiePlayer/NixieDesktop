@@ -31,6 +31,14 @@ jobs:
       - run: pnpm release:gate
         env:
           NOCTUNE_RELEASE_GATES_ACCEPTED: ${{ secrets.NOCTUNE_RELEASE_GATES_ACCEPTED }}
+      # The draft is created here rather than left to electron-builder, which runs a publisher per
+      # architecture and starts both before either has created anything. A draft is not keyed to
+      # its tag, so the second one is not refused: v0.1.1 produced two drafts, the artifacts split
+      # between them, and the step below published the one holding a single blockmap. Creating it
+      # first leaves them nothing to race over, since both find it by tag.
+      - run: gh release create "$GITHUB_REF_NAME" --draft --title "$GITHUB_REF_NAME" --notes ""
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       # Both architectures in one run, so one `latest-mac.yml` names both. Two jobs publishing that
       # file would leave whichever finished last as the update feed every installed copy reads, and
       # the other architecture would be offered a build it cannot run.
