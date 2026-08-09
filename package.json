@@ -1,12 +1,12 @@
 {
-	"name": "noctune",
-	"version": "0.3.1",
+	"name": "neotune",
+	"version": "0.0.0",
 	"description": "A local-first desktop client for YouTube Music, with gapless playback, loudness normalization, and synced lyrics.",
 	"author": "Edoardo Ranghieri",
 	"license": "MIT",
 	"repository": {
 		"type": "git",
-		"url": "git+https://github.com/NoctunePlayer/NoctuneDesktop.git"
+		"url": "git+https://github.com/NeotunePlayer/NeotuneDesktop.git"
 	},
 	"private": true,
 	"type": "module",
@@ -81,8 +81,8 @@
 		"vitest": "4.1.10"
 	},
 	"build": {
-		"appId": "com.theedoran.noctunedesktop",
-		"productName": "Noctune",
+		"appId": "com.theedoran.neotunedesktop",
+		"productName": "Neotune",
 		"publish": {
 			"provider": "github",
 			"releaseType": "draft"

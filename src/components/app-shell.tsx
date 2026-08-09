@@ -190,7 +190,7 @@ function AccountMenu({ auth, onAuthChange }: { auth: AuthState; onAuthChange: (a
 				<DropdownMenuItem
 					onClick={() => {
 						engine.pause();
-						void window.noctune?.auth.signOut().then(onAuthChange);
+						void window.neotune?.auth.signOut().then(onAuthChange);
 					}}
 				>
 					<LogOut />

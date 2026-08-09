@@ -13,7 +13,7 @@ export type AccountSettingKey = "likedFromYouTube" | "dynamicQueue" | "pauseWatc
  * Keyed on upstream's own `itemId`, which is stable and unlocalised, unlike the title beside it.
  *
  * The four left out are deliberate: `SAFETY_MODE` is not an account setting at all (see below),
- * `MUSIC_SAVE_TO_MOST_RECENT_PLAYLIST` governs an auto-save Noctune does not do, and the two
+ * `MUSIC_SAVE_TO_MOST_RECENT_PLAYLIST` governs an auto-save Neotune does not do, and the two
  * `MUSIC_ENABLE_*` profile flags only decide what strangers see on a YouTube profile page, which
  * this app never renders.
  */
@@ -79,7 +79,7 @@ function writeFrom(endpoint: unknown): AccountSettingWrite | undefined {
 	}
 	// `setClientSettingEndpoint`, which is what Restricted Mode carries, lands here on purpose. It
 	// names no `apiUrl` and the node states no `enabled`, because it is a client flag rather than
-	// something the account holds. Noctune sets it on the InnerTube session instead.
+	// something the account holds. Neotune sets it on the InnerTube session instead.
 }
 
 export function extractAccountSettings(response: unknown): AccountSettingsResult {

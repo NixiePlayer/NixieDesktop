@@ -1,12 +1,12 @@
-# Noctune product specification
+# Neotune product specification
 
 ## Purpose
 
-Noctune is a private, local-first desktop music player for a user's YouTube Music account, for macOS, Windows, and Linux. It combines YouTube Music browsing and library access with a calm, familiar interface, synchronized lyrics, persistent playback, playlist management, and Spotify-like loudness normalization.
+Neotune is a private, local-first desktop music player for a user's YouTube Music account, for macOS, Windows, and Linux. It combines YouTube Music browsing and library access with a calm, familiar interface, synchronized lyrics, persistent playback, playlist management, and Spotify-like loudness normalization.
 
 The app is an independent, unofficial client. It is not affiliated with, endorsed by, or sponsored by YouTube, Google, Spotify, or LRCLIB, and it is not a YouTube Music product. It states this on the sign-in view and on the About tab, so nobody can link an account under the impression that Google wrote it. Trademarks are named only to identify the services the app connects to, never in the app's own name, icon, or interface.
 
-It requires a YouTube Music Premium subscription, and refuses an account that holds none. Playback without advertisements, in the background, and through the app's own audio engine are things YouTube sells that subscription for, so Noctune plays only for an account that has already bought them.
+It requires a YouTube Music Premium subscription, and refuses an account that holds none. Playback without advertisements, in the background, and through the app's own audio engine are things YouTube sells that subscription for, so Neotune plays only for an account that has already bought them.
 
 ## Product goals
 
@@ -18,7 +18,7 @@ It requires a YouTube Music Premium subscription, and refuses an account that ho
 
 ## Experience and visual direction
 
-- Read as a YouTube Music client rather than a separate product with its own identity. Noctune is the name, not a brand to dress the interface in.
+- Read as a YouTube Music client rather than a separate product with its own identity. Neotune is the name, not a brand to dress the interface in.
 - Keep the interface quiet and unornamented. Content is the artwork and the type; nothing decorative competes with it.
 - Use a single red accent on neutral surfaces: `#ff0033` on `#0f0f0f` in dark, `#cc0000` on `#ffffff` in light. Reserve red for fills, the active state, and playback progress. Never use it for body text.
 - Use Inter for every role. Set weight and size, not a second typeface.
@@ -34,7 +34,7 @@ It requires a YouTube Music Premium subscription, and refuses an account that ho
 ## Account connection
 
 - Connect to YouTube Music by adopting the session from a signed-in browser profile on this device. Google rejects sign-in from an embedded window and refuses OAuth device tokens on every InnerTube endpoint, so neither is offered.
-- Store website cookies only in the dedicated `persist:noctune-auth` Electron partition.
+- Store website cookies only in the dedicated `persist:neotune-auth` Electron partition.
 - List browser profiles that hold a YouTube session and let the user pick which one to continue.
 - Never log or expose cookie values.
 - Show signed-in account state and support sign-out.
@@ -138,7 +138,7 @@ It requires a YouTube Music Premium subscription, and refuses an account that ho
 
 ## Local data and privacy
 
-- Operate without a Noctune account, backend, telemetry, analytics, crash uploader, advertising SDK, or media cache.
+- Operate without a Neotune account, backend, telemetry, analytics, crash uploader, advertising SDK, or media cache.
 - Persist only playback restoration, settings, recent searches, window bounds, account display metadata, logs, and the bounded YouTube parser cache.
 - Write local state atomically with user-only file permissions.
 - Recover safely from corrupt state by preserving the corrupt file and loading defaults.
@@ -155,7 +155,7 @@ It requires a YouTube Music Premium subscription, and refuses an account that ho
 - Validate and bound all IPC payloads at the main-process trust boundary.
 - Keep `youtubei.js`, cookies, signed media URLs, deciphering, network adapters, and filesystem access in the privileged process.
 - Convert upstream parser objects into serializable application DTOs before returning data to the renderer.
-- Proxy artwork and audio through the secure `noctune://app` protocol using random, short-lived opaque tokens.
+- Proxy artwork and audio through the secure `neotune://app` protocol using random, short-lived opaque tokens.
 - Support valid bounded, open-ended, and suffix byte ranges without exposing upstream media URLs.
 - Deny unexpected navigation, popups, permissions, protocols, and external hosts.
 - Open only allowlisted HTTPS links in the system browser.
@@ -195,7 +195,7 @@ It requires a YouTube Music Premium subscription, and refuses an account that ho
 
 ## Explicit non-goals
 
-- No Noctune cloud service or cross-device synchronization.
+- No Neotune cloud service or cross-device synchronization.
 - No storage of raw audio or offline media downloads.
 - No playback for an account without a YouTube Music Premium subscription.
 - No exposure of cookies or direct signed media URLs to renderer code.

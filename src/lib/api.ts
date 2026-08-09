@@ -44,7 +44,7 @@ const mixKey = (request: MusicQuery) =>
  * the continuation token its own walk spends, so a second walk from it would resume nothing.
  */
 export async function queryMusic(request: MusicQuery, fresh = false): Promise<Page<MusicEntity>> {
-	const bridge = window.noctune;
+	const bridge = window.neotune;
 	if (!bridge) return { items: [] };
 	// Route loaders still run while the sign-in gate is on screen, so an empty page
 	// beats an upstream failure that would swap the gate for an error boundary.
@@ -68,7 +68,7 @@ export async function queryMusic(request: MusicQuery, fresh = false): Promise<Pa
 
 /** Most recent first, deduplicated, capped where the store caps it anyway. */
 export async function rememberSearch(query: string) {
-	const bridge = window.noctune;
+	const bridge = window.neotune;
 	if (!query || !bridge) return;
 	const stored = await bridge.local.load();
 	await bridge.local.save({

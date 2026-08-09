@@ -39,13 +39,13 @@ function set(next: UpdateState) {
  */
 function announce(version: string | undefined) {
 	toast.add({
-		title: version ? `Noctune ${version} is ready` : "An update is ready",
+		title: version ? `Neotune ${version} is ready` : "An update is ready",
 		description: "Restart to install it, or keep listening and it installs when you next quit.",
 		type: "success",
 		timeout: 0,
 		actionProps: {
 			children: "Restart now",
-			onClick: () => void window.noctune?.update.install(),
+			onClick: () => void window.neotune?.update.install(),
 		},
 	});
 }
@@ -60,7 +60,7 @@ function announce(version: string | undefined) {
 export function checkForUpdates() {
 	set({ status: "checking" });
 	holdUntil = Date.now() + MIN_CHECK_MS;
-	void window.noctune?.update.check();
+	void window.neotune?.update.check();
 }
 
 /**
@@ -88,7 +88,7 @@ function receive(next: UpdateState) {
 function start() {
 	if (started) return;
 	started = true;
-	const bridge = window.noctune;
+	const bridge = window.neotune;
 	if (!bridge) return;
 	// Only if nothing has arrived in the meantime. This starts with the shell, which is while the
 	// startup check is still in flight, so a push landing between the ask and the answer is a real

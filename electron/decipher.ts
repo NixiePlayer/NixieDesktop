@@ -17,7 +17,7 @@ export async function evaluateRestricted(data: ScriptData, environment: Record<s
 	if (data.output.length > 2_000_000) throw new Error("Player evaluator input exceeds its limit");
 	const workerPath = join(import.meta.dirname, "decipher-worker.js");
 	const child = utilityProcess.fork(workerPath, [], {
-		serviceName: "Noctune Decipher Evaluator",
+		serviceName: "Neotune Decipher Evaluator",
 		stdio: "ignore",
 		env: {},
 		execArgv: ["--permission", `--allow-fs-read=${workerPath}`],

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createAudioEngine, type AudioEngineDeps } from "#/lib/audio-engine";
-import type { NoctuneBridge, PersistedState, Track } from "#/shared/contracts";
+import type { NeotuneBridge, PersistedState, Track } from "#/shared/contracts";
 import { defaultState } from "#/shared/defaults";
 
 const track = (id: string, durationSeconds = 200): Track => ({
@@ -75,7 +75,7 @@ function harness(
 	const resolve = vi.fn(async (trackId: string) => {
 		if (options.resolveDelay) await new Promise((done) => setTimeout(done, options.resolveDelay));
 		return {
-			url: `noctune://app/media/${trackId}`,
+			url: `neotune://app/media/${trackId}`,
 			fingerprint: { itag: 251, mimeType: "audio/webm", codec: "opus", bitrate: 128000, durationMs: 200000 },
 			integratedLufs: -8,
 		};
@@ -99,7 +99,7 @@ function harness(
 		// A bridge with no music surface is the shape this ran against before history reporting, and
 		// playback has to survive it: the report is optional the whole way down.
 		...(options.withoutMusic ? {} : { music: { command, query } }),
-	} as unknown as NoctuneBridge;
+	} as unknown as NeotuneBridge;
 
 	const makeGain = () => {
 		const node = {

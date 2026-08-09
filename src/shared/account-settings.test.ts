@@ -61,7 +61,7 @@ const response = {
 };
 
 describe("extractAccountSettings", () => {
-	it("reads the four settings Noctune offers, and only those", () => {
+	it("reads the four settings Neotune offers, and only those", () => {
 		const { settings } = extractAccountSettings(response);
 		expect(settings).toEqual([
 			{ key: "likedFromYouTube", enabled: false },

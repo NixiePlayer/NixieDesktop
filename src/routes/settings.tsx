@@ -63,7 +63,7 @@ const tabs = [
 	{ value: "about", label: "About", icon: Info },
 ] as const;
 
-const REPOSITORY = "https://github.com/NoctunePlayer/NoctuneDesktop";
+const REPOSITORY = "https://github.com/NeotunePlayer/NeotuneDesktop";
 
 /** Leaving the region to upstream is a choice of its own, so it is an option rather than an absence. */
 const AUTOMATIC_REGION = "auto";
@@ -199,12 +199,12 @@ function useRegions() {
 /**
  * Whether the system has refused a banner. Read on mount rather than pushed: this is the only page
  * that shows it, and a refusal that happens while it is open is one the reader is not being notified
- * about anyway, since nothing is drawn while Noctune has focus.
+ * about anyway, since nothing is drawn while Neotune has focus.
  */
 function useNotificationsRefused() {
 	const [refused, setRefused] = useState(false);
 	useEffect(() => {
-		void window.noctune?.player
+		void window.neotune?.player
 			.notifyRefused()
 			.then(setRefused)
 			.catch(() => undefined);
@@ -215,7 +215,7 @@ function useNotificationsRefused() {
 function useAppInfo() {
 	const [info, setInfo] = useState<AppInfo>();
 	useEffect(() => {
-		void window.noctune?.app
+		void window.neotune?.app
 			.info()
 			.then(setInfo)
 			.catch(() => undefined);
@@ -235,7 +235,7 @@ function useAppInfo() {
  */
 function UpdateSetting() {
 	const state = useUpdateState();
-	const update = window.noctune?.update;
+	const update = window.neotune?.update;
 	const version = state.version ?? "";
 	// Held once because it is written twice: the downloading button is sized against it, so a reworded
 	// button would otherwise leave the bar the width of a sentence nobody prints any more.
@@ -243,7 +243,7 @@ function UpdateSetting() {
 	// Nothing rests on "available" now that the download starts itself: it is the first tick of the
 	// download, a beat before the first percent, so it reads as one state rather than two.
 	const downloading = {
-		label: `Downloading Noctune ${version}`,
+		label: `Downloading Neotune ${version}`,
 		description: "Keep listening, this runs in the background.",
 		control: (
 			// The button is the bar: a hard-edged gradient fills it from the left as the download runs,
@@ -302,8 +302,8 @@ function UpdateSetting() {
 		available: downloading,
 		downloading,
 		ready: {
-			label: `Noctune ${version} is ready`,
-			description: "Restarting installs it, and so does quitting Noctune later.",
+			label: `Neotune ${version} is ready`,
+			description: "Restarting installs it, and so does quitting Neotune later.",
 			control: <Button onClick={() => void update?.install()}>{restart}</Button>,
 		},
 		error: {
@@ -338,14 +338,14 @@ function SettingsPage() {
 	const notificationsRefused = useNotificationsRefused();
 
 	useEffect(() => {
-		void window.noctune?.local.load().then((state) => setSettings(state.settings));
+		void window.neotune?.local.load().then((state) => setSettings(state.settings));
 	}, []);
 
 	const save = async (next: Settings) => {
 		setSettings(next);
 		applyTheme(next.theme);
-		const state = await window.noctune?.local.load();
-		if (state) await window.noctune?.local.save({ ...state, settings: next });
+		const state = await window.neotune?.local.load();
+		if (state) await window.neotune?.local.save({ ...state, settings: next });
 	};
 
 	/**
@@ -390,7 +390,7 @@ function SettingsPage() {
 	const issueUrl = `${REPOSITORY}/issues/new?${new URLSearchParams({
 		title: "",
 		body: info
-			? `\n\n---\nNoctune ${info.version} · ${info.os} · ${info.arch} · Electron ${info.electron} · Chromium ${info.chrome}`
+			? `\n\n---\nNeotune ${info.version} · ${info.os} · ${info.arch} · Electron ${info.electron} · Chromium ${info.chrome}`
 			: "",
 	})}`;
 
@@ -413,7 +413,7 @@ function SettingsPage() {
 				</TabsList>
 
 				<TabsContent value="general">
-					<Section title="General" description="How Noctune looks, and what YouTube Music sends it.">
+					<Section title="General" description="How Neotune looks, and what YouTube Music sends it.">
 						<ScopeGroup scope="On this computer">
 							<Setting label="Theme" description="System follows your device's appearance.">
 								<div className="flex flex-wrap gap-2">
@@ -431,7 +431,7 @@ function SettingsPage() {
 							</Setting>
 							<Setting
 								label="Notify on track change"
-								description="Names the next track when the queue moves on by itself. Nothing is shown while Noctune is the app you are in."
+								description="Names the next track when the queue moves on by itself. Nothing is shown while Neotune is the app you are in."
 								control={
 									<Switch
 										checked={settings.notifyTrackChange !== false}
@@ -441,7 +441,7 @@ function SettingsPage() {
 							>
 								{notificationsRefused && settings.notifyTrackChange !== false && (
 									<p className="text-destructive text-sm">
-										Your system refused the last one. Allow notifications for Noctune in System Settings, under
+										Your system refused the last one. Allow notifications for Neotune in System Settings, under
 										Notifications.
 									</p>
 								)}
@@ -482,7 +482,7 @@ function SettingsPage() {
 							/>
 							<Setting
 								label="Restricted mode"
-								description="Hides songs and videos with potentially mature content. No filter catches everything. YouTube keeps this per app rather than on your account, so it covers Noctune alone."
+								description="Hides songs and videos with potentially mature content. No filter catches everything. YouTube keeps this per app rather than on your account, so it covers Neotune alone."
 								control={
 									<Switch
 										checked={settings.restricted === true}
@@ -504,7 +504,7 @@ function SettingsPage() {
 				</TabsContent>
 
 				<TabsContent value="playback">
-					<Section title="Playback" description="How Noctune streams and levels what you play.">
+					<Section title="Playback" description="How Neotune streams and levels what you play.">
 						<ScopeGroup scope="On this computer">
 							<Setting
 								label="Volume normalization"
@@ -546,7 +546,7 @@ function SettingsPage() {
 							</Setting>
 							<Setting
 								label="Autoplay"
-								description="Keeps playing when the queue runs out, on a radio YouTube Music seeds from the track that just finished. Turning this off stops Noctune at the end of the queue."
+								description="Keeps playing when the queue runs out, on a radio YouTube Music seeds from the track that just finished. Turning this off stops Neotune at the end of the queue."
 								control={
 									<Switch
 										checked={settings.autoplay !== false}
@@ -594,7 +594,7 @@ function SettingsPage() {
 				<TabsContent value="privacy">
 					<Section
 						title="Privacy"
-						description="Noctune has no account service, backend, telemetry, or media cache. Nothing here leaves this device except what the rows below send to the account you linked."
+						description="Neotune has no account service, backend, telemetry, or media cache. Nothing here leaves this device except what the rows below send to the account you linked."
 					>
 						<ScopeGroup scope="On this computer">
 							<Setting
@@ -611,7 +611,7 @@ function SettingsPage() {
 								label="Diagnostics"
 								description="Writes a log file with playback and session events. Cookies, stream URLs, file paths, and lyrics are redacted."
 								control={
-									<Button variant="outline" onClick={() => void window.noctune?.local.exportDiagnostics()}>
+									<Button variant="outline" onClick={() => void window.neotune?.local.exportDiagnostics()}>
 										<Download data-icon="inline-start" />
 										Export
 									</Button>
@@ -621,7 +621,7 @@ function SettingsPage() {
 								label="Local data"
 								description="Removes the queue, settings, and the linked browser account, so this signs you out."
 								control={
-									<Button variant="destructive" onClick={() => void window.noctune?.local.clear("all")}>
+									<Button variant="destructive" onClick={() => void window.neotune?.local.clear("all")}>
 										<Trash2 data-icon="inline-start" />
 										Clear
 									</Button>
@@ -658,7 +658,7 @@ function SettingsPage() {
 					<Section title="About" description="What this build is, and how to tell us it is wrong.">
 						<ScopeGroup>
 							<Setting
-								label={`Noctune ${info?.version ?? ""}`.trim()}
+								label={`Neotune ${info?.version ?? ""}`.trim()}
 								description={
 									info
 										? `${info.os} · ${info.arch} · Electron ${info.electron} · Chromium ${info.chrome}`
@@ -672,7 +672,7 @@ function SettingsPage() {
 											if (!info) return;
 											void navigator.clipboard
 												.writeText(
-													`Noctune ${info.version} · ${info.os} · ${info.arch} · Electron ${info.electron} · Chromium ${info.chrome}`
+													`Neotune ${info.version} · ${info.os} · ${info.arch} · Electron ${info.electron} · Chromium ${info.chrome}`
 												)
 												.then(() => toast.add({ title: "Version copied", type: "success" }));
 										}}
@@ -691,14 +691,14 @@ function SettingsPage() {
 						</ScopeGroup>
 
 						<p className="text-muted-foreground max-w-2xl text-sm">
-							Noctune is an independent, unofficial client and is not affiliated with, endorsed by, or sponsored by
+							Neotune is an independent, unofficial client and is not affiliated with, endorsed by, or sponsored by
 							Google or YouTube. YouTube and YouTube Music are trademarks of Google LLC. It is not a YouTube Music
 							product and does not reproduce or imitate one: it plays what the account you linked can already play, and
 							it stores no media of its own.
 						</p>
 
-						<ScopeGroup scope="Noctune">
-							<DocumentRow name="LICENSE" title="License" description="Noctune is released under the MIT license." />
+						<ScopeGroup scope="Neotune">
+							<DocumentRow name="LICENSE" title="License" description="Neotune is released under the MIT license." />
 							<DocumentRow
 								name="PRIVACY.md"
 								title="Privacy"
@@ -712,7 +712,7 @@ function SettingsPage() {
 							<DocumentRow
 								name="THIRD_PARTY_NOTICES.md"
 								title="Third-party notices"
-								description="The projects and lyrics sources Noctune depends on."
+								description="The projects and lyrics sources Neotune depends on."
 							/>
 							<DocumentRow
 								name="THIRD_PARTY_LICENSES.txt"
@@ -725,7 +725,7 @@ function SettingsPage() {
 							<LinkRow
 								href="https://www.youtube.com/t/terms"
 								label="YouTube Terms of Service"
-								description="The terms covering the account Noctune plays through."
+								description="The terms covering the account Neotune plays through."
 							/>
 							<LinkRow
 								href="https://policies.google.com/privacy"

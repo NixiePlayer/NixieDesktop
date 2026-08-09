@@ -1,6 +1,6 @@
 # Third-party notices
 
-Noctune is an independent, unofficial client. It is not affiliated with, endorsed by, or sponsored by YouTube, Google, Spotify, LRCLIB, or NetEase Cloud Music. Every product name and trademark mentioned below belongs to its owner and is used only to identify what Noctune connects to or depends on. YouTube and YouTube Music are trademarks of Google LLC.
+Neotune is an independent, unofficial client. It is not affiliated with, endorsed by, or sponsored by YouTube, Google, Spotify, LRCLIB, or NetEase Cloud Music. Every product name and trademark mentioned below belongs to its owner and is used only to identify what Neotune connects to or depends on. YouTube and YouTube Music are trademarks of Google LLC.
 
 ## Open source packages
 

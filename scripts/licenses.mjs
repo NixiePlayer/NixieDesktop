@@ -20,8 +20,8 @@ const OUTPUT = "THIRD_PARTY_LICENSES.txt";
 
 const PREAMBLE = `Third-party licenses
 
-Noctune bundles the packages below into the application. Each one is listed with its version, the
-license it declares, and the full text of the license file it ships. Noctune's own license is in
+Neotune bundles the packages below into the application. Each one is listed with its version, the
+license it declares, and the full text of the license file it ships. Neotune's own license is in
 LICENSE, and the projects and data sources it depends on are described in THIRD_PARTY_NOTICES.md.
 
 Electron and Chromium are not listed here. Their notices are packaged separately, as

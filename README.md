@@ -1,48 +1,48 @@
 <p align="center">
-  <img src="docs/banner.png" alt="Noctune: a desktop client for YouTube Music, with gapless playback, loudness normalization and synced lyrics." width="100%">
+  <img src="docs/banner.png" alt="Neotune: a desktop client for YouTube Music, with gapless playback, loudness normalization and synced lyrics." width="100%">
 </p>
 
 <p align="center">
-  <a href="https://github.com/NoctunePlayer/NoctuneDesktop/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/NoctunePlayer/NoctuneDesktop?style=flat-square&color=ff0033&label=release"></a>
+  <a href="https://github.com/NeotunePlayer/NeotuneDesktop/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/NeotunePlayer/NeotuneDesktop?style=flat-square&color=ff0033&label=release"></a>
   <a href="LICENSE"><img alt="MIT licence" src="https://img.shields.io/badge/licence-MIT-blue?style=flat-square"></a>
   <img alt="macOS" src="https://img.shields.io/badge/macOS-Apple%20silicon%20%7C%20Intel-lightgrey?style=flat-square">
   <a href="https://github.com/sponsors/TheEdoRan"><img alt="Sponsor" src="https://img.shields.io/badge/sponsor-%E2%9D%A4-ff69b4?style=flat-square"></a>
 </p>
 
-Noctune is a desktop client for YouTube Music. It plays your account's music through a
+Neotune is a desktop client for YouTube Music. It plays your account's music through a
 native app instead of a browser tab: gapless playback, loudness normalization you can
 actually set, time-synced lyrics, and a session that comes back exactly where you left it.
 
-It is an independent project. There is no Noctune account, no backend and no telemetry.
+It is an independent project. There is no Neotune account, no backend and no telemetry.
 Everything it knows stays on your computer.
 
 > [!IMPORTANT]
-> **Noctune is an independent, unofficial client and is not affiliated with, endorsed by,
+> **Neotune is an independent, unofficial client and is not affiliated with, endorsed by,
 > or sponsored by Google or YouTube.** It is not a YouTube Music product, it does not copy
 > or imitate one, and nothing here speaks for Google. YouTube and YouTube Music are
 > trademarks of Google LLC. It was written because I wanted a desktop client I liked
 > better for my own listening, and it is shared in case anyone else wants the same thing.
 
 > [!IMPORTANT]
-> **Noctune is beta software, and macOS only for now.** Things move, and some of them
+> **Neotune is beta software, and macOS only for now.** Things move, and some of them
 > break. Builds are signed and notarized for Apple silicon and Intel. Windows and Linux
 > are planned but have no date attached.
 
 > [!IMPORTANT]
-> **Noctune requires a YouTube Music Premium subscription.** It plays without
+> **Neotune requires a YouTube Music Premium subscription.** It plays without
 > advertisements, in the background, and through its own audio engine, and those are the
 > things YouTube sells a subscription for. It checks when you link an account and refuses
-> one that does not hold a subscription. Noctune is not a way to get Premium features
+> one that does not hold a subscription. Neotune is not a way to get Premium features
 > without Premium, and it is not affiliated with or authorized by YouTube.
 
 ## Install
 
-Grab the latest build from the [releases page](https://github.com/NoctunePlayer/NoctuneDesktop/releases/latest):
+Grab the latest build from the [releases page](https://github.com/NeotunePlayer/NeotuneDesktop/releases/latest):
 
 | File | For |
 | --- | --- |
-| `Noctune-<version>-applesilicon.dmg` | M1 and later |
-| `Noctune-<version>-intel.dmg` | Intel Macs |
+| `Neotune-<version>-applesilicon.dmg` | M1 and later |
+| `Neotune-<version>-intel.dmg` | Intel Macs |
 
 Every release is signed and notarized by Apple, the disk image as well as the app inside
 it, so it opens on a double click with no right-click trick and no Gatekeeper warning at
@@ -77,7 +77,7 @@ I use YouTube Music every day and the official web app kept getting in the way. 
 things in particular, and each one is why a specific piece of this app exists.
 
 **There is no loudness normalization you can set.** One track arrives mastered loud, the
-next one quiet, and you spend the evening on the volume key. Noctune normalizes to a target
+next one quiet, and you spend the evening on the volume key. Neotune normalizes to a target
 you choose: -19, -14 or -11 LUFS, the same three levels Spotify publishes, with -14 as the
 default because that is what YouTube itself aims for. It reads the integrated loudness
 YouTube already measured for each stream, so there is no analysis pass and no delay before
@@ -85,13 +85,13 @@ a track starts. Loud tracks are pulled all the way down; quiet ones are lifted, 
 by more than 6 dB, because YouTube publishes a loudness and not a true peak, and a quiet
 master that is already peaking near full scale would clip if you lifted it blind.
 
-**Nothing is where you left it.** Close the tab, come back, start over. Noctune saves the
+**Nothing is where you left it.** Close the tab, come back, start over. Neotune saves the
 queue, the current track, the exact position in it, the volume, and whether repeat and
 shuffle were on. Reopen it and everything is there, paused, with the stream already
 resolved so the first press of Space starts instantly. It comes back paused on purpose:
 an app that starts making noise before you have asked it to is not a feature.
 
-**Lyrics are plain text, when they are there at all.** Noctune asks three sources in
+**Lyrics are plain text, when they are there at all.** Neotune asks three sources in
 order, LRCLIB, then NetEase, then YouTube Music itself, and prefers a time-synced result
 over a plain one regardless of which source it came from. Synced lyrics highlight the line
 you are on, scroll to keep it in view, and seek when you click one. It stops at the first
@@ -152,23 +152,23 @@ Now Playing in Control Center. It is a desktop app, not a web page in a frame.
 ## How signing in works
 
 Google refuses sign-in from an embedded browser window, and refuses OAuth tokens on the
-endpoints this app talks to. So Noctune does not ask for your password at all. Instead it
+endpoints this app talks to. So Neotune does not ask for your password at all. Instead it
 adopts the session from a browser you are already signed in to on the same machine.
 
 Pick a profile from Chrome, Brave, Edge, Vivaldi or Chromium on macOS, or Firefox on any
-platform, and Noctune reads that profile's YouTube cookies. They go into a dedicated
+platform, and Neotune reads that profile's YouTube cookies. They go into a dedicated
 Electron session partition and nowhere else. They are never logged, never sent anywhere
 except YouTube, and never exposed to the app's interface. Google expires the session
-every few minutes and only the browser holds the current value, so Noctune re-reads that
+every few minutes and only the browser holds the current value, so Neotune re-reads that
 profile while it runs, at most once a minute, for as long as the account stays linked.
 It is the only way in: there is no password field and no way to paste a session by hand.
 
-Noctune reaches YouTube through the private interface the YouTube Music apps use, which
+Neotune reaches YouTube through the private interface the YouTube Music apps use, which
 Google does not publish or support. Nothing about you leaves this device to anyone else,
 but the account you link is talking to YouTube through an unofficial client, and it
 carries whatever risk that brings.
 
-Once the session is adopted, Noctune checks that the account holds a Music Premium
+Once the session is adopted, Neotune checks that the account holds a Music Premium
 subscription, by asking YouTube what audio tiers it is willing to offer: the 256 kbps
 tiers are offered to a subscriber and to nobody else. An account without one is refused
 and nothing is stored for it. If that check cannot reach YouTube at all it lets you
@@ -178,21 +178,21 @@ Signing out clears the session and the parser cache.
 
 ## Donations
 
-Noctune is free, MIT licensed, and has no paid tier or premium build. Nothing in the app
+Neotune is free, MIT licensed, and has no paid tier or premium build. Nothing in the app
 asks for money, and nothing is ever kept behind a donation.
 
 What it costs is time: reading upstream responses that changed overnight, chasing a race
 in the audio engine, keeping three lyric providers working, and eventually getting Windows
 and Linux out the door.
 
-If Noctune is what you listen to and you want to give something back,
+If Neotune is what you listen to and you want to give something back,
 [a donation](https://github.com/sponsors/TheEdoRan) is welcome and entirely optional. Any
 amount helps, and it is the difference between this being a project I maintain and a
-project I get to work on. A donation supports the person writing Noctune. It buys no
+project I get to work on. A donation supports the person writing Neotune. It buys no
 feature, no priority and no entitlement to anything on YouTube.
 
 <p>
-  <a href="https://github.com/sponsors/TheEdoRan"><img alt="Sponsor Noctune on GitHub" src="https://img.shields.io/badge/Sponsor%20on%20GitHub-%E2%9D%A4-ff0033?style=for-the-badge&logo=githubsponsors&logoColor=white"></a>
+  <a href="https://github.com/sponsors/TheEdoRan"><img alt="Sponsor Neotune on GitHub" src="https://img.shields.io/badge/Sponsor%20on%20GitHub-%E2%9D%A4-ff0033?style=for-the-badge&logo=githubsponsors&logoColor=white"></a>
 </p>
 
 ## Development
@@ -210,20 +210,20 @@ producing signed, notarized releases, and [docs/signing.md](docs/signing.md) cov
 ### Getting it running
 
 ```sh
-git clone https://github.com/NoctunePlayer/NoctuneDesktop.git
-cd NoctuneDesktop
+git clone https://github.com/NeotunePlayer/NeotuneDesktop.git
+cd NeotuneDesktop
 pnpm install
 pnpm dev
 ```
 
-The app opens with a blue icon and calls itself Noctune (Dev). Sign in by picking a
+The app opens with a blue icon and calls itself Neotune (Dev). Sign in by picking a
 browser profile, the same as the released app.
 
 A few things happen on the way there that are worth knowing about, because they look
 strange if you meet them by surprise:
 
 - `pnpm install` runs `scripts/dev-app-name.mjs`. It renames the bundled Electron app to
-  `Noctune.app`, sets its display name to "Noctune (Dev)", paints its icon blue, and then
+  `Neotune.app`, sets its display name to "Neotune (Dev)", paints its icon blue, and then
   re-signs it ad hoc. That last step matters: editing an Electron bundle's `Info.plist`
   breaks the signature it ships with, and macOS silently refuses notifications from an app
   whose signature does not validate. The same script runs again on every `pnpm dev`, since
@@ -231,7 +231,7 @@ strange if you meet them by surprise:
 - `pnpm dev` starts Vite on port 3000 for the renderer and compiles the main process and
   preload into `dist-electron/`, then launches Electron against them. All three reload on
   save.
-- The dev build stores its data under `Noctune (Dev)`, separate from the released app. Its
+- The dev build stores its data under `Neotune (Dev)`, separate from the released app. Its
   linked account, settings and playback state are its own, and you can run both
   at once.
 
@@ -272,18 +272,18 @@ short list of things that will get a pull request turned down.
 
 ## Licence and legal
 
-Noctune is [MIT licensed](LICENSE). See also [PRIVACY.md](PRIVACY.md),
+Neotune is [MIT licensed](LICENSE). See also [PRIVACY.md](PRIVACY.md),
 [SECURITY.md](SECURITY.md) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Every build
 also ships the full licence text of every open source package inside it, generated from the
 dependency tree and readable in Settings, under About.
 
-Noctune is an independent, unofficial client. It is not affiliated with, endorsed by, or
+Neotune is an independent, unofficial client. It is not affiliated with, endorsed by, or
 sponsored by YouTube, Google, Spotify, LRCLIB, or NetEase Cloud Music. YouTube and YouTube
-Music are trademarks of Google LLC, used here only to say what Noctune connects to, and
+Music are trademarks of Google LLC, used here only to say what Neotune connects to, and
 no name, logo or interface of theirs is copied or imitated. You need your own YouTube
 Music account to use it, and your use of that account remains subject to YouTube's terms.
 Nothing in this project is meant to disparage YouTube Music, YouTube or Google: it exists
 because I wanted a different desktop client for my own listening, not as a replacement for
 or a criticism of theirs. If Google or YouTube would like anything here changed, please
-[open an issue](https://github.com/NoctunePlayer/NoctuneDesktop/issues) and it will be
+[open an issue](https://github.com/NeotunePlayer/NeotuneDesktop/issues) and it will be
 dealt with.

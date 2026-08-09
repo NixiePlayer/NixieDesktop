@@ -11,19 +11,19 @@ import { join } from "node:path";
 const root = join(import.meta.dirname, "..");
 const dist = join(root, "node_modules", "electron", "dist");
 const from = join(dist, "Electron.app");
-const to = join(dist, "Noctune.app");
+const to = join(dist, "Neotune.app");
 
 if (process.platform !== "darwin" || (!existsSync(from) && !existsSync(to))) process.exit(0);
 
 if (existsSync(from)) renameSync(from, to);
 // The executable inside keeps its own name, so only the bundle path moves.
-writeFileSync(join(root, "node_modules", "electron", "path.txt"), "Noctune.app/Contents/MacOS/Electron");
+writeFileSync(join(root, "node_modules", "electron", "path.txt"), "Neotune.app/Contents/MacOS/Electron");
 
 const plist = join(to, "Contents", "Info.plist");
-// The bundle path stays `Noctune.app` because `path.txt` above points at it, but the two name keys
+// The bundle path stays `Neotune.app` because `path.txt` above points at it, but the two name keys
 // carry the channel, so a development window is never mistaken for the installed app beside it.
 for (const key of ["CFBundleName", "CFBundleDisplayName"]) {
-	execFileSync("plutil", ["-replace", key, "-string", "Noctune (Dev)", plist]);
+	execFileSync("plutil", ["-replace", key, "-string", "Neotune (Dev)", plist]);
 }
 // `app.dock.setIcon` reaches the Dock and nothing else: every other place macOS draws an app, the
 // notification's leading icon included, reads the bundle's own icon file, which is Electron's. The

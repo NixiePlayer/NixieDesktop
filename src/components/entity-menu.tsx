@@ -167,7 +167,7 @@ export async function playRadio(
  */
 export async function addToPlaylist(item: Subject, playlist: Playlist) {
 	const tracks = await tracksOf(item);
-	await window.noctune?.music.command({
+	await window.neotune?.music.command({
 		type: "playlist-add",
 		playlistId: playlist.id,
 		trackIds: tracks.slice(0, SAVE_LIMIT).map((one) => one.id),
@@ -277,7 +277,7 @@ function MenuItems({
 	const deletePlaylist = () => {
 		if (!deletable || !window.confirm(`Delete "${item.title}"? This cannot be undone.`)) return;
 		void run("Playlist not deleted", async () => {
-			await window.noctune?.music.command({ type: "playlist-delete", playlistId: item.id });
+			await window.neotune?.music.command({ type: "playlist-delete", playlistId: item.id });
 			removePlaylist(item.id);
 			toast.add({ title: "Playlist deleted", type: "success" });
 			// Deleted from its own page, there is no page left to stand on.

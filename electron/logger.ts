@@ -7,14 +7,14 @@ export class LocalLogger {
 	readonly #path: string;
 
 	constructor(userDataPath: string) {
-		this.#path = join(userDataPath, "logs", "noctune.log");
+		this.#path = join(userDataPath, "logs", "neotune.log");
 	}
 
 	async write(level: "info" | "warn" | "error", message: string) {
 		const safe = message.replaceAll(sensitive, "[redacted]").replaceAll(/https?:\/\/\S+/g, "[url]");
 		// Errors also go to the terminal, so a `pnpm dev` session shows the failure without
 		// exporting diagnostics first. The redacted string is the only thing that leaves here.
-		if (level === "error") console.error(`[noctune] ${safe}`);
+		if (level === "error") console.error(`[neotune] ${safe}`);
 		await mkdir(dirname(this.#path), { recursive: true });
 		await this.#rotate();
 		await appendFile(this.#path, `${new Date().toISOString()} ${level.toUpperCase()} ${safe}\n`, { mode: 0o600 });
@@ -24,7 +24,7 @@ export class LocalLogger {
 		const files = await readdir(dirname(this.#path)).catch(() => []);
 		const content = await Promise.all(
 			files
-				.filter((name) => name.startsWith("noctune.log"))
+				.filter((name) => name.startsWith("neotune.log"))
 				.map((name) => readFile(join(dirname(this.#path), name), "utf8"))
 		);
 		await writeFile(destination, content.join("\n"), { mode: 0o600 });

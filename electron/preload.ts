@@ -6,7 +6,7 @@ import type {
 	MediaCommand,
 	MusicCommand,
 	MusicQuery,
-	NoctuneBridge,
+	NeotuneBridge,
 	PersistedState,
 	Track,
 	UpdateState,
@@ -44,7 +44,7 @@ window.addEventListener(
 	true
 );
 
-const bridge: NoctuneBridge = {
+const bridge: NeotuneBridge = {
 	auth: {
 		state: () => ipcRenderer.invoke("auth:state"),
 		browsers: () => ipcRenderer.invoke("auth:browsers"),
@@ -92,4 +92,4 @@ const bridge: NoctuneBridge = {
 	},
 };
 
-contextBridge.exposeInMainWorld("noctune", bridge);
+contextBridge.exposeInMainWorld("neotune", bridge);

@@ -162,7 +162,7 @@ async function locateProfiles(): Promise<ProfileLocation[]> {
 
 /** The browser keeps its store locked while running, so every read happens against a throwaway copy. */
 async function withCookieDatabase<T>(path: string, read: (database: DatabaseSync) => T) {
-	const copy = join(tmpdir(), `noctune-cookies-${randomBytes(8).toString("hex")}`);
+	const copy = join(tmpdir(), `neotune-cookies-${randomBytes(8).toString("hex")}`);
 	await copyFile(path, copy);
 	// Recent writes can still be sitting in the write-ahead log.
 	await copyFile(`${path}-wal`, `${copy}-wal`).catch(() => undefined);

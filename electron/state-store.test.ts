@@ -12,7 +12,7 @@ afterEach(async () => Promise.all(paths.splice(0).map((path) => rm(path, { recur
 
 describe("state recovery", () => {
 	it("writes atomically and restores playback paused", async () => {
-		const path = await mkdtemp(join(tmpdir(), "noctune-state-"));
+		const path = await mkdtemp(join(tmpdir(), "neotune-state-"));
 		paths.push(path);
 		const store = new StateStore(path);
 		const state = defaultState();
@@ -28,7 +28,7 @@ describe("state recovery", () => {
 	});
 
 	it("survives overlapping saves", async () => {
-		const path = await mkdtemp(join(tmpdir(), "noctune-state-"));
+		const path = await mkdtemp(join(tmpdir(), "neotune-state-"));
 		paths.push(path);
 		const store = new StateStore(path);
 		// Both writers share one temp path, so unqueued this rejects with ENOENT on the rename.
@@ -43,7 +43,7 @@ describe("state recovery", () => {
 	});
 
 	it("keeps the latest playback position in memory for the final close save", async () => {
-		const path = await mkdtemp(join(tmpdir(), "noctune-state-"));
+		const path = await mkdtemp(join(tmpdir(), "neotune-state-"));
 		paths.push(path);
 		const store = new StateStore(path);
 		store.setPlaybackPosition(42.375);
@@ -52,7 +52,7 @@ describe("state recovery", () => {
 	});
 
 	it("reads a normalization switch written by an older build as a level", async () => {
-		const path = await mkdtemp(join(tmpdir(), "noctune-state-"));
+		const path = await mkdtemp(join(tmpdir(), "neotune-state-"));
 		paths.push(path);
 		const state = defaultState();
 		await writeFile(
@@ -63,7 +63,7 @@ describe("state recovery", () => {
 	});
 
 	it("leaves a snapshot written before history reporting existed alone", async () => {
-		const path = await mkdtemp(join(tmpdir(), "noctune-state-"));
+		const path = await mkdtemp(join(tmpdir(), "neotune-state-"));
 		paths.push(path);
 		const state = defaultState();
 		const { reportHistory: _reportHistory, ...settings } = state.settings;
@@ -77,7 +77,7 @@ describe("state recovery", () => {
 	});
 
 	it("drops the download metadata an older snapshot carries", async () => {
-		const path = await mkdtemp(join(tmpdir(), "noctune-state-"));
+		const path = await mkdtemp(join(tmpdir(), "neotune-state-"));
 		paths.push(path);
 		const state = {
 			...defaultState(),
@@ -98,7 +98,7 @@ describe("state recovery", () => {
 	});
 
 	it("renames corrupt state and returns safe defaults", async () => {
-		const path = await mkdtemp(join(tmpdir(), "noctune-state-"));
+		const path = await mkdtemp(join(tmpdir(), "neotune-state-"));
 		paths.push(path);
 		await writeFile(join(path, "state.json"), "{broken");
 		const store = new StateStore(path);

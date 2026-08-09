@@ -57,7 +57,7 @@ export class SecureResourceRegistry {
 		const id = token();
 		this.#media.set(id, { ...target, expiresAt: Date.now() + 4 * 60 * 60 * 1000 });
 		this.#prune();
-		return `noctune://app/media/${id}`;
+		return `neotune://app/media/${id}`;
 	}
 
 	/**
@@ -66,7 +66,7 @@ export class SecureResourceRegistry {
 	 * images, no signature and no identity, and `handleArtwork` still refuses every host but theirs.
 	 */
 	registerArtwork(url: string) {
-		return `noctune://app/artwork/${Buffer.from(url).toString("base64url")}`;
+		return `neotune://app/artwork/${Buffer.from(url).toString("base64url")}`;
 	}
 
 	async handleMedia(request: Request, id: string) {

@@ -22,8 +22,8 @@ conventional_commits = true
 # Anything that is not a Conventional Commit is dropped rather than filed under a heading nobody
 # wrote. The repository requires the format, so what this drops is a mistake, not a category.
 filter_commits = true
-# Only version tags count. `pre-noctune-history` is a marker, not a release, and `--latest` would
-# otherwise measure a range from it.
+# Only version tags count, so a marker tag that was never a release cannot become the range
+# `--latest` measures the notes from.
 tag_pattern = "v[0-9]*"
 commit_parsers = [
 	# The bump commit `pnpm release:*` writes is about the release, not in it.

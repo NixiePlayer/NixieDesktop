@@ -8,7 +8,7 @@ import { defaultState } from "#/shared/defaults";
  * default first and correct itself in view. The state file stays the owner: `__root` applies what it
  * loads, which is what repairs a mirror that ever falls behind.
  */
-const KEY = "noctune.theme";
+const KEY = "neotune.theme";
 const query = typeof matchMedia === "function" ? matchMedia("(prefers-color-scheme: dark)") : undefined;
 
 function mirrored(): Theme {

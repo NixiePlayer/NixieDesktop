@@ -18,7 +18,7 @@ describe("artwork", () => {
 			// The collage YouTube Music draws for a mix, served from the site's own origin.
 			"https://music.youtube.com/image/mixart?r=ENgEGNgEMh0IBxoKL20",
 		]) {
-			const response = await new SecureResourceRegistry().handleArtwork(new Request("noctune://app/"), artworkId(url));
+			const response = await new SecureResourceRegistry().handleArtwork(new Request("neotune://app/"), artworkId(url));
 			expect(response.status, url).toBe(200);
 		}
 	});
@@ -31,7 +31,7 @@ describe("artwork", () => {
 			// The mix collages are one path on that origin, not a door onto the rest of the site.
 			"https://music.youtube.com/playlist?list=LM",
 		]) {
-			const response = await new SecureResourceRegistry().handleArtwork(new Request("noctune://app/"), artworkId(url));
+			const response = await new SecureResourceRegistry().handleArtwork(new Request("neotune://app/"), artworkId(url));
 			expect(response.status, url).toBe(404);
 		}
 	});

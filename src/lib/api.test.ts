@@ -8,7 +8,7 @@ import type { MusicEntity, Page } from "#/shared/contracts";
 async function freshApi(query: (request: unknown) => Promise<Page<MusicEntity>>) {
 	vi.resetModules();
 	Object.assign(globalThis, {
-		window: { noctune: { auth: { state: async () => ({ status: "authenticated" }) }, music: { query } } },
+		window: { neotune: { auth: { state: async () => ({ status: "authenticated" }) }, music: { query } } },
 	});
 	return import("#/lib/api");
 }
