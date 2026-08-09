@@ -157,7 +157,26 @@ async function artworkIcon(url: string | undefined) {
 let notificationsRefused = false;
 
 /**
- * Names the track the queue moved to on its own. Nothing is drawn while the window has focus: the
+ * The banner is worth seeing and the row it leaves behind in Notification Center is not: a track
+ * change is over the moment the next one starts, and left alone an evening of listening piles up an
+ * entry per song. Electron marks nothing transient on macOS, so the banner is dismissed instead,
+ * which is what `close()` does there: it removes the delivered notification from the Center. The
+ * delay is the banner's own dwell time, so it is read on screen and leaves nothing after it, and a
+ * change arriving inside that window replaces the one before it rather than stacking on it.
+ */
+const NOTIFICATION_LINGER_MS = 6000;
+let lastNotification: { notification: Notification; timer: ReturnType<typeof setTimeout> } | undefined;
+
+function dismissNotification() {
+	if (!lastNotification) return;
+	clearTimeout(lastNotification.timer);
+	lastNotification.notification.close();
+	lastNotification = undefined;
+}
+
+/**
+ * Names the track the queue moved to on its own, or the one a hardware key reached while the app was
+ * not on screen. Nothing is drawn while the window has focus: the
  * player is on screen and already says so, and this exists for the times it is not. macOS suppresses
  * a banner from the frontmost app anyway, so this only makes that deliberate.
  *
@@ -194,7 +213,9 @@ async function notifyTrackChange(track: Track) {
 		notificationsRefused = true;
 		void logger.write("warn", `notification refused: ${error}`);
 	});
+	dismissNotification();
 	notification.show();
+	lastNotification = { notification, timer: setTimeout(dismissNotification, NOTIFICATION_LINGER_MS) };
 }
 
 let refreshedAt = 0;

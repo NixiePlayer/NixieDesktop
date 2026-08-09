@@ -436,6 +436,17 @@ describe("audio engine", () => {
 		expect(notify).toHaveBeenCalledTimes(1);
 	});
 
+	it("announces a move a hardware key reached", async () => {
+		const { engine, notify } = harness();
+		await engine.start();
+		const queue = [track("t1"), track("t2")];
+		await engine.play(queue[0], queue);
+
+		engine.next(true);
+		await vi.waitFor(() => expect(notify).toHaveBeenCalledTimes(1));
+		expect(notify.mock.calls[0]?.[0]).toMatchObject({ id: "t2" });
+	});
+
 	it("pauses at the end of the queue when repeat is off", async () => {
 		const { engine, audio } = harness();
 		await engine.start();

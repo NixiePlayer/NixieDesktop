@@ -36,8 +36,12 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 		if (!("mediaSession" in navigator)) return;
 		navigator.mediaSession.setActionHandler("play", () => void engine.play());
 		navigator.mediaSession.setActionHandler("pause", () => engine.pause());
-		navigator.mediaSession.setActionHandler("nexttrack", () => engine.next());
-		navigator.mediaSession.setActionHandler("previoustrack", () => engine.previous());
+		// These two are the hardware keys and the Now Playing widget, the only transport controls
+		// reachable without the app on screen, so they announce the track they land on exactly as an
+		// automatic advance does. Main still draws nothing while the window has focus, which is what
+		// keeps a key pressed over the open app silent.
+		navigator.mediaSession.setActionHandler("nexttrack", () => engine.next(true));
+		navigator.mediaSession.setActionHandler("previoustrack", () => engine.previous(true));
 	}, [engine]);
 
 	return <PlayerContext.Provider value={engine}>{children}</PlayerContext.Provider>;

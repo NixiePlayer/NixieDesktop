@@ -30,8 +30,9 @@ export interface AudioEngine {
 	dequeue(index: number): void;
 	pause(): void;
 	toggle(): void;
-	next(): void;
-	previous(): void;
+	/** `unwatched` marks a move nobody in the app saw asked for, which is a hardware media key. */
+	next(unwatched?: boolean): void;
+	previous(unwatched?: boolean): void;
 	seek(seconds: number): void;
 	setVolume(volume: number): void;
 	toggleShuffle(): void;
@@ -94,8 +95,8 @@ export function createAudioEngine(deps: AudioEngineDeps = {}): AudioEngine {
 	let handoff = false;
 	/** The one extension in flight, shared so the boundary never asks for a second radio. */
 	let extending: Promise<boolean> | undefined;
-	/** Set by the two callers of `move` nobody pressed, and read by `play` on the same tick. */
-	let autoAdvanced = false;
+	/** Set by the callers of `move` nobody watched happen, and read by `play` on the same tick. */
+	let unwatchedMove = false;
 	let restoreTo = 0;
 
 	const listeners = new Set<() => void>();
@@ -358,10 +359,10 @@ export function createAudioEngine(deps: AudioEngineDeps = {}): AudioEngine {
 
 	async function play(track?: Track, queue?: Track[], context?: QueueContext) {
 		ensureGraph();
-		// Read on this tick and cleared here, so every other way into `play` is a press and announces
-		// nothing. `move` sets it immediately before the call, and nothing awaits in between.
-		const unwatched = autoAdvanced;
-		autoAdvanced = false;
+		// Read on this tick and cleared here, so every other way into `play` is a press in the app and
+		// announces nothing. `move` sets it immediately before the call, and nothing awaits in between.
+		const unwatched = unwatchedMove;
+		unwatchedMove = false;
 		// Whatever asked for this track wins over a handoff still waiting on the old one, and this is
 		// also what keeps the armed timer from advancing a second time when `ended` beat it there.
 		clearHandoff();
@@ -484,7 +485,7 @@ export function createAudioEngine(deps: AudioEngineDeps = {}): AudioEngine {
 		void persist();
 	}
 
-	function move(direction: "next" | "previous", auto = false) {
+	function move(direction: "next" | "previous", unwatched = false) {
 		const { queueIndex, queue, repeat, shuffle } = state.playback;
 		// The preload already decided what follows, and with shuffle on that decision was a die roll:
 		// rolling a second one here would land somewhere else and throw the prepared deck away.
@@ -501,18 +502,18 @@ export function createAudioEngine(deps: AudioEngineDeps = {}): AudioEngine {
 			// so the deck has drained with nothing to move to: pausing is the honest state right now,
 			// and it is also what a listener who is watching sees stop. The in-flight promise is then
 			// awaited rather than a fresh one started, since a second call would be a second radio for
-			// one seed, and a settled `false` is an answer already given. `auto` is carried through the
-			// re-entry so the track the queue reached on its own still announces itself.
+			// one seed, and a settled `false` is an answer already given. `unwatched` is carried through
+			// the re-entry so the track the queue reached on its own still announces itself.
 			pause();
 			const token = generation;
 			void extending?.then((grew) => {
-				if (grew && token === generation) move("next", auto);
+				if (grew && token === generation) move("next", unwatched);
 			});
 			return;
 		}
 		const track = queue[result.index];
 		if (!track) return;
-		autoAdvanced = auto;
+		unwatchedMove = unwatched;
 		void play(track, queue);
 	}
 
@@ -701,9 +702,10 @@ export function createAudioEngine(deps: AudioEngineDeps = {}): AudioEngine {
 		dequeue,
 		pause,
 		toggle: () => (["playing", "loading"].includes(state.playback.status) ? pause() : void play()),
-		next: () => move("next"),
+		next: (unwatched) => move("next", unwatched),
 		// Past the grace window, "previous" restarts the loaded track instead of leaving it.
-		previous: () => (position > PREVIOUS_RESTART_SECONDS && elements[active]?.src ? seek(0) : move("previous")),
+		previous: (unwatched) =>
+			position > PREVIOUS_RESTART_SECONDS && elements[active]?.src ? seek(0) : move("previous", unwatched),
 
 		seek,
 
