@@ -7,8 +7,9 @@ import type { BundledDocument } from "#/shared/contracts";
  *
  * Read from the bundle rather than linked to GitHub, so the text is the one in the build that is
  * running and it opens with no network. ponytail: rendered as preformatted text, not parsed. These
- * are four short files of plain prose, and a markdown renderer would be the eleventh runtime
- * dependency in a project that has ten.
+ * are files of plain prose, and the generated licence collection is plain text with no markdown in
+ * it at all, so a markdown renderer would be the eleventh runtime dependency in a project that has
+ * ten.
  */
 export function DocumentRow({
 	name,

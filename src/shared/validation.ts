@@ -245,6 +245,7 @@ export function validateDocumentName(value: unknown): asserts value is BundledDo
 		"LICENSE",
 		"PRIVACY.md",
 		"SECURITY.md",
+		"THIRD_PARTY_LICENSES.txt",
 		"THIRD_PARTY_NOTICES.md",
 	] satisfies BundledDocument[];
 	if (typeof value !== "string" || !names.includes(value)) throw new TypeError("Unknown document");

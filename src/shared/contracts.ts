@@ -349,7 +349,12 @@ export interface UpdateState {
 }
 
 /** The documents shipped inside the app bundle, named rather than pathed. */
-export type BundledDocument = "LICENSE" | "PRIVACY.md" | "SECURITY.md" | "THIRD_PARTY_NOTICES.md";
+export type BundledDocument =
+	| "LICENSE"
+	| "PRIVACY.md"
+	| "SECURITY.md"
+	| "THIRD_PARTY_LICENSES.txt"
+	| "THIRD_PARTY_NOTICES.md";
 
 export interface MediaCommand {
 	type: "play" | "pause" | "toggle" | "next" | "previous" | "seek";

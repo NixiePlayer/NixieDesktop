@@ -273,7 +273,9 @@ short list of things that will get a pull request turned down.
 ## Licence and legal
 
 Noctune is [MIT licensed](LICENSE). See also [PRIVACY.md](PRIVACY.md),
-[SECURITY.md](SECURITY.md) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+[SECURITY.md](SECURITY.md) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Every build
+also ships the full licence text of every open source package inside it, generated from the
+dependency tree and readable in Settings, under About.
 
 Noctune is an independent, unofficial client. It is not affiliated with, endorsed by, or
 sponsored by YouTube, Google, Spotify, LRCLIB, or NetEase Cloud Music. YouTube and YouTube

@@ -714,6 +714,11 @@ function SettingsPage() {
 								title="Third-party notices"
 								description="The projects and lyrics sources Noctune depends on."
 							/>
+							<DocumentRow
+								name="THIRD_PARTY_LICENSES.txt"
+								title="Third-party licenses"
+								description="The license of every open source package bundled into this build."
+							/>
 						</ScopeGroup>
 
 						<ScopeGroup scope="YouTube and Google">

@@ -16,3 +16,5 @@ electron-builder.env
 .vinxi
 __unconfig*
 todos.json
+# Generated from the dependency tree on every build, by scripts/licenses.mjs.
+THIRD_PARTY_LICENSES.txt
