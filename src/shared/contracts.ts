@@ -367,7 +367,6 @@ export interface NoctuneBridge {
 		state(): Promise<AuthState>;
 		browsers(): Promise<BrowserAccount[]>;
 		importFromBrowser(account: BrowserAccount): Promise<AuthState>;
-		importCookies(cookieHeader: string): Promise<AuthState>;
 		signOut(): Promise<AuthState>;
 	};
 	music: {

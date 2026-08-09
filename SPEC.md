@@ -34,8 +34,7 @@ The app is an independent client. It is not affiliated with, endorsed by, or spo
 - Connect to YouTube Music by adopting the session from a signed-in browser profile on this device. Google rejects sign-in from an embedded window and refuses OAuth device tokens on every InnerTube endpoint, so neither is offered.
 - Store website cookies only in the dedicated `persist:noctune-auth` Electron partition.
 - List browser profiles that hold a YouTube session and let the user pick which one to continue.
-- Provide guided Cookie request-header import as a fallback for unsupported browsers.
-- Validate imported Cookie headers, clear the input after import, and never log or expose cookie values.
+- Never log or expose cookie values.
 - Show signed-in account state and support sign-out.
 - On sign-out, clear the website session and YouTube parser cache.
 

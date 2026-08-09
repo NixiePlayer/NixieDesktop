@@ -50,7 +50,6 @@ const bridge: NoctuneBridge = {
 		state: () => ipcRenderer.invoke("auth:state"),
 		browsers: () => ipcRenderer.invoke("auth:browsers"),
 		importFromBrowser: (account: BrowserAccount) => ipcRenderer.invoke("auth:import-browser", account),
-		importCookies: (cookieHeader: string) => ipcRenderer.invoke("auth:import-cookies", cookieHeader),
 		signOut: () => ipcRenderer.invoke("auth:sign-out"),
 	},
 	music: {

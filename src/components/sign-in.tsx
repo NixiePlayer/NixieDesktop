@@ -1,13 +1,10 @@
-import { ChevronRight, CircleAlert, Globe } from "lucide-react";
+import { ChevronRight, Globe } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import markDev from "#/assets/logo-dev.png";
 import markProd from "#/assets/logo.png";
 import type { AuthState, BrowserAccount } from "#/shared/contracts";
-import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
 import { Button } from "./ui/button";
-import { Field, FieldDescription, FieldLabel } from "./ui/field";
 import { Skeleton } from "./ui/skeleton";
-import { Textarea } from "./ui/textarea";
 
 // One SVG filter, inlined so the panel needs no asset and no network. It is what keeps the
 // gradient from banding on a large dark window.
@@ -94,8 +91,6 @@ function AccountRow({
 
 /** The whole app is behind this. Nothing renders until an account is linked. */
 export function SignInView({ onSignedIn }: { onSignedIn: (auth: AuthState) => void }) {
-	const [cookies, setCookies] = useState("");
-	const [manual, setManual] = useState(false);
 	const [error, setError] = useState("");
 	const [busy, setBusy] = useState(false);
 	// Undefined until detection answers, so the empty state never renders over a running scan.
@@ -117,7 +112,6 @@ export function SignInView({ onSignedIn }: { onSignedIn: (auth: AuthState) => vo
 		void work
 			.then((state) => {
 				if (state.status !== "authenticated") return setError("That did not sign you in. Please try again.");
-				setCookies("");
 				onSignedIn(state);
 			})
 			.catch((reason: Error) => setError(reason.message))
@@ -172,7 +166,8 @@ export function SignInView({ onSignedIn }: { onSignedIn: (auth: AuthState) => vo
 							</div>
 							<p className="text-muted-foreground text-sm">
 								Each row states the account signed in to that browser profile. Your system may ask once for permission
-								to read the browser's saved cookies. Nothing leaves this device.
+								to read the browser's saved cookies. Noctune re-reads that profile while it runs, because Google expires
+								the session every few minutes. The cookies go to YouTube and nowhere else.
 							</p>
 						</div>
 					) : (
@@ -195,45 +190,6 @@ export function SignInView({ onSignedIn }: { onSignedIn: (auth: AuthState) => vo
 						</div>
 					)}
 
-					{manual ? (
-						<div className="flex flex-col gap-4">
-							<Alert>
-								<CircleAlert />
-								<AlertTitle>If your browser is not listed</AlertTitle>
-								<AlertDescription>
-									You can connect the account from your browser instead. Treat what you paste like a password. It stays
-									on this device.
-								</AlertDescription>
-							</Alert>
-							<Field>
-								<FieldLabel htmlFor="cookie-header">Cookie header from music.youtube.com</FieldLabel>
-								<Textarea
-									id="cookie-header"
-									value={cookies}
-									autoComplete="off"
-									spellCheck={false}
-									onChange={(event) => setCookies(event.target.value)}
-									placeholder="SAPISID=...; __Secure-3PAPISID=..."
-								/>
-								<FieldDescription>Noctune clears the field as soon as it connects.</FieldDescription>
-							</Field>
-							<Button
-								variant="outline"
-								disabled={busy || !cookies.trim()}
-								onClick={() => run(window.noctune?.auth.importCookies(cookies))}
-							>
-								Connect account
-							</Button>
-						</div>
-					) : (
-						<button
-							type="button"
-							onClick={() => setManual(true)}
-							className="text-muted-foreground hover:text-foreground self-start text-sm underline underline-offset-4"
-						>
-							Trouble signing in?
-						</button>
-					)}
 				</div>
 			</main>
 		</div>

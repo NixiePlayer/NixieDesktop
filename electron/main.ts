@@ -33,7 +33,6 @@ import type {
 import { artistNames } from "../src/shared/entities";
 import {
 	validateBrowserAccount,
-	validateCookieHeader,
 	validateDocumentName,
 	validateDownloadRequest,
 	validateMusicCommand,
@@ -310,33 +309,6 @@ function createAdapter() {
 	return adapter;
 }
 
-async function importCookies(raw: unknown) {
-	validateCookieHeader(raw);
-	const authSession = session.fromPartition(authPartition);
-	await authSession.clearStorageData();
-	// A pasted header owns the session from here, so no browser profile gets to overwrite it.
-	await rm(linkPath(), { force: true });
-	for (const part of raw.split(";")) {
-		const separator = part.indexOf("=");
-		if (separator <= 0) continue;
-		const name = part.slice(0, separator).trim();
-		const value = part.slice(separator + 1).trim();
-		if (!name || !value) continue;
-		await authSession.cookies.set({
-			url: "https://www.youtube.com",
-			name,
-			value,
-			path: "/",
-			secure: true,
-			httpOnly: true,
-		});
-	}
-	youtube = createAdapter();
-	const state = await authState();
-	if (state.status !== "authenticated") throw new Error("The Cookie header did not create an authenticated session");
-	return state;
-}
-
 const execFileAsync = promisify(execFile);
 const browserIcons = new Map<string, Promise<string | undefined>>();
 
@@ -447,7 +419,6 @@ function registerIpc() {
 		return Promise.all(accounts.map(async (account) => ({ ...account, icon: await browserIcon(account.browser) })));
 	});
 	handle("auth:import-browser", (_event, account) => importFromBrowser(account));
-	handle("auth:import-cookies", (_event, raw) => importCookies(raw));
 	handle("auth:sign-out", async () => {
 		await session.fromPartition(authPartition).clearStorageData();
 		await rm(linkPath(), { force: true });

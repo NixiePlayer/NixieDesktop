@@ -15,6 +15,6 @@ Do not open public issues containing cookies, signed media URLs, diagnostics, or
 - Bundled documents are read by name from a fixed set, never from a path the renderer supplies.
 - Restricted decipher evaluation runs in a short-lived utility process with a capability-free VM context and a hard timeout.
 
-Cookie headers are credentials. Import them only from a browser profile you control, never paste them into issues, chat, or logs.
+Cookies are credentials. Link only a browser profile you control, and never paste cookie values into issues, chat, or logs.
 
 If media access or restricted evaluation fails, the release gate must remain closed. Do not disable sandboxing or Electron web security as a workaround.

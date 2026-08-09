@@ -280,12 +280,6 @@ export function validateTrack(value: unknown): asserts value is Track {
 	if (!validTrack(value)) throw new TypeError("Invalid track");
 }
 
-export function validateCookieHeader(value: unknown): asserts value is string {
-	if (typeof value !== "string" || value.length < 3 || value.length > 32_000 || /[\r\n]/.test(value)) {
-		throw new TypeError("Invalid Cookie header");
-	}
-}
-
 /** The names index into a table of supported browsers in the main process, never straight into a path. */
 export function validateBrowserAccount(value: unknown): asserts value is BrowserAccount {
 	if (!record(value) || typeof value.browser !== "string" || typeof value.profile !== "string") {

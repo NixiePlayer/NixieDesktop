@@ -15,7 +15,7 @@
 
 Noctune uses pinned `youtubei.js` 17.2.0 in Electron's main process. The renderer receives plain DTOs, opaque continuation values, proxied artwork, and opaque media tokens. Parser objects, cookies, signed URLs, and arbitrary upstream URLs stay in main.
 
-Authentication adopts the YouTube session from a browser profile on this device: `electron/browser-cookies.ts` reads that profile's cookie store (Chromium forks on macOS, Firefox on any platform) and main writes the cookies into the auth partition. Google rejects sign-in from an embedded window whatever user agent it presents, and OAuth device tokens are refused by every InnerTube endpoint, so neither path exists. A guided Cookie header import is the fallback for unsupported browsers. Cookie values are never logged. Sign out clears the partition and YouTube parser cache.
+Authentication adopts the YouTube session from a browser profile on this device: `electron/browser-cookies.ts` reads that profile's cookie store (Chromium forks on macOS, Firefox on any platform) and main writes the cookies into the auth partition. Google rejects sign-in from an embedded window whatever user agent it presents, and OAuth device tokens are refused by every InnerTube endpoint, so neither path exists, and a browser profile is the only way in. Cookie values are never logged. Sign out clears the partition and YouTube parser cache.
 
 This accepts private API breakage, account enforcement changes, and YouTube policy risk. A failed media or decipher gate blocks distribution. It does not justify disabling `webSecurity`, Node integration, sandboxing, or context isolation.
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { durationsMatch, parseLrc } from "./lrc";
 import { parseByteRange } from "./range";
-import { validateCookieHeader, validateMusicCommand, validateMusicQuery } from "./validation";
+import { validateMusicCommand, validateMusicQuery } from "./validation";
 
 describe("boundary parsing", () => {
 	it("parses and sorts multi-timestamp LRC lines", () => {
@@ -61,6 +61,5 @@ describe("boundary parsing", () => {
 		).not.toThrow();
 		expect(() => validateMusicCommand({ type: "playlist-update", playlistId: "PL1", privacy: "friends" })).toThrow();
 		expect(() => validateMusicCommand({ type: "playlist-update", playlistId: "PL1" })).toThrow();
-		expect(() => validateCookieHeader("SID=value\r\nInjected: yes")).toThrow();
 	});
 });

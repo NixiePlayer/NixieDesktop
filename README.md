@@ -149,10 +149,23 @@ endpoints this app talks to. So Noctune does not ask for your password at all. I
 adopts the session from a browser you are already signed in to on the same machine.
 
 Pick a profile from Chrome, Brave, Edge, Vivaldi or Chromium on macOS, or Firefox on any
-platform, and Noctune reads that profile's YouTube cookies once. They go into a dedicated
+platform, and Noctune reads that profile's YouTube cookies. They go into a dedicated
 Electron session partition and nowhere else. They are never logged, never sent anywhere
-except YouTube, and never exposed to the app's interface. If your browser is not on that
-list, you can paste a `Cookie` header instead.
+except YouTube, and never exposed to the app's interface. Google expires the session
+every few minutes and only the browser holds the current value, so Noctune re-reads that
+profile while it runs, at most once a minute, for as long as the account stays linked.
+It is the only way in: there is no password field and no way to paste a session by hand.
+
+Noctune reaches YouTube through the private interface the YouTube Music apps use, which
+Google does not publish or support. Nothing about you leaves this device to anyone else,
+but the account you link is talking to YouTube through an unofficial client, and it
+carries whatever risk that brings.
+
+Once the session is adopted, Noctune checks that the account holds a Music Premium
+subscription, by asking YouTube what audio tiers it is willing to offer: the 256 kbps
+tiers are offered to a subscriber and to nobody else. An account without one is refused
+and nothing is stored for it. If that check cannot reach YouTube at all it lets you
+through, because a network failure is not evidence about anybody's subscription.
 
 Signing out clears the session and the parser cache.
 
