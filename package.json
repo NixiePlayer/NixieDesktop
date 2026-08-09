@@ -1,6 +1,6 @@
 {
 	"name": "noctune",
-	"version": "0.3.0",
+	"version": "0.3.1",
 	"description": "A local-first desktop client for YouTube Music, with gapless playback, loudness normalization, and synced lyrics.",
 	"author": "Edoardo Ranghieri",
 	"license": "MIT",
