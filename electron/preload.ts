@@ -32,8 +32,14 @@ window.addEventListener(
 			(["INPUT", "TEXTAREA", "SELECT"].includes(target?.tagName ?? "") &&
 				(target as HTMLInputElement | null)?.type !== "range");
 		if (typing) return;
-		if (target?.closest('[role="menu"],[role="menuitem"],[aria-haspopup="menu"]')) return;
+		// Space is the transport control and nothing else, everywhere outside a text field. This runs in
+		// the capture phase on `window`, ahead of every listener in the page, so `stopPropagation` is
+		// what keeps the key away from whatever happens to hold focus: a menu trigger left focused by a
+		// menu that has just closed reopened it on Space instead of pausing, and any button, menu item
+		// or select would do the same. `preventDefault` is the other half, since native button
+		// activation fires on keyup rather than through a listener.
 		event.preventDefault();
+		event.stopPropagation();
 		dispatchMediaCommand({ type: "toggle" });
 	},
 	true

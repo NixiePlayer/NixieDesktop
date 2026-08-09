@@ -29,7 +29,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "#/components/ui/tabs";
 import { toast } from "#/components/ui/toast";
 import { dropHeldPages, queryMusic } from "#/lib/api";
 import { formatBytes, plural } from "#/lib/format";
-import { applyTheme } from "#/lib/theme";
+import { applyTheme, storedTheme } from "#/lib/theme";
 import { checkForUpdates, useUpdateState } from "#/lib/updates";
 import { cn } from "#/lib/utils";
 import type { AppInfo, NormalizationLevel, Settings } from "#/shared/contracts";
