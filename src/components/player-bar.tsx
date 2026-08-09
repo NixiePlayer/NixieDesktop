@@ -20,7 +20,7 @@ import { formatDuration } from "#/lib/format";
 import { nextRating, rate, useRating } from "#/lib/rating";
 import { usePlayback, usePlaybackPosition, usePlayer } from "#/player";
 import type { Track } from "#/shared/contracts";
-import { TrackMenu } from "./entity-menu";
+import { EntityContextMenu, TrackMenu } from "./entity-menu";
 import { Artwork, TrackLink } from "./media";
 import type { PanelTab } from "./now-panel";
 import { Button } from "./ui/button";
@@ -164,6 +164,52 @@ function Rating({ track }: { track: Track }) {
 	);
 }
 
+/**
+ * The now playing block, and the one part of the bar that is about an entity rather than about
+ * transport, so right clicking it opens the same menu its `⋯` does. `render` makes the block itself
+ * the trigger rather than wrapping it in one, which would add an element inside the bar's grid
+ * column; with nothing playing there is no subject for a menu, so the same block is drawn plain.
+ */
+function NowPlaying({ track, failure }: { track?: Track; failure?: string }) {
+	const className = "flex min-w-0 items-center gap-3";
+	const body = (
+		<>
+			<Artwork src={track?.artworkUrl} className="size-12" />
+			<div className="flex min-w-0 flex-col">
+				{track ? (
+					<TrackLink track={track} className="truncate text-sm font-medium hover:underline" />
+				) : (
+					<span className="truncate text-sm font-medium">Nothing playing</span>
+				)}
+				{failure ? (
+					<span className="text-destructive truncate text-xs" title={failure}>
+						{failure}
+					</span>
+				) : track ? (
+					<TrackLinks track={track} />
+				) : (
+					<span className="text-muted-foreground truncate text-xs">Pick something to start</span>
+				)}
+			</div>
+			{/* `shrink-0` beside a `min-w-0` title block: the title gives up width first, these never do. */}
+			{track && (
+				<div className="flex shrink-0 items-center">
+					<Rating track={track} />
+					<TrackMenu track={track} />
+				</div>
+			)}
+		</>
+	);
+
+	return track ? (
+		<EntityContextMenu item={track} render={<div className={className} />}>
+			{body}
+		</EntityContextMenu>
+	) : (
+		<div className={className}>{body}</div>
+	);
+}
+
 export function PlayerBar({
 	panel,
 	onPanelChange,
@@ -186,32 +232,7 @@ export function PlayerBar({
 		<footer className="border-border bg-background relative col-span-3 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-6 border-t px-4">
 			<SeekBar />
 
-			<div className="flex min-w-0 items-center gap-3">
-				<Artwork src={track?.artworkUrl} className="size-12" />
-				<div className="flex min-w-0 flex-col">
-					{track ? (
-						<TrackLink track={track} className="truncate text-sm font-medium hover:underline" />
-					) : (
-						<span className="truncate text-sm font-medium">Nothing playing</span>
-					)}
-					{failure ? (
-						<span className="text-destructive truncate text-xs" title={failure}>
-							{failure}
-						</span>
-					) : track ? (
-						<TrackLinks track={track} />
-					) : (
-						<span className="text-muted-foreground truncate text-xs">Pick something to start</span>
-					)}
-				</div>
-				{/* `shrink-0` beside a `min-w-0` title block: the title gives up width first, these never do. */}
-				{track && (
-					<div className="flex shrink-0 items-center">
-						<Rating track={track} />
-						<TrackMenu track={track} />
-					</div>
-				)}
-			</div>
+			<NowPlaying track={track} failure={failure} />
 
 			<div className="flex items-center gap-2">
 				<span className="text-muted-foreground w-10 text-right text-xs tabular-nums">{formatDuration(position)}</span>
