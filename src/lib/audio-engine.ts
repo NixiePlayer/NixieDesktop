@@ -26,6 +26,7 @@ export interface AudioEngine {
 	dispose(): void;
 	play(track?: Track, queue?: Track[], context?: QueueContext): Promise<void>;
 	enqueue(tracks: Track[], at: "next" | "end"): void;
+	setQueue(queue: Track[], context?: QueueContext): void;
 	dequeue(index: number): void;
 	pause(): void;
 	toggle(): void;
@@ -558,6 +559,34 @@ export function createAudioEngine(deps: AudioEngineDeps = {}): AudioEngine {
 	}
 
 	/**
+	 * Swaps the queue under the track already playing, the other thing `play` cannot do. A radio
+	 * seeded off the current song opens on that song, so handing the result to `play` reloaded the
+	 * deck and restarted it under the listener for no change of track at all. Only the rows, the index
+	 * into them and the context change here; the deck plays on untouched.
+	 *
+	 * The prepared deck belongs to the queue being replaced, so it is dropped and the new next row is
+	 * prepared in its place, which is what keeps the handoff at the end of this track gapless. Settings
+	 * are read fresh for the same reason `play` reads them.
+	 */
+	function setQueue(queue: Track[], context?: QueueContext) {
+		const current = state.playback.currentTrack;
+		if (!current || !queue.length) return;
+		// A queue that does not hold what is playing would leave the index pointing at someone else's
+		// row, so the current track heads it. Every caller so far passes a queue that opens on it.
+		const found = queue.findIndex((item) => item.id === current.id);
+		const rows = found >= 0 ? queue : [current, ...queue];
+		preloaded = undefined;
+		update({ queue: rows, queueIndex: Math.max(0, found), context: context ?? state.playback.context });
+		const token = generation;
+		void getBridge()
+			?.local.load()
+			.then((stored) => {
+				if (stored && token === generation) preloadNext(token, stored.settings);
+			})
+			.catch(() => undefined);
+	}
+
+	/**
 	 * Drops one row. Every branch below is about the track that was playing, which is the whole
 	 * difficulty: removing any other row is arithmetic, while removing the current one has to decide
 	 * what plays next without letting `play`, which always plays, start a paused session.
@@ -668,6 +697,7 @@ export function createAudioEngine(deps: AudioEngineDeps = {}): AudioEngine {
 
 		play,
 		enqueue,
+		setQueue,
 		dequeue,
 		pause,
 		toggle: () => (["playing", "loading"].includes(state.playback.status) ? pause() : void play()),

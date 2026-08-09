@@ -639,6 +639,28 @@ describe("audio engine", () => {
 		await vi.waitFor(() => expect(saved.length).toBeGreaterThan(before));
 	});
 
+	it("swaps the queue under the playing track without restarting it", async () => {
+		const { engine, audio } = harness();
+		await engine.start();
+		const first = track("t1");
+		await engine.play(first, [first]);
+		audio[0].currentTime = 90;
+		audio[0].dispatch("timeupdate");
+		const played = audio[0].played;
+
+		// What starting a radio off the current song hands back: the same song, then its queue.
+		engine.setQueue([first, track("t2"), track("t3")], { type: "radio", title: "Radio" });
+		const { playback } = engine.getSnapshot();
+
+		expect(playback.queue.map((item) => item.id)).toEqual(["t1", "t2", "t3"]);
+		expect(playback.queueIndex).toBe(0);
+		expect(playback.context?.title).toBe("Radio");
+		expect(playback.status).toBe("playing");
+		// The deck was neither reloaded nor started again, so the song plays on from where it was.
+		expect(audio[0].played).toBe(played);
+		expect(engine.getPosition()).toBe(90);
+	});
+
 	it("plays straight away when something is queued with nothing playing", async () => {
 		const { engine } = harness();
 		await engine.start();

@@ -146,7 +146,16 @@ export async function playRadio(
 		const queue = (await queryMusic(query)).items.filter(isTrack);
 		const [first] = queue;
 		if (!first) throw new Error("No queue");
-		await engine.play(first, queue, { type: "radio", id: context.id, title: context.title });
+		const { playback } = engine.getSnapshot();
+		const target = { type: "radio" as const, id: context.id, title: context.title };
+		// A radio seeded off the song already playing opens on that song, so there is no track to
+		// change: asking `play` for it would reload the deck and restart it from the beginning under
+		// the listener. Only the queue behind it is new.
+		if (first.id === playback.currentTrack?.id && ["playing", "loading"].includes(playback.status)) {
+			engine.setQueue(queue, target);
+			return;
+		}
+		await engine.play(first, queue, target);
 	});
 	if (starting === key) starting = undefined;
 }
