@@ -1,11 +1,10 @@
 import { RouterProvider } from "@tanstack/react-router";
 import { StrictMode } from "react";
 import ReactDOM from "react-dom/client";
-import { applyTheme } from "./lib/theme";
+// Imported for its side effect: it paints the mirrored choice before the first render, so the
+// window never opens on one appearance and swaps to the other once the state file answers.
+import "./lib/theme";
 import { router } from "./router";
-
-// Resolve the OS preference before the first paint. The stored choice arrives later over IPC.
-applyTheme("system");
 
 const rootElement = document.getElementById("app")!;
 

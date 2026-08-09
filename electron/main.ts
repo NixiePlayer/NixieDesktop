@@ -11,6 +11,7 @@ import {
 	ipcMain,
 	Menu,
 	nativeImage,
+	nativeTheme,
 	net,
 	Notification,
 	protocol,
@@ -693,6 +694,11 @@ async function verifyRestrictedEvaluator() {
 
 async function createWindow() {
 	const saved = stateStore.snapshot.windowBounds;
+	// What the window is painted with until the renderer's first frame lands. It is the stored theme's
+	// own `--background` from `src/styles.css`, so a light window never opens on a dark rectangle: a
+	// colour fixed at one appearance is the flash the renderer's synchronous paint cannot reach.
+	const theme = stateStore.snapshot.settings.theme;
+	const dark = theme === "system" ? nativeTheme.shouldUseDarkColors : theme === "dark";
 	mainWindow = new BrowserWindow({
 		width: saved?.width ?? 1440,
 		height: saved?.height ?? 900,
@@ -702,7 +708,7 @@ async function createWindow() {
 		minHeight: 680,
 		show: false,
 		titleBarStyle: "hiddenInset",
-		backgroundColor: "#0A0C12",
+		backgroundColor: dark ? "#0f0f0f" : "#ffffff",
 		webPreferences: {
 			preload: join(import.meta.dirname, "../preload/preload.mjs"),
 			sandbox: true,

@@ -338,7 +338,9 @@ function UpdateSetting() {
 
 function SettingsPage() {
 	const router = useRouter();
-	const [settings, setSettings] = useState<Settings>(defaultState().settings);
+	// The theme is the one setting already in hand: the state file is an IPC round trip away, and a
+	// card selected on the default and moved a frame later is the selection visibly changing itself.
+	const [settings, setSettings] = useState<Settings>(() => ({ ...defaultState().settings, theme: storedTheme() }));
 	// Remembers the target across an off/on toggle, since "off" cannot hold one.
 	const [lastLevel, setLastLevel] = useState<Level>("normal");
 	const level = settings.normalization === "off" ? lastLevel : settings.normalization;
