@@ -20,6 +20,5 @@ export function defaultState(): PersistedState {
 			reportHistory: true,
 		},
 		recentSearches: [],
-		downloads: [],
 	};
 }

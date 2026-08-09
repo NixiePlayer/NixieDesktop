@@ -5,7 +5,6 @@ import {
 	BookmarkX,
 	CircleMinus,
 	Disc3,
-	Download,
 	Link2,
 	ListEnd,
 	ListPlus,
@@ -78,7 +77,7 @@ async function run(failure: string, work: () => Promise<unknown>, description = 
  * `pages` caps the walk, and everything that starts playback passes 1. Upstream hands back a hundred
  * rows at a time and a radio keeps handing back more, so the full walk is up to twenty sequential
  * round trips, which is a long time to hold the first note back and no time at all to hold a
- * download back. Only the commands that mean the whole list pay for the whole list.
+ * full-list command back. Only the commands that mean the whole list pay for the whole list.
  */
 export async function tracksOf(item: Subject, pages = Number.POSITIVE_INFINITY): Promise<Track[]> {
 	if (isTrack(item)) return [item];
@@ -199,13 +198,11 @@ function MenuItems({
 	item,
 	queueIndex,
 	extra,
-	downloaded,
 	onNewPlaylist,
 }: {
 	item: Subject;
 	queueIndex?: number;
 	extra?: ReactNode;
-	downloaded?: boolean;
 	onNewPlaylist: () => void;
 }) {
 	const engine = usePlayer();
@@ -277,34 +274,6 @@ function MenuItems({
 			toast.add({ title: "Link copied", type: "success" });
 		});
 
-	const download = () =>
-		run(
-			"Not downloaded",
-			async () => {
-				const tracks = await tracksOf(item);
-				const result = await window.noctune?.local.download({ tracks });
-				if (result) {
-					toast.add({
-						title: result.saved === 1 ? "Saved for offline listening" : `${result.saved} tracks saved offline`,
-						type: "success",
-					});
-					void router.invalidate();
-				}
-			},
-			"The audio could not be stored for offline listening."
-		);
-
-	const removeDownload = () =>
-		run(
-			"Download not removed",
-			async () => {
-				await window.noctune?.local.removeDownload(item.id);
-				toast.add({ title: "Removed from downloads", type: "success" });
-				void router.invalidate();
-			},
-			"The offline copy could not be removed."
-		);
-
 	const deletePlaylist = () => {
 		if (!deletable || !window.confirm(`Delete "${item.title}"? This cannot be undone.`)) return;
 		void run("Playlist not deleted", async () => {
@@ -353,17 +322,6 @@ function MenuItems({
 			</DropdownMenuGroup>
 			<DropdownMenuSeparator />
 			<DropdownMenuGroup>
-				{downloaded && track ? (
-					<DropdownMenuItem variant="destructive" onClick={() => void removeDownload()}>
-						<Trash2 />
-						Remove download
-					</DropdownMenuItem>
-				) : !isArtist(item) ? (
-					<DropdownMenuItem onClick={() => void download()}>
-						<Download />
-						Download
-					</DropdownMenuItem>
-				) : null}
 				{/* The thumbs stay stateless: reading a rating costs a request per row, so only the player
 				    bar, which shows them, pays for it. Whether the library holds something is free, since
 				    the store already knows what the library pages listed and what this session saved. */}
@@ -552,14 +510,12 @@ export function EntityContextMenu({
 	item,
 	queueIndex,
 	extra,
-	downloaded,
 	children,
 	...props
 }: ContextMenuPrimitive.Trigger.Props & {
 	item: MusicEntity;
 	queueIndex?: number;
 	extra?: ReactNode;
-	downloaded?: boolean;
 }) {
 	const entity = unwrap(item);
 	const { dialog, openNew } = useNewPlaylist(entity);
@@ -570,13 +526,7 @@ export function EntityContextMenu({
 		<>
 			<ContextMenuPrimitive.Root>
 				<ContextMenuPrimitive.Trigger {...props}>{children}</ContextMenuPrimitive.Trigger>
-				<MenuItems
-					item={entity}
-					queueIndex={queueIndex}
-					extra={extra}
-					downloaded={downloaded}
-					onNewPlaylist={openNew}
-				/>
+				<MenuItems item={entity} queueIndex={queueIndex} extra={extra} onNewPlaylist={openNew} />
 			</ContextMenuPrimitive.Root>
 			{dialog}
 		</>

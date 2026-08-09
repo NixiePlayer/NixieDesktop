@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/banner.png" alt="Noctune: a desktop client for YouTube Music, with gapless playback, loudness normalization, offline downloads and synced lyrics." width="100%">
+  <img src="docs/banner.png" alt="Noctune: a desktop client for YouTube Music, with gapless playback, loudness normalization and synced lyrics." width="100%">
 </p>
 
 <p align="center">
@@ -11,11 +11,11 @@
 
 Noctune is a desktop client for YouTube Music. It plays your account's music through a
 native app instead of a browser tab: gapless playback, loudness normalization you can
-actually set, time-synced lyrics, offline downloads, and a session that comes back exactly
-where you left it.
+actually set, time-synced lyrics, and a session that comes back exactly where you left it.
 
 It is an independent project. There is no Noctune account, no backend and no telemetry.
 Everything it knows stays on your computer.
+
 > [!IMPORTANT]
 > **Noctune is an independent, unofficial client and is not affiliated with, endorsed by,
 > or sponsored by Google or YouTube.** It is not a YouTube Music product, it does not copy
@@ -132,12 +132,6 @@ Now Playing in Control Center. It is a desktop app, not a web page in a frame.
 - Create, rename, describe, reorder, edit privacy on and delete playlists. Add and remove
   tracks. Like, dislike, save to library, subscribe to artists.
 
-**Offline**
-
-- Download a track, an album or a whole playlist to disk.
-- Downloaded tracks play from the file, with their measured loudness stored alongside, so
-  normalization still applies offline.
-
 **macOS**
 
 - Now Playing in Control Center, with artwork, and hardware media keys.
@@ -238,7 +232,7 @@ strange if you meet them by surprise:
   preload into `dist-electron/`, then launches Electron against them. All three reload on
   save.
 - The dev build stores its data under `Noctune (Dev)`, separate from the released app. Its
-  linked account, downloads, settings and playback state are its own, and you can run both
+  linked account, settings and playback state are its own, and you can run both
   at once.
 
 ### Before you push

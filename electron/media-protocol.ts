@@ -1,16 +1,10 @@
 import { randomBytes } from "node:crypto";
-import { createReadStream, createWriteStream } from "node:fs";
-import { rm } from "node:fs/promises";
-import { Readable } from "node:stream";
-import { pipeline } from "node:stream/promises";
-import type { ReadableStream as NodeReadableStream } from "node:stream/web";
 import { net } from "electron";
 import type { AudioVariantFingerprint } from "../src/shared/contracts";
 import { parseByteRange, type ByteRange } from "../src/shared/range";
 
 interface MediaTarget {
 	url?: string;
-	filePath?: string;
 	contentLength?: number;
 	fingerprint: AudioVariantFingerprint;
 	expiresAt: number;
@@ -66,10 +60,6 @@ export class SecureResourceRegistry {
 		return `noctune://app/media/${id}`;
 	}
 
-	registerOffline(filePath: string, contentLength: number, fingerprint: AudioVariantFingerprint) {
-		return this.registerMedia({ filePath, contentLength, fingerprint });
-	}
-
 	/**
 	 * Artwork rides along inside the queue and the playback snapshot, which outlive this process, so
 	 * the id carries the upstream URL instead of pointing into a map that dies with it. Public CDN
@@ -77,21 +67,6 @@ export class SecureResourceRegistry {
 	 */
 	registerArtwork(url: string) {
 		return `noctune://app/artwork/${Buffer.from(url).toString("base64url")}`;
-	}
-
-	async saveMedia(mediaUrl: string, filePath: string) {
-		const id = new URL(mediaUrl).pathname.split("/").at(-1);
-		const target = id ? this.#media.get(id) : undefined;
-		if (!target?.url || target.expiresAt < Date.now()) throw new Error("Download expired");
-
-		const response = await net.fetch(target.url, { headers: { "cache-control": "no-store" } });
-		if (!response.ok || !response.body) throw new Error(`Download failed with status ${response.status}`);
-		try {
-			await pipeline(Readable.fromWeb(response.body as unknown as NodeReadableStream), createWriteStream(filePath));
-		} catch (error) {
-			await rm(filePath, { force: true });
-			throw error;
-		}
 	}
 
 	async handleMedia(request: Request, id: string) {
@@ -109,19 +84,6 @@ export class SecureResourceRegistry {
 				status: 416,
 				headers: target.contentLength ? { "content-range": `bytes */${target.contentLength}` } : undefined,
 			});
-		}
-
-		if (target.filePath) {
-			const headers = new Headers({
-				"accept-ranges": "bytes",
-				"cache-control": "private, no-store",
-				"content-length": String(range ? range.end - range.start + 1 : target.contentLength),
-				"content-type": mimeType,
-			});
-			for (const [name, value] of Object.entries(this.#cors(request) ?? {})) headers.set(name, value);
-			if (range) headers.set("content-range", `bytes ${range.start}-${range.end}/${target.contentLength}`);
-			const body = Readable.toWeb(createReadStream(target.filePath, range && { start: range.start, end: range.end }));
-			return new Response(body as unknown as ReadableStream, { status: range ? 206 : 200, headers });
 		}
 
 		if (!target.url) return new Response("Not found", { status: 404 });

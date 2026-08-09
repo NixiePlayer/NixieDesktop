@@ -3,7 +3,6 @@ import type {
 	AudioQuality,
 	BrowserAccount,
 	BundledDocument,
-	DownloadRequest,
 	MediaCommand,
 	MusicCommand,
 	MusicQuery,
@@ -74,11 +73,8 @@ const bridge: NoctuneBridge = {
 	local: {
 		load: () => ipcRenderer.invoke("local:load"),
 		save: (state: PersistedState) => ipcRenderer.invoke("local:save", state),
-		download: (request: DownloadRequest) => ipcRenderer.invoke("local:download", request),
-		removeDownload: (trackId) => ipcRenderer.invoke("local:remove-download", trackId),
 		clear: (selection) => ipcRenderer.invoke("local:clear", selection),
 		exportDiagnostics: () => ipcRenderer.invoke("local:export-diagnostics"),
-		downloadsSize: () => ipcRenderer.invoke("local:downloads-size"),
 		document: (name: BundledDocument) => ipcRenderer.invoke("local:document", name),
 	},
 	app: {

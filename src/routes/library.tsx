@@ -8,7 +8,6 @@ import { isAlbum, isArtist, isPlaylist, isTrack } from "#/shared/entities";
 
 const filters = [
 	{ value: "all", label: "All", match: () => true },
-	{ value: "downloads", label: "Downloads", match: () => false },
 	{ value: "playlists", label: "Playlists", match: isPlaylist },
 	{ value: "albums", label: "Albums", match: isAlbum },
 	{ value: "artists", label: "Artists", match: isArtist },
@@ -17,23 +16,20 @@ const filters = [
 
 export const Route = createFileRoute("/library")({
 	loader: async () => {
-		const [library, stored] = await Promise.all([
-			queryMusic({ type: "library" }).catch(() => ({ items: [] })),
-			window.noctune?.local.load(),
-		]);
+		const library = await queryMusic({ type: "library" }).catch(() => ({ items: [] }));
 		// Everything the library page lists is held by definition, and it is the only free read of that:
 		// nothing on a shelf, a search result or a page states whether the account already holds it.
 		markHeld(library.items);
-		return { library, downloads: stored?.downloads.map(({ track }) => track) ?? [] };
+		return { library };
 	},
 	component: LibraryPage,
 });
 
 function LibraryPage() {
-	const { library, downloads } = Route.useLoaderData();
+	const { library } = Route.useLoaderData();
 	const [filter, setFilter] = useState<string>("all");
 	const active = filters.find((item) => item.value === filter) ?? filters[0];
-	const visible = filter === "downloads" ? downloads : library.items.filter(active.match);
+	const visible = library.items.filter(active.match);
 
 	return (
 		<div>
@@ -48,11 +44,7 @@ function LibraryPage() {
 				</TabsList>
 			</Tabs>
 			{visible.length ? (
-				<MediaGrid
-					items={visible}
-					context={{ type: "library", title: active.label }}
-					downloaded={filter === "downloads"}
-				/>
+				<MediaGrid items={visible} context={{ type: "library", title: active.label }} />
 			) : (
 				<p className="text-muted-foreground text-sm">Nothing here yet.</p>
 			)}

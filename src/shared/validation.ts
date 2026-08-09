@@ -2,7 +2,6 @@ import type {
 	AccountSettingKey,
 	BrowserAccount,
 	BundledDocument,
-	DownloadRequest,
 	MusicCommand,
 	MusicQuery,
 	PersistedState,
@@ -125,19 +124,6 @@ function validTrack(value: unknown): value is Track {
 		optionalString(value.artworkUrl, 4096) &&
 		(value.explicit === undefined || typeof value.explicit === "boolean") &&
 		optionalString(value.plays, 100)
-	);
-}
-
-function validFingerprint(value: unknown) {
-	return (
-		record(value) &&
-		Number.isInteger(value.itag) &&
-		boundedString(value.mimeType, 200) &&
-		boundedString(value.codec, 100) &&
-		typeof value.bitrate === "number" &&
-		Number.isFinite(value.bitrate) &&
-		typeof value.durationMs === "number" &&
-		Number.isFinite(value.durationMs)
 	);
 }
 
@@ -264,18 +250,6 @@ export function validateDocumentName(value: unknown): asserts value is BundledDo
 	if (typeof value !== "string" || !names.includes(value)) throw new TypeError("Unknown document");
 }
 
-export function validateDownloadRequest(value: unknown): asserts value is DownloadRequest {
-	if (
-		!record(value) ||
-		!Array.isArray(value.tracks) ||
-		value.tracks.length < 1 ||
-		value.tracks.length > 2000 ||
-		!value.tracks.every(validTrack)
-	) {
-		throw new TypeError("Invalid download request");
-	}
-}
-
 export function validateTrack(value: unknown): asserts value is Track {
 	if (!validTrack(value)) throw new TypeError("Invalid track");
 }
@@ -295,17 +269,7 @@ export function validateState(value: unknown): asserts value is PersistedState {
 		!Array.isArray(value.playback.queue) ||
 		value.playback.queue.length > 2000 ||
 		!Array.isArray(value.recentSearches) ||
-		value.recentSearches.length > 20 ||
-		!Array.isArray(value.downloads) ||
-		value.downloads.length > 20_000 ||
-		!value.downloads.every(
-			(item) =>
-				record(item) &&
-				validTrack(item.track) &&
-				validFingerprint(item.fingerprint) &&
-				(item.integratedLufs === undefined ||
-					(typeof item.integratedLufs === "number" && Number.isFinite(item.integratedLufs)))
-		)
+		value.recentSearches.length > 20
 	) {
 		throw new TypeError("Local state exceeds bounds");
 	}

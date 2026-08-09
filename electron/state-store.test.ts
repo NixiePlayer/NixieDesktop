@@ -76,30 +76,25 @@ describe("state recovery", () => {
 		expect(() => validateState({ ...loaded, settings: { ...loaded.settings, reportHistory: "yes" } })).toThrow();
 	});
 
-	it("adds an empty download list to an older version 1 snapshot", async () => {
+	it("drops the download metadata an older snapshot carries", async () => {
 		const path = await mkdtemp(join(tmpdir(), "noctune-state-"));
 		paths.push(path);
-		const { downloads: _downloads, ...state } = defaultState();
+		const state = {
+			...defaultState(),
+			downloads: [
+				{
+					track: { id: "track", title: "Track", artists: [], durationSeconds: 120 },
+					fingerprint: { itag: 251, mimeType: "audio/webm", codec: "opus", bitrate: 128_000, durationMs: 120_000 },
+				},
+			],
+		};
 		await writeFile(join(path, "state.json"), JSON.stringify(state));
-
-		expect((await new StateStore(path).load()).downloads).toEqual([]);
-	});
-
-	it("removes download metadata", async () => {
-		const path = await mkdtemp(join(tmpdir(), "noctune-state-"));
-		paths.push(path);
 		const store = new StateStore(path);
-		const state = defaultState();
-		state.downloads.push({
-			track: { id: "track", title: "Track", artists: [], durationSeconds: 120 },
-			fingerprint: { itag: 251, mimeType: "audio/webm", codec: "opus", bitrate: 128_000, durationMs: 120_000 },
-		});
-		await store.save(state);
 
-		await store.removeDownload("track");
-
-		expect(store.snapshot.downloads).toEqual([]);
-		expect(JSON.parse(await readFile(join(path, "state.json"), "utf8")).downloads).toEqual([]);
+		expect(await store.load()).not.toHaveProperty("downloads");
+		// The files themselves go on the same startup, in main, which owns that path.
+		await store.save(store.snapshot);
+		expect(JSON.parse(await readFile(join(path, "state.json"), "utf8"))).not.toHaveProperty("downloads");
 	});
 
 	it("renames corrupt state and returns safe defaults", async () => {

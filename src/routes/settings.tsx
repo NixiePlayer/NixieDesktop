@@ -27,7 +27,6 @@ import { Switch } from "#/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "#/components/ui/tabs";
 import { toast } from "#/components/ui/toast";
 import { dropHeldPages, queryMusic } from "#/lib/api";
-import { formatBytes, plural } from "#/lib/format";
 import { applyTheme, storedTheme } from "#/lib/theme";
 import { checkForUpdates, useUpdateState } from "#/lib/updates";
 import { cn } from "#/lib/utils";
@@ -60,7 +59,6 @@ const qualities: Record<Settings["quality"], string> = {
 const tabs = [
 	{ value: "general", label: "General", icon: SlidersHorizontal },
 	{ value: "playback", label: "Playback", icon: Gauge },
-	{ value: "downloads", label: "Downloads", icon: Download },
 	{ value: "privacy", label: "Privacy", icon: Shield },
 	{ value: "about", label: "About", icon: Info },
 ] as const;
@@ -196,19 +194,6 @@ function useRegions() {
 			.catch(() => setRegions([]));
 	}, []);
 	return regions;
-}
-
-function useDownloads() {
-	const [state, setState] = useState<{ count: number; bytes: number }>();
-	const read = () => {
-		const bridge = window.noctune;
-		if (!bridge) return;
-		void Promise.all([bridge.local.load(), bridge.local.downloadsSize()])
-			.then(([stored, bytes]) => setState({ count: stored.downloads.length, bytes }))
-			.catch(() => setState({ count: 0, bytes: 0 }));
-	};
-	useEffect(read, []);
-	return { downloads: state, refresh: read };
 }
 
 /**
@@ -349,7 +334,6 @@ function SettingsPage() {
 		() => ({ [AUTOMATIC_REGION]: "Chosen by YouTube", ...Object.fromEntries(regions.map((r) => [r.code, r.label])) }),
 		[regions]
 	);
-	const { downloads, refresh: refreshDownloads } = useDownloads();
 	const info = useAppInfo();
 	const notificationsRefused = useNotificationsRefused();
 
@@ -379,20 +363,6 @@ function SettingsPage() {
 			// what the next visit would be served.
 			dropHeldPages();
 			void router.invalidate();
-		});
-	};
-
-	const clearDownloads = () => {
-		if (
-			!downloads?.count ||
-			!window.confirm(`Remove ${plural(downloads.count, "downloaded track")} from this computer?`)
-		) {
-			return;
-		}
-		void window.noctune?.local.clear("downloads").then(() => {
-			refreshDownloads();
-			void router.invalidate();
-			toast.add({ title: "Downloads removed", type: "success" });
 		});
 	};
 
@@ -621,32 +591,6 @@ function SettingsPage() {
 					</Section>
 				</TabsContent>
 
-				<TabsContent value="downloads">
-					<Section
-						title="Downloads"
-						description="Tracks saved to this computer so they play without a connection. They live with the app and go when it does."
-					>
-						<ScopeGroup scope="On this computer">
-							<Setting
-								label="Saved for offline listening"
-								description={
-									downloads
-										? downloads.count
-											? `${plural(downloads.count, "track")}, ${formatBytes(downloads.bytes)} on disk.`
-											: "Nothing downloaded yet. Save a track, album or playlist from its menu."
-										: "Measuring what is on disk."
-								}
-								control={
-									<Button variant="destructive" disabled={!downloads?.count} onClick={clearDownloads}>
-										<Trash2 data-icon="inline-start" />
-										Remove all
-									</Button>
-								}
-							/>
-						</ScopeGroup>
-					</Section>
-				</TabsContent>
-
 				<TabsContent value="privacy">
 					<Section
 						title="Privacy"
@@ -675,7 +619,7 @@ function SettingsPage() {
 							/>
 							<Setting
 								label="Local data"
-								description="Removes the queue, settings, downloads, and the linked browser account, so this signs you out."
+								description="Removes the queue, settings, and the linked browser account, so this signs you out."
 								control={
 									<Button variant="destructive" onClick={() => void window.noctune?.local.clear("all")}>
 										<Trash2 data-icon="inline-start" />

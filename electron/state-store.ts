@@ -23,9 +23,10 @@ export class StateStore {
 	async load() {
 		try {
 			const value: unknown = JSON.parse(await readFile(this.#path, "utf8"));
-			// Downloads were added to version 1 after release, so an older valid snapshot gets an empty list.
-			if (typeof value === "object" && value && !("downloads" in value)) Reflect.set(value, "downloads", []);
 			validateState(value);
+			// State written while the app still stored downloads carries a list of them. The files are
+			// removed on the same startup, in main, which owns that path.
+			Reflect.deleteProperty(value, "downloads");
 			// State written before loudness moved to YouTube's own numbers carries a dead array.
 			Reflect.deleteProperty(value, "loudness");
 			// State written while normalization was a switch carries a boolean.
@@ -73,15 +74,9 @@ export class StateStore {
 		this.#state.playback.positionSeconds = positionSeconds;
 	}
 
-	async removeDownload(trackId: string) {
-		await this.save({ ...this.#state, downloads: this.#state.downloads.filter(({ track }) => track.id !== trackId) });
-	}
-
-	async clear(selection: "session" | "downloads" | "all") {
+	async clear(selection: "session" | "all") {
 		if (selection === "all") this.#state = defaultState();
 		if (selection === "session") this.#state.playback = defaultState().playback;
-		// The files are removed by main, which owns the path. This drops what named them.
-		if (selection === "downloads") this.#state.downloads = [];
 		await this.save(this.#state);
 	}
 }

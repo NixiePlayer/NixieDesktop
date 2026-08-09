@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { release } from "node:os";
 import { join, relative, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -22,19 +22,11 @@ import {
 // Destructured from the default export rather than imported by name: electron-updater is CommonJS,
 // and a named import of it from an ES module resolves to nothing at runtime.
 import electronUpdater from "electron-updater";
-import type {
-	AudioQuality,
-	AuthState,
-	OfflineTrack,
-	PersistedState,
-	Track,
-	UpdateState,
-} from "../src/shared/contracts";
+import type { AudioQuality, AuthState, PersistedState, Track, UpdateState } from "../src/shared/contracts";
 import { artistNames } from "../src/shared/entities";
 import {
 	validateBrowserAccount,
 	validateDocumentName,
-	validateDownloadRequest,
 	validateMusicCommand,
 	validateMusicQuery,
 	validateState,
@@ -91,7 +83,7 @@ const APP_NAME = process.env.VITE_DEV_SERVER_URL ? "Noctune (Dev)" : "Noctune";
 // macOS reads the name once, while the first menu is built, so setting this after `whenReady` was too
 // late and the menu bar and About panel both still said "Electron".
 app.setName(APP_NAME);
-// The data path carries the channel, so a development run holds its own linked account, downloads,
+// The data path carries the channel, so a development run holds its own linked account, settings,
 // playback state and cookies, and the two can be open at once: one profile directory shared between
 // two Chromium processes is two writers on the same cookie and Local Storage databases. It is set
 // rather than left to Electron so the packaged path stays `Noctune` whatever the bundle is called.
@@ -139,10 +131,6 @@ function handle(channel: string, listener: (event: IpcMainInvokeEvent, ...args: 
 /** Which browser profile the session was adopted from, so the copy can follow that profile. */
 function linkPath() {
 	return join(app.getPath("userData"), "linked-account.json");
-}
-
-function downloadsPath() {
-	return join(app.getPath("userData"), "downloads");
 }
 
 /**
@@ -491,17 +479,6 @@ function registerIpc() {
 		if (typeof trackId !== "string" || !/^[\w-]{1,256}$/.test(trackId)) throw new TypeError("Invalid track ID");
 		if (!["low", "normal", "high"].includes(String(quality))) throw new TypeError("Invalid audio quality");
 		try {
-			const offline = stateStore.snapshot.downloads.find(({ track }) => track.id === trackId);
-			if (offline) {
-				const file = await stat(join(downloadsPath(), trackId)).catch(() => undefined);
-				if (file?.isFile()) {
-					return {
-						url: resources.registerOffline(join(downloadsPath(), trackId), file.size, offline.fingerprint),
-						fingerprint: offline.fingerprint,
-						integratedLufs: offline.integratedLufs,
-					};
-				}
-			}
 			const result = await youtube.resolve(trackId, quality as AudioQuality);
 			return { url: result.url, fingerprint: result.fingerprint, integratedLufs: result.integratedLufs };
 		} catch (error) {
@@ -522,67 +499,14 @@ function registerIpc() {
 		validateState(value);
 		return stateStore.save(value);
 	});
-	handle("local:download", async (_event, request) => {
-		validateDownloadRequest(request);
-		const quality = stateStore.snapshot.settings.quality;
-		const completed: OfflineTrack[] = [];
-		await mkdir(downloadsPath(), { recursive: true });
-		try {
-			for (const track of new Map(request.tracks.map((item) => [item.id, item])).values()) {
-				const existing = stateStore.snapshot.downloads.find((item) => item.track.id === track.id);
-				if (existing && (await stat(join(downloadsPath(), track.id)).catch(() => undefined))?.isFile()) {
-					completed.push(existing);
-					continue;
-				}
-				const resolved = await youtube.resolve(track.id, quality);
-				const filePath = join(downloadsPath(), track.id);
-				const temporaryPath = `${filePath}.part`;
-				await resources.saveMedia(resolved.url, temporaryPath);
-				await rm(filePath, { force: true });
-				await rename(temporaryPath, filePath);
-				completed.push({
-					track,
-					fingerprint: resolved.fingerprint,
-					integratedLufs: resolved.integratedLufs,
-				});
-			}
-		} finally {
-			if (completed.length) {
-				const state = stateStore.snapshot;
-				const downloads = new Map(state.downloads.map((item) => [item.track.id, item]));
-				for (const item of completed) downloads.set(item.track.id, item);
-				await stateStore.save({ ...state, downloads: [...downloads.values()] });
-			}
-		}
-		return { saved: completed.length };
-	});
-	handle("local:remove-download", async (_event, trackId) => {
-		if (typeof trackId !== "string" || !/^[\w-]{1,256}$/.test(trackId)) throw new TypeError("Invalid track ID");
-		await rm(join(downloadsPath(), trackId), { force: true });
-		await stateStore.removeDownload(trackId);
-	});
 	handle("local:clear", async (_event, selection) => {
-		if (!["session", "downloads", "all"].includes(String(selection))) throw new TypeError("Invalid clear selection");
+		if (!["session", "all"].includes(String(selection))) throw new TypeError("Invalid clear selection");
 		if (selection === "all") {
 			void session.fromPartition(authPartition).clearStorageData();
 			void rm(linkPath(), { force: true });
 			void youtube.reset();
 		}
-		// Awaited, unlike the sign-out work above it: clearing downloads is the whole of what was asked
-		// here, and the renderer reads the size back as soon as this resolves.
-		if (selection === "downloads" || selection === "all") {
-			await rm(downloadsPath(), { recursive: true, force: true });
-		}
-		return stateStore.clear(selection as "session" | "downloads" | "all");
-	});
-	handle("local:downloads-size", async () => {
-		// Measured rather than summed: `OfflineTrack` records no byte count, and a directory read is one
-		// syscall per file against a list the library page already holds.
-		const files: string[] = await readdir(downloadsPath()).catch(() => []);
-		const sizes = await Promise.all(
-			files.map(async (name: string) => (await stat(join(downloadsPath(), name)).catch(() => undefined))?.size ?? 0)
-		);
-		return sizes.reduce((total: number, size: number) => total + size, 0);
+		return stateStore.clear(selection as "session" | "all");
 	});
 	handle("local:document", async (_event, name) => {
 		validateDocumentName(name);
@@ -754,6 +678,11 @@ void app
 				app.dock?.setIcon(join(app.getAppPath(), "build/icon-dev.png"));
 			} catch {}
 		await mkdir(app.getPath("userData"), { recursive: true });
+		// An install that predates the removal of offline downloads still holds the audio files it
+		// saved, and nothing left in the app can play them or list them. Removing them here is the
+		// whole of the migration: `StateStore.load` drops the records that named them.
+		// ponytail: unconditional, since a directory that is not there costs one failed unlink.
+		void rm(join(app.getPath("userData"), "downloads"), { recursive: true, force: true });
 		stateStore = new StateStore(app.getPath("userData"));
 		logger = new LocalLogger(app.getPath("userData"));
 		await stateStore.load();

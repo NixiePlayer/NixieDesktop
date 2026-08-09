@@ -1,16 +1,9 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { net } from "electron";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 vi.mock("electron", () => ({ net: { fetch: vi.fn(async () => new Response("image", { status: 200 })) } }));
 
 const { SecureResourceRegistry } = await import("./media-protocol");
-
-const paths: string[] = [];
-
-afterEach(async () => Promise.all(paths.splice(0).map((path) => rm(path, { recursive: true, force: true }))));
 
 function artworkId(url: string) {
 	return new URL(new SecureResourceRegistry().registerArtwork(url)).pathname.split("/").at(-1) ?? "";
@@ -41,29 +34,6 @@ describe("artwork", () => {
 			const response = await new SecureResourceRegistry().handleArtwork(new Request("noctune://app/"), artworkId(url));
 			expect(response.status, url).toBe(404);
 		}
-	});
-});
-
-describe("offline media", () => {
-	it("serves byte ranges from an app-managed file", async () => {
-		const directory = await mkdtemp(join(tmpdir(), "noctune-offline-"));
-		paths.push(directory);
-		const filePath = join(directory, "track");
-		await writeFile(filePath, "0123456789");
-		const registry = new SecureResourceRegistry();
-		const url = registry.registerOffline(filePath, 10, {
-			itag: 251,
-			mimeType: 'audio/webm; codecs="opus"',
-			codec: "opus",
-			bitrate: 128_000,
-			durationMs: 1_000,
-		});
-		const id = new URL(url).pathname.split("/").at(-1) ?? "";
-		const response = await registry.handleMedia(new Request(url, { headers: { range: "bytes=2-5" } }), id);
-
-		expect(response.status).toBe(206);
-		expect(response.headers.get("content-range")).toBe("bytes 2-5/10");
-		expect(await response.text()).toBe("2345");
 	});
 });
 

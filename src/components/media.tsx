@@ -202,13 +202,11 @@ export function MediaCard({
 	queue,
 	context,
 	className,
-	downloaded,
 }: {
 	item: MusicEntity;
 	queue?: Track[];
 	context?: QueueContext;
 	className?: string;
-	downloaded?: boolean;
 }) {
 	const engine = usePlayer();
 	const round = isArtist(item);
@@ -244,11 +242,7 @@ export function MediaCard({
 	);
 
 	return (
-		<EntityContextMenu
-			item={item}
-			downloaded={downloaded}
-			render={<div className={cn("group/card flex flex-col gap-3", className)} />}
-		>
+		<EntityContextMenu item={item} render={<div className={cn("group/card flex flex-col gap-3", className)} />}>
 			{artwork}
 			<div className={cn("flex flex-col gap-0.5", round && "items-center text-center")}>
 				<EntityLink item={item} className="hover:underline">
@@ -647,27 +641,13 @@ export function MediaList({
 	);
 }
 
-export function MediaGrid({
-	items,
-	context,
-	downloaded,
-}: {
-	items: MusicEntity[];
-	context?: QueueContext;
-	downloaded?: boolean;
-}) {
+export function MediaGrid({ items, context }: { items: MusicEntity[]; context?: QueueContext }) {
 	const tracks = toTracks(items);
 
 	return (
 		<div className="grid grid-cols-[repeat(auto-fill,minmax(9.5rem,1fr))] gap-x-4 gap-y-6">
 			{items.map((item) => (
-				<MediaCard
-					key={"track" in item ? item.itemId : item.id}
-					item={item}
-					queue={tracks}
-					context={context}
-					downloaded={downloaded}
-				/>
+				<MediaCard key={"track" in item ? item.itemId : item.id} item={item} queue={tracks} context={context} />
 			))}
 		</div>
 	);

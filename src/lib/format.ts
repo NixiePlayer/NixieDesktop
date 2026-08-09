@@ -2,20 +2,6 @@ export function plural(count: number, singular: string, many = `${singular}s`): 
 	return `${count} ${count === 1 ? singular : many}`;
 }
 
-/**
- * A size on disk, in the unit that keeps it readable. Megabytes up to a gigabyte and gigabytes above,
- * since a downloads folder crosses that line and "3.100 MB" reads as a number rather than a size.
- */
-export function formatBytes(bytes: number): string {
-	const safe = Number.isFinite(bytes) && bytes > 0 ? bytes : 0;
-	const gigabytes = safe >= 1e9;
-	return new Intl.NumberFormat(undefined, {
-		style: "unit",
-		unit: gigabytes ? "gigabyte" : "megabyte",
-		maximumFractionDigits: gigabytes ? 1 : 0,
-	}).format(safe / (gigabytes ? 1e9 : 1e6));
-}
-
 /** A whole release runs to hours, where a track's `m:ss` stops reading as a length. */
 export function formatTotalDuration(seconds: number): string {
 	const minutes = Math.round(Math.max(seconds, 0) / 60);

@@ -285,7 +285,6 @@ export interface PersistedState {
 	settings: Settings;
 	windowBounds?: WindowBounds;
 	recentSearches: string[];
-	downloads: OfflineTrack[];
 }
 
 export type MusicQuery =
@@ -324,16 +323,6 @@ export interface ResolvedMedia {
 	fingerprint: AudioVariantFingerprint;
 	/** Integrated loudness YouTube reports for this exact variant, in LUFS. */
 	integratedLufs?: number;
-}
-
-export interface OfflineTrack {
-	track: Track;
-	fingerprint: AudioVariantFingerprint;
-	integratedLufs?: number;
-}
-
-export interface DownloadRequest {
-	tracks: Track[];
 }
 
 /** What the About tab states about the build it is running in. */
@@ -397,12 +386,8 @@ export interface NoctuneBridge {
 	local: {
 		load(): Promise<PersistedState>;
 		save(state: PersistedState): Promise<void>;
-		download(request: DownloadRequest): Promise<{ saved: number }>;
-		removeDownload(trackId: RemoteId): Promise<void>;
-		clear(selection: "session" | "downloads" | "all"): Promise<void>;
+		clear(selection: "session" | "all"): Promise<void>;
 		exportDiagnostics(): Promise<string | undefined>;
-		/** Total bytes on disk. Not persisted per track, so it is measured rather than summed. */
-		downloadsSize(): Promise<number>;
 		/** One of the documents shipped in the bundle, read by name from a fixed set. */
 		document(name: BundledDocument): Promise<string>;
 	};

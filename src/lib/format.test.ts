@@ -1,18 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { expandPlays, formatBytes } from "./format";
-
-describe("formatBytes", () => {
-	it("switches to gigabytes once a downloads folder crosses one", () => {
-		expect(formatBytes(310e6)).toMatch(/310.*MB/);
-		expect(formatBytes(3.1e9)).toMatch(/3[.,]1.*GB/);
-	});
-
-	it("states nothing negative or unreadable as a size", () => {
-		expect(formatBytes(0)).toMatch(/^0/);
-		expect(formatBytes(-5)).toMatch(/^0/);
-		expect(formatBytes(Number.NaN)).toMatch(/^0/);
-	});
-});
+import { expandPlays } from "./format";
 
 describe("expandPlays", () => {
 	it("multiplies the abbreviation upstream states back out, and drops its wording", () => {
