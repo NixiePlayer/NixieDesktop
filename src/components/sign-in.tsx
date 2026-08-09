@@ -33,9 +33,9 @@ function HeroPanel() {
 			/>
 			<img src={MARK} alt="" className="relative size-11 rounded-xl" />
 			<div className="relative flex flex-col gap-4">
-				<p className="max-w-md text-5xl font-bold tracking-tight text-balance">Everything you already listen to.</p>
+				<p className="max-w-md text-5xl font-bold tracking-tight text-balance">A real player for your music.</p>
 				<p className="text-muted-foreground max-w-sm">
-					Noctune plays your YouTube Music playlists, albums and library in a native window.
+					Your playlists, albums and library, in a native desktop player. No browser tab, no ads, gapless.
 				</p>
 			</div>
 		</div>
@@ -190,6 +190,20 @@ export function SignInView({ onSignedIn }: { onSignedIn: (auth: AuthState) => vo
 						</div>
 					)}
 
+					{/*
+					 * The disclaimer belongs on the screen that asks for a Google session, not only on a
+					 * settings tab reached later: this is the point at which someone decides whether to hand
+					 * their YouTube account to something they may have assumed Google wrote. It closes on the
+					 * unofficial interface rather than the trademark, since that is the part carrying real risk
+					 * to the account being linked, and it is the one thing no other screen says.
+					 */}
+					<p className="text-muted-foreground border-border border-t pt-4 text-xs">
+						Noctune is an independent, unofficial client and is not affiliated with, endorsed by, or sponsored by Google
+						or YouTube. YouTube and YouTube Music are trademarks of Google LLC. Noctune plays only what the account you
+						link can already play, and your use of that account stays subject to YouTube's terms. It reaches YouTube
+						through the private interface the YouTube Music apps use, which YouTube does not publish or support, so the
+						account you link carries whatever risk that brings.
+					</p>
 				</div>
 			</main>
 		</div>

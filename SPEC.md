@@ -4,7 +4,7 @@
 
 Noctune is a private, local-first desktop music player for a user's YouTube Music account, for macOS, Windows, and Linux. It combines YouTube Music browsing and library access with a calm, familiar interface, synchronized lyrics, persistent playback, playlist management, and Spotify-like loudness normalization.
 
-The app is an independent client. It is not affiliated with, endorsed by, or sponsored by YouTube, Google, Spotify, or LRCLIB.
+The app is an independent, unofficial client. It is not affiliated with, endorsed by, or sponsored by YouTube, Google, Spotify, or LRCLIB, and it is not a YouTube Music product. It states this on the sign-in view and on the About tab, so nobody can link an account under the impression that Google wrote it. Trademarks are named only to identify the services the app connects to, never in the app's own name, icon, or interface.
 
 ## Product goals
 

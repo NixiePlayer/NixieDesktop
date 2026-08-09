@@ -16,4 +16,4 @@ Diagnostics are exported only when requested. Logs redact cookies, authorization
 
 YouTube Music, LRCLIB, and NetEase Cloud Music receive the requests needed to provide their services and apply their own policies. A lyrics lookup asks them in order and stops as soon as one answers, so the later sources are reached only when the earlier ones came back empty. LRCLIB and NetEase are sent a title, an artist, and a length, with no cookie and nothing that identifies the account. YouTube Music is asked over the same signed-in session that streams the audio, so that request is tied to the linked account like every other request to it. Clearing all local data removes Noctune state, measurements, and the website session.
 
-Noctune is an independent project. It is not affiliated with, endorsed by, or sponsored by YouTube, Google, Spotify, LRCLIB, or NetEase Cloud Music.
+Noctune is an independent, unofficial client. It is not affiliated with, endorsed by, or sponsored by YouTube, Google, Spotify, LRCLIB, or NetEase Cloud Music. YouTube and YouTube Music are trademarks of Google LLC, named here only to state which service Noctune connects to.

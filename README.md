@@ -16,6 +16,13 @@ where you left it.
 
 It is an independent project. There is no Noctune account, no backend and no telemetry.
 Everything it knows stays on your computer.
+> [!IMPORTANT]
+> **Noctune is an independent, unofficial client and is not affiliated with, endorsed by,
+> or sponsored by Google or YouTube.** It is not a YouTube Music product, it does not copy
+> or imitate one, and nothing here speaks for Google. YouTube and YouTube Music are
+> trademarks of Google LLC. It was written because I wanted a desktop client I liked
+> better for my own listening, and it is shared in case anyone else wants the same thing.
+
 
 > [!IMPORTANT]
 > **Noctune is beta software, and macOS only for now.** Things move, and some of them
@@ -33,8 +40,8 @@ Grab the latest build from the [releases page](https://github.com/NoctunePlayer/
 
 Every release is signed and notarized by Apple, the disk image as well as the app inside
 it, so it opens on a double click with no right-click trick and no Gatekeeper warning at
-either step. Once installed the app checks for updates on its own,
-downloads them in the background, and asks nothing of you beyond a restart. If you never
+either step. Once installed the app checks for updates on its own, downloads them in the
+background, and asks nothing of you beyond a restart. If you never
 restart, the update installs the next time you quit.
 
 ## Screenshots
@@ -268,7 +275,13 @@ short list of things that will get a pull request turned down.
 Noctune is [MIT licensed](LICENSE). See also [PRIVACY.md](PRIVACY.md),
 [SECURITY.md](SECURITY.md) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
-Noctune is an independent project. It is not affiliated with, endorsed by, or sponsored by
-YouTube, Google, Spotify, LRCLIB, or NetEase Cloud Music. YouTube and YouTube Music are
-trademarks of Google LLC. You need your own YouTube Music account to use it, and your use
-of that account remains subject to YouTube's terms.
+Noctune is an independent, unofficial client. It is not affiliated with, endorsed by, or
+sponsored by YouTube, Google, Spotify, LRCLIB, or NetEase Cloud Music. YouTube and YouTube
+Music are trademarks of Google LLC, used here only to say what Noctune connects to, and
+no name, logo or interface of theirs is copied or imitated. You need your own YouTube
+Music account to use it, and your use of that account remains subject to YouTube's terms.
+Nothing in this project is meant to disparage YouTube Music, YouTube or Google: it exists
+because I wanted a different desktop client for my own listening, not as a replacement for
+or a criticism of theirs. If Google or YouTube would like anything here changed, please
+[open an issue](https://github.com/NoctunePlayer/NoctuneDesktop/issues) and it will be
+dealt with.

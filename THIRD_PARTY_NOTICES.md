@@ -1,6 +1,6 @@
 # Third-party notices
 
-Noctune is not affiliated with, endorsed by, or sponsored by YouTube, Google, Spotify, LRCLIB, or NetEase Cloud Music.
+Noctune is an independent, unofficial client. It is not affiliated with, endorsed by, or sponsored by YouTube, Google, Spotify, LRCLIB, or NetEase Cloud Music. Every product name and trademark mentioned below belongs to its owner and is used only to identify what Noctune connects to or depends on. YouTube and YouTube Music are trademarks of Google LLC.
 
 The application includes open source packages recorded in `pnpm-lock.yaml`. Their copyright and license metadata is distributed with the packaged application where required.
 
