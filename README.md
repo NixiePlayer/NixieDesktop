@@ -182,20 +182,20 @@ through, because a network failure is not evidence about anybody's subscription.
 
 Signing out clears the session and the parser cache.
 
-## Sponsorship
+## Donations
 
-Noctune is free, MIT licensed, and has no paid tier or premium build. It does cost
-something to ship, though.
+Noctune is free, MIT licensed, and has no paid tier or premium build. Nothing in the app
+asks for money, and nothing is ever kept behind a donation.
 
-A Mac app that opens without a scary dialog has to be signed and notarized by Apple, and
-that requires an Apple Developer Program membership at 99 USD a year, renewed whether or
-not anyone downloads a single build. The rest is time: reading upstream responses that
-changed overnight, chasing a race in the audio engine, keeping three lyric providers
-working, and eventually getting Windows and Linux out the door.
+What it costs is time: reading upstream responses that changed overnight, chasing a race
+in the audio engine, keeping three lyric providers working, and eventually getting Windows
+and Linux out the door.
 
-If Noctune is what you listen to, [sponsoring it](https://github.com/sponsors/TheEdoRan)
-covers that and buys more of it. Any amount helps, and it is the difference between this
-being a project I maintain and a project I get to work on.
+If Noctune is what you listen to and you want to give something back,
+[a donation](https://github.com/sponsors/TheEdoRan) is welcome and entirely optional. Any
+amount helps, and it is the difference between this being a project I maintain and a
+project I get to work on. A donation supports the person writing Noctune. It buys no
+feature, no priority and no entitlement to anything on YouTube.
 
 <p>
   <a href="https://github.com/sponsors/TheEdoRan"><img alt="Sponsor Noctune on GitHub" src="https://img.shields.io/badge/Sponsor%20on%20GitHub-%E2%9D%A4-ff0033?style=for-the-badge&logo=githubsponsors&logoColor=white"></a>
