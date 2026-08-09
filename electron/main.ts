@@ -254,14 +254,32 @@ async function cookieHeader() {
 	return cookies.map(({ name, value }) => `${name}=${value}`).join("; ");
 }
 
+/**
+ * Noctune plays without advertisements, in the background, and out of its own audio engine, which are
+ * three things YouTube sells as Music Premium. Asked of an account that pays for them, it hands back
+ * what that account has already bought; asked of a free one, it hands over what YouTube charges for.
+ * So a session that holds no subscription is refused here, at the one place every entry passes
+ * through, rather than being checked wherever playback happens to start.
+ *
+ * The probe answers `undefined` when it could not tell, and that allows: a network that was down or a
+ * response that arrived without formats is not evidence of anything, and locking a paying listener
+ * out of their own music over it is the worse failure by a distance.
+ */
 async function authState(): Promise<AuthState> {
 	const header = await cookieHeader();
 	if (!/(?:^|;\s*)(?:SAPISID|__Secure-3PAPISID)=/.test(header)) return { status: "signed-out" };
 	// The name and the photo are worth one request, not the sign-in gate: an account YouTube will
 	// not describe is still an account, and the menu falls back to naming the service.
-	const account = await youtube.account().catch(async (error: unknown) => {
-		await logger.write("error", `account lookup failed: ${error instanceof Error ? error.message : "unknown"}`);
-	});
+	const [account, entitled] = await Promise.all([
+		youtube.account().catch(async (error: unknown) => {
+			await logger.write("error", `account lookup failed: ${error instanceof Error ? error.message : "unknown"}`);
+		}),
+		youtube.entitled().catch(async (error: unknown) => {
+			await logger.write("warn", `entitlement check failed: ${error instanceof Error ? error.message : "unknown"}`);
+			return undefined;
+		}),
+	]);
+	if (entitled === false) return { status: "unentitled" };
 	return {
 		status: "authenticated",
 		accountName: account?.accountName ?? "YouTube Music",
@@ -283,6 +301,11 @@ async function importFromBrowser(account: unknown) {
 	await writeCookies(cookies);
 	youtube = createAdapter();
 	const state = await authState();
+	// Nothing is written for an account Noctune will not play, so a refused profile leaves no link
+	// behind and the next attempt starts from nothing.
+	if (state.status === "unentitled") {
+		throw new Error("That account has no YouTube Music Premium subscription, which Noctune requires");
+	}
 	if (state.status !== "authenticated") throw new Error("That browser profile is not signed in to YouTube");
 	await writeFile(linkPath(), JSON.stringify({ browser: account.browser, profile: account.profile }), {
 		mode: 0o600,

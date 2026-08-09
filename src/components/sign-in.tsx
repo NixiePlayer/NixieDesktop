@@ -209,3 +209,63 @@ export function SignInView({ onSignedIn }: { onSignedIn: (auth: AuthState) => vo
 		</div>
 	);
 }
+
+/**
+ * What a linked account that holds no Music Premium subscription gets instead of the app. It is a
+ * screen of its own rather than an error on the sign-in view, because nothing about the sign-in
+ * failed: the session is real and YouTube recognises it, and there is nothing to retry.
+ *
+ * Signing out is the only action, since it is what leads back to linking a different account. The
+ * subscription itself is bought on the web and picked up on the next launch, which is what the second
+ * line says rather than offering a "check again" that would be one more thing to press.
+ */
+export function PremiumRequiredView({ onSignedOut }: { onSignedOut: (auth: AuthState) => void }) {
+	const [busy, setBusy] = useState(false);
+
+	return (
+		<div className="bg-background relative flex h-full">
+			{/* No top bar here either, so this strip is what keeps the frameless window draggable. */}
+			<div className="drag-region absolute inset-x-0 top-0 z-10 h-14" />
+			<HeroPanel />
+			<main className="flex min-h-0 flex-1 items-center justify-center overflow-y-auto px-6 py-14">
+				<div className="flex w-full max-w-sm flex-col gap-6">
+					<div className="flex flex-col gap-3">
+						<img src={MARK} alt="" className="size-11 rounded-xl lg:hidden" />
+						<h1 className="text-2xl font-bold tracking-tight">Noctune needs Music Premium</h1>
+						<p className="text-muted-foreground text-sm">
+							Noctune plays without advertisements, in the background, and through its own audio engine. Those are
+							things YouTube sells as a Music Premium subscription, so it plays only for an account that holds one. The
+							account you linked does not.
+						</p>
+						<p className="text-muted-foreground text-sm">
+							A subscription started on the web is picked up the next time Noctune opens. Signing out here goes back to
+							picking an account.
+						</p>
+					</div>
+					<Button
+						variant="outline"
+						disabled={busy}
+						className="self-start"
+						onClick={() => {
+							setBusy(true);
+							void window.noctune?.auth
+								.signOut()
+								.then(onSignedOut)
+								.finally(() => setBusy(false));
+						}}
+					>
+						Sign out
+					</Button>
+					<a
+						href="https://music.youtube.com"
+						target="_blank"
+						rel="noreferrer"
+						className="text-muted-foreground hover:text-foreground self-start text-sm underline underline-offset-4"
+					>
+						Open YouTube Music
+					</a>
+				</div>
+			</main>
+		</div>
+	);
+}

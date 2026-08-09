@@ -1,7 +1,7 @@
 import { createRootRoute, rootRouteId, useRouter } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { AppShell } from "#/components/app-shell";
-import { SignInView } from "#/components/sign-in";
+import { PremiumRequiredView, SignInView } from "#/components/sign-in";
 import { Button } from "#/components/ui/button";
 import { Toaster } from "#/components/ui/toast";
 import { TooltipProvider } from "#/components/ui/tooltip";
@@ -58,6 +58,10 @@ function RootComponent() {
 				{auth &&
 					(auth.status === "authenticated" ? (
 						<AppShell auth={auth} onAuthChange={changeAuth} />
+					) : auth.status === "unentitled" ? (
+						// A real session that holds no subscription. Not the sign-in view: nothing failed there,
+						// and there is nothing on it to press that would change the answer.
+						<PremiumRequiredView onSignedOut={changeAuth} />
 					) : (
 						<SignInView onSignedIn={changeAuth} />
 					))}

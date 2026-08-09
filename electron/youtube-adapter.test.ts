@@ -11,6 +11,7 @@ import {
 	extractSections,
 	extractQueueTracks,
 	extractRating,
+	readEntitlement,
 	exploreTitle,
 	feedContinuation,
 	libraryTarget,
@@ -1547,5 +1548,35 @@ describe("library target", () => {
 
 	it("refuses an album whose page named no playlist", () => {
 		expect(() => libraryTarget("MPREb_album", "https://music.youtube.com/browse/MPREb_album")).toThrow();
+	});
+});
+
+describe("premium entitlement", () => {
+	const format = (itag: number, audioQuality: string) => ({
+		itag,
+		mimeType: 'audio/mp4; codecs="mp4a.40.2"',
+		audioQuality,
+	});
+	const response = (adaptiveFormats: unknown[]) => ({ streamingData: { adaptiveFormats } });
+
+	it("reads a subscription off the 256 kbps tier a free account is never offered", () => {
+		expect(readEntitlement(response([format(140, "AUDIO_QUALITY_MEDIUM"), format(141, "AUDIO_QUALITY_HIGH")]))).toBe(
+			true
+		);
+	});
+
+	it("reads no subscription when the account was offered the mediums and nothing above them", () => {
+		expect(readEntitlement(response([format(140, "AUDIO_QUALITY_MEDIUM"), format(251, "AUDIO_QUALITY_MEDIUM")]))).toBe(
+			false
+		);
+	});
+
+	it("answers undefined rather than false whenever it was not really asked, since a caller locks on false", () => {
+		// A request that failed, a response with no streaming data, an empty list, and a list holding
+		// only the video track are all "no answer" and must never refuse a paying listener.
+		expect(readEntitlement(undefined)).toBeUndefined();
+		expect(readEntitlement({})).toBeUndefined();
+		expect(readEntitlement(response([]))).toBeUndefined();
+		expect(readEntitlement(response([{ itag: 137, mimeType: 'video/mp4; codecs="avc1"' }]))).toBeUndefined();
 	});
 });

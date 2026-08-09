@@ -23,11 +23,17 @@ Everything it knows stays on your computer.
 > trademarks of Google LLC. It was written because I wanted a desktop client I liked
 > better for my own listening, and it is shared in case anyone else wants the same thing.
 
-
 > [!IMPORTANT]
 > **Noctune is beta software, and macOS only for now.** Things move, and some of them
 > break. Builds are signed and notarized for Apple silicon and Intel. Windows and Linux
 > are planned but have no date attached.
+
+> [!IMPORTANT]
+> **Noctune requires a YouTube Music Premium subscription.** It plays without
+> advertisements, in the background, and through its own audio engine, and those are the
+> things YouTube sells a subscription for. It checks when you link an account and refuses
+> one that does not hold a subscription. Noctune is not a way to get Premium features
+> without Premium, and it is not affiliated with or authorized by YouTube.
 
 ## Install
 

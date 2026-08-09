@@ -208,7 +208,12 @@ export interface LyricsResult {
 }
 
 export interface AuthState {
-	status: "signed-out" | "signing-in" | "authenticated" | "expired";
+	/**
+	 * `unentitled` is a session YouTube recognises but that holds no Music Premium subscription. It is
+	 * its own status and not an error, since it is the account that is wrong for Noctune rather than
+	 * the sign-in, and the only way out of it is another account or a subscription.
+	 */
+	status: "signed-out" | "signing-in" | "authenticated" | "expired" | "unentitled";
 	accountName?: string;
 	avatarUrl?: string;
 }

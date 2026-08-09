@@ -6,6 +6,8 @@ Noctune is a private, local-first desktop music player for a user's YouTube Musi
 
 The app is an independent, unofficial client. It is not affiliated with, endorsed by, or sponsored by YouTube, Google, Spotify, or LRCLIB, and it is not a YouTube Music product. It states this on the sign-in view and on the About tab, so nobody can link an account under the impression that Google wrote it. Trademarks are named only to identify the services the app connects to, never in the app's own name, icon, or interface.
 
+It requires a YouTube Music Premium subscription, and refuses an account that holds none. Playback without advertisements, in the background, and through the app's own audio engine are things YouTube sells that subscription for, so Noctune plays only for an account that has already bought them.
+
 ## Product goals
 
 - Make a YouTube Music account feel like a polished native desktop music library.
@@ -195,6 +197,7 @@ The app is an independent, unofficial client. It is not affiliated with, endorse
 
 - No Noctune cloud service or cross-device synchronization.
 - No storage of raw audio or offline media downloads.
+- No playback for an account without a YouTube Music Premium subscription.
 - No exposure of cookies or direct signed media URLs to renderer code.
 - No affiliation claim or pixel-for-pixel clone of another music product.
 - No bypass of YouTube account enforcement, DRM, Electron security, or platform policy.

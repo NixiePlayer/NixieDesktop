@@ -656,6 +656,31 @@ export class YouTubeAdapter {
 	}
 
 	/**
+	 * Whether the linked account holds a Music Premium subscription. Nothing upstream states it
+	 * outright: no response carries an entitlement flag, which is why youtubei.js parses none, and the
+	 * account menu's "Paid memberships" row means only that something is being paid for, a channel
+	 * membership or a bought film as readily as this.
+	 *
+	 * What a subscription does change is what `/player` is willing to offer. The 256 kbps tiers, itag
+	 * 141 and itag 774, both marked `AUDIO_QUALITY_HIGH`, are offered to a subscriber and to nobody
+	 * else, where a free account tops out at the ~130 kbps mediums (140 and 251). That is the same
+	 * signal yt-dlp documents, and it is read here rather than off `resolve`, which asks for one format
+	 * and would not see the tiers it did not pick.
+	 *
+	 * One fixed track, never whatever is about to play: the high tier is per master as well as per
+	 * account, so a track nobody mastered above 128 states nothing about the subscription and reading
+	 * one would refuse a paying listener. This one is a stable, worldwide catalogue entry that carries
+	 * both tiers.
+	 */
+	async entitled(): Promise<boolean | undefined> {
+		const client = await this.#getClient();
+		const response = await client.actions
+			.execute("/player", { videoId: ENTITLEMENT_PROBE_ID, client: "YTMUSIC", parse: false })
+			.catch(() => undefined);
+		return readEntitlement(response?.data);
+	}
+
+	/**
 	 * Who the copied session belongs to, for the top bar. `getInfo(true)` is the channel switcher
 	 * list: it collects `AccountItem`s out of the response memo, where `getInfo()` asserts the TV
 	 * layout around them and throws when upstream moves it. The photo goes through `registerArtwork`
@@ -1254,6 +1279,29 @@ export function extractQueueTracks(value: unknown, registerArtwork: (url: string
 		});
 	});
 	return tracks;
+}
+
+/**
+ * The track `entitled` asks about. Nothing plays it and nothing shows it: only its format list is
+ * read. It is fixed rather than chosen because the answer has to be about the account and not about
+ * the track, and it is this one because it is as close to permanent as a catalogue entry gets.
+ */
+const ENTITLEMENT_PROBE_ID = "dQw4w9WgXcQ";
+
+/**
+ * Whether a raw `/player` response was offered a subscriber-only audio tier. See `entitled`.
+ *
+ * Undefined rather than false whenever the answer cannot be trusted, since a caller locks the app on
+ * a negative: a request that failed, a response carrying no `streamingData`, and a format list with
+ * no audio in it at all are all "not asked" rather than "asked and refused". Only a list that does
+ * hold audio, none of it high, is a definite no.
+ */
+export function readEntitlement(value: unknown): boolean | undefined {
+	const streaming = record(value) && record(value.streamingData) ? value.streamingData : undefined;
+	const formats = Array.isArray(streaming?.adaptiveFormats) ? streaming.adaptiveFormats : undefined;
+	const audio = formats?.filter((format) => record(format) && String(format.mimeType).startsWith("audio"));
+	if (!audio?.length) return undefined;
+	return audio.some((format) => record(format) && format.audioQuality === "AUDIO_QUALITY_HIGH");
 }
 
 const ratings: Record<string, TrackRating> = { LIKE: "like", DISLIKE: "dislike", INDIFFERENT: "indifferent" };
