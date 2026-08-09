@@ -109,7 +109,7 @@ export function NewPlaylistDialog({
 						const { title, description } = readForm(event.currentTarget);
 						if (!title) return;
 						setBusy(true);
-						void window.neotune?.music
+						void window.nixie?.music
 							.command({
 								type: "playlist-create",
 								title,

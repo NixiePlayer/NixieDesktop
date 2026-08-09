@@ -73,7 +73,7 @@ async function toggle(id: string, next: boolean, command: MusicCommand, failure:
 	else held.delete(id);
 	emit();
 	try {
-		await window.neotune?.music.command(command);
+		await window.nixie?.music.command(command);
 		return true;
 	} catch {
 		if (next) held.delete(id);

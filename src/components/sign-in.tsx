@@ -98,7 +98,7 @@ export function SignInView({ onSignedIn }: { onSignedIn: (auth: AuthState) => vo
 
 	const findAccounts = useCallback(() => {
 		setAccounts(undefined);
-		void window.neotune?.auth
+		void window.nixie?.auth
 			.browsers()
 			.then(setAccounts)
 			.catch(() => setAccounts([]));
@@ -106,7 +106,7 @@ export function SignInView({ onSignedIn }: { onSignedIn: (auth: AuthState) => vo
 	useEffect(findAccounts, [findAccounts]);
 
 	const run = (work?: Promise<AuthState>) => {
-		if (!work) return setError("Sign-in is only available in the Neotune desktop app.");
+		if (!work) return setError("Sign-in is only available in the Nixie desktop app.");
 		setError("");
 		setBusy(true);
 		void work
@@ -129,7 +129,7 @@ export function SignInView({ onSignedIn }: { onSignedIn: (auth: AuthState) => vo
 						<img src={MARK} alt="" className="size-11 rounded-xl lg:hidden" />
 						<h1 className="text-2xl font-bold tracking-tight">Continue with a signed-in browser</h1>
 						<p className="text-muted-foreground text-sm">
-							Neotune continues the YouTube session you are already signed in to in your browser. Google refuses to sign
+							Nixie continues the YouTube session you are already signed in to in your browser. Google refuses to sign
 							in inside an app window, so it never asks you here.
 						</p>
 					</div>
@@ -160,13 +160,13 @@ export function SignInView({ onSignedIn }: { onSignedIn: (auth: AuthState) => vo
 										key={`${account.browser}-${account.profile}`}
 										account={account}
 										disabled={busy}
-										onSelect={() => run(window.neotune?.auth.importFromBrowser(account))}
+										onSelect={() => run(window.nixie?.auth.importFromBrowser(account))}
 									/>
 								))}
 							</div>
 							<p className="text-muted-foreground text-sm">
 								Each row states the account signed in to that browser profile. Your system may ask once for permission
-								to read the browser's saved cookies. Neotune re-reads that profile while it runs, because Google expires
+								to read the browser's saved cookies. Nixie re-reads that profile while it runs, because Google expires
 								the session every few minutes. The cookies go to YouTube and nowhere else.
 							</p>
 						</div>
@@ -198,8 +198,8 @@ export function SignInView({ onSignedIn }: { onSignedIn: (auth: AuthState) => vo
 					 * to the account being linked, and it is the one thing no other screen says.
 					 */}
 					<p className="text-muted-foreground border-border border-t pt-4 text-xs">
-						Neotune is an independent, unofficial client and is not affiliated with, endorsed by, or sponsored by Google
-						or YouTube. YouTube and YouTube Music are trademarks of Google LLC. Neotune plays only what the account you
+						Nixie is an independent, unofficial client and is not affiliated with, endorsed by, or sponsored by Google
+						or YouTube. YouTube and YouTube Music are trademarks of Google LLC. Nixie plays only what the account you
 						link can already play, and your use of that account stays subject to YouTube's terms. It reaches YouTube
 						through the private interface the YouTube Music apps use, which YouTube does not publish or support, so the
 						account you link carries whatever risk that brings.
@@ -231,14 +231,14 @@ export function PremiumRequiredView({ onSignedOut }: { onSignedOut: (auth: AuthS
 				<div className="flex w-full max-w-sm flex-col gap-6">
 					<div className="flex flex-col gap-3">
 						<img src={MARK} alt="" className="size-11 rounded-xl lg:hidden" />
-						<h1 className="text-2xl font-bold tracking-tight">Neotune needs Music Premium</h1>
+						<h1 className="text-2xl font-bold tracking-tight">Nixie needs Music Premium</h1>
 						<p className="text-muted-foreground text-sm">
-							Neotune plays without advertisements, in the background, and through its own audio engine. Those are
-							things YouTube sells as a Music Premium subscription, so it plays only for an account that holds one. The
-							account you linked does not.
+							Nixie plays without advertisements, in the background, and through its own audio engine. Those are things
+							YouTube sells as a Music Premium subscription, so it plays only for an account that holds one. The account
+							you linked does not.
 						</p>
 						<p className="text-muted-foreground text-sm">
-							A subscription started on the web is picked up the next time Neotune opens. Signing out here goes back to
+							A subscription started on the web is picked up the next time Nixie opens. Signing out here goes back to
 							picking an account.
 						</p>
 					</div>
@@ -248,7 +248,7 @@ export function PremiumRequiredView({ onSignedOut }: { onSignedOut: (auth: AuthS
 						className="self-start"
 						onClick={() => {
 							setBusy(true);
-							void window.neotune?.auth
+							void window.nixie?.auth
 								.signOut()
 								.then(onSignedOut)
 								.finally(() => setBusy(false));

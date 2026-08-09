@@ -248,7 +248,7 @@ describe("Explore shelves", () => {
 		vi.mocked(Innertube.create).mockResolvedValueOnce({ actions: { execute } } as never);
 		const adapter = new YouTubeAdapter(
 			{ registerArtwork: identity } as never,
-			join(tmpdir(), "neotune-cache-missing"),
+			join(tmpdir(), "nixie-cache-missing"),
 			() => Promise.resolve("SID=explore")
 		);
 
@@ -401,7 +401,7 @@ describe("Explore shelves", () => {
 		vi.mocked(Innertube.create).mockResolvedValueOnce({ actions: { execute } } as never);
 		const adapter = new YouTubeAdapter(
 			{ registerArtwork: identity } as never,
-			join(tmpdir(), "neotune-cache-missing"),
+			join(tmpdir(), "nixie-cache-missing"),
 			() => Promise.resolve("SID=flat-explore")
 		);
 
@@ -546,7 +546,7 @@ describe("home shelves", () => {
 
 	const homeAdapter = (execute: ReturnType<typeof vi.fn>, cookie: string) => {
 		vi.mocked(Innertube.create).mockResolvedValueOnce({ actions: { execute } } as never);
-		return new YouTubeAdapter({ registerArtwork: identity } as never, join(tmpdir(), "neotune-cache-missing"), () =>
+		return new YouTubeAdapter({ registerArtwork: identity } as never, join(tmpdir(), "nixie-cache-missing"), () =>
 			Promise.resolve(cookie)
 		);
 	};
@@ -714,7 +714,7 @@ describe("history reporting", () => {
 		vi.mocked(Innertube.create).mockResolvedValueOnce({ music: { getInfo } } as never);
 		const adapter = new YouTubeAdapter(
 			{ registerArtwork: identity } as never,
-			join(tmpdir(), "neotune-cache-missing"),
+			join(tmpdir(), "nixie-cache-missing"),
 			() => Promise.resolve("SID=history")
 		);
 
@@ -731,7 +731,7 @@ describe("history reporting", () => {
 });
 
 describe("entity extraction", () => {
-	const items = extractEntities(shelf, (url) => `neotune://app/artwork/${encodeURIComponent(url)}`);
+	const items = extractEntities(shelf, (url) => `nixie://app/artwork/${encodeURIComponent(url)}`);
 
 	it("keeps one entity per item and no wrapper", () => {
 		// The shelf header and every navigation endpoint carry a title but no `item_type`.
@@ -822,7 +822,7 @@ describe("entity extraction", () => {
 			durationSeconds: 255,
 			artists: [{ id: "UCGsv8l1sq32W1Xptp7ywaNA", name: "Caparezza" }],
 		});
-		expect(items[0]).toHaveProperty("artworkUrl", expect.stringContaining("neotune://app/artwork/"));
+		expect(items[0]).toHaveProperty("artworkUrl", expect.stringContaining("nixie://app/artwork/"));
 		expect(items[1]).toMatchObject({ id: "MPREb_2OsyiPiMOco", title: "Museica" });
 		expect(items[2]).toMatchObject({ id: "VLPL0PpBFf", title: "ita rocco", itemCount: 85 });
 		expect(items[3]).toMatchObject({ id: "UCGsv8l1sq32W1Xptp7ywaNA", name: "Caparezza" });
@@ -1005,7 +1005,7 @@ describe("album header", () => {
 		},
 		(url) => url
 	);
-	const items = withAlbumHeader("MPREb_album", header, rows, (url) => `neotune://app/artwork/${url}`);
+	const items = withAlbumHeader("MPREb_album", header, rows, (url) => `nixie://app/artwork/${url}`);
 
 	it("turns the header into the page's album", () => {
 		expect(items[0]).toEqual({
@@ -1013,7 +1013,7 @@ describe("album header", () => {
 			title: "American Idiot",
 			artists: [{ id: "UC_green_day", name: "Green Day" }],
 			year: "2004",
-			artworkUrl: "neotune://app/artwork/https://example.test/cover.jpg",
+			artworkUrl: "nixie://app/artwork/https://example.test/cover.jpg",
 			kind: "Album",
 			explicit: true,
 		});
@@ -1027,7 +1027,7 @@ describe("album header", () => {
 		expect(items[1]).toMatchObject({
 			id: "vBBmyaGiRcs",
 			artists: [{ id: "UC_green_day", name: "Green Day" }],
-			artworkUrl: "neotune://app/artwork/https://example.test/cover.jpg",
+			artworkUrl: "nixie://app/artwork/https://example.test/cover.jpg",
 			album: { title: "American Idiot" },
 		});
 	});
@@ -1053,14 +1053,14 @@ describe("playlist header", () => {
 			]),
 		},
 	};
-	const items = withPlaylistHeader("VLPLcool", source, [], (url) => `neotune://app/artwork/${url}`);
+	const items = withPlaylistHeader("VLPLcool", source, [], (url) => `nixie://app/artwork/${url}`);
 
 	it("turns the header into the page's playlist", () => {
 		expect(items[0]).toEqual({
 			id: "VLPLcool",
 			title: "Cool pop punk",
 			description: "My cool pop punk collection",
-			artworkUrl: "neotune://app/artwork/https://example.test/cover.jpg",
+			artworkUrl: "nixie://app/artwork/https://example.test/cover.jpg",
 			// Named in the strapline, which is the only place a playlist page says who made it.
 			author: "Edoardo",
 			privacy: "private",
@@ -1072,7 +1072,7 @@ describe("playlist header", () => {
 		expect(items[0]).toHaveProperty("privacy", undefined);
 	});
 
-	it("replaces auto-generated metadata that points at settings Neotune does not expose", () => {
+	it("replaces auto-generated metadata that points at settings Nixie does not expose", () => {
 		const items = withPlaylistHeader("VLLM", { header: source.header }, [], (url) => url);
 		expect(items[0]).toMatchObject({
 			title: "Liked music",
@@ -1105,7 +1105,7 @@ describe("artist header", () => {
 		},
 		(url) => url
 	);
-	const items = withArtistHeader("UC_blink_182", header, related, (url) => `neotune://app/artwork/${url}`);
+	const items = withArtistHeader("UC_blink_182", header, related, (url) => `nixie://app/artwork/${url}`);
 
 	it("turns the header into the page's artist", () => {
 		expect(items[0]).toEqual({
@@ -1113,8 +1113,8 @@ describe("artist header", () => {
 			name: "blink-182",
 			description: "An American rock band formed in Poway, California.",
 			// The same image twice: card size beside a title, and the wide box the page's banner needs.
-			artworkUrl: "neotune://app/artwork/https://example.test/blink=w544-h544",
-			bannerUrl: "neotune://app/artwork/https://example.test/blink=w1920-h1080",
+			artworkUrl: "nixie://app/artwork/https://example.test/blink=w544-h544",
+			bannerUrl: "nixie://app/artwork/https://example.test/blink=w1920-h1080",
 			shuffle: { id: "song_1", playlistId: "RDAO_blink", params: "wAEB8gECKAE%3D" },
 			radio: { id: "song_2", playlistId: "RDEM_blink" },
 		});
@@ -1372,7 +1372,7 @@ describe("search preview", () => {
 		vi.mocked(Innertube.create).mockResolvedValueOnce({ music: { getSearchSuggestions } } as never);
 		const adapter = new YouTubeAdapter(
 			{ registerArtwork: identity } as never,
-			join(tmpdir(), "neotune-cache-missing"),
+			join(tmpdir(), "nixie-cache-missing"),
 			() => Promise.resolve("SID=first")
 		);
 
@@ -1388,7 +1388,7 @@ describe("session cookies", () => {
 		const headers = ["SID=first", "SID=first", "SID=second"];
 		const create = vi.mocked(Innertube.create);
 		create.mockClear();
-		const adapter = new YouTubeAdapter({} as never, join(tmpdir(), "neotune-cache-missing"), () =>
+		const adapter = new YouTubeAdapter({} as never, join(tmpdir(), "nixie-cache-missing"), () =>
 			Promise.resolve(headers.shift() ?? "")
 		);
 		await adapter.warm();
@@ -1417,13 +1417,13 @@ describe("account", () => {
 			account: { getInfo: () => Promise.resolve(accounts) },
 		} as never);
 		const adapter = new YouTubeAdapter(
-			{ registerArtwork: (url: string) => `neotune://app/artwork/${url}` } as never,
-			join(tmpdir(), "neotune-cache-missing"),
+			{ registerArtwork: (url: string) => `nixie://app/artwork/${url}` } as never,
+			join(tmpdir(), "nixie-cache-missing"),
 			() => Promise.resolve("SID=first")
 		);
 		expect(await adapter.account()).toEqual({
 			accountName: "Listener",
-			avatarUrl: "neotune://app/artwork/https://example.test/s176.jpg",
+			avatarUrl: "nixie://app/artwork/https://example.test/s176.jpg",
 		});
 	});
 });
@@ -1521,7 +1521,7 @@ describe("watch-next extraction", () => {
 
 describe("YouTube parser cache", () => {
 	it("keeps newest files within its byte limit", async () => {
-		const path = await mkdtemp(join(tmpdir(), "neotune-cache-"));
+		const path = await mkdtemp(join(tmpdir(), "nixie-cache-"));
 		paths.push(path);
 		const oldFile = join(path, "old");
 		const newFile = join(path, "new");

@@ -38,7 +38,7 @@ export function useAccountSettings() {
 
 	const load = useCallback(() => {
 		setState({ status: "loading" });
-		const bridge = window.neotune;
+		const bridge = window.nixie;
 		if (!bridge) return setState({ status: "failed" });
 		void bridge.music
 			.accountSettings()
@@ -56,7 +56,7 @@ export function useAccountSettings() {
 			status: "ready",
 			settings: previous.map((setting) => (setting.key === key ? { ...setting, enabled } : setting)),
 		});
-		void window.neotune?.music
+		void window.nixie?.music
 			.command({ type: "account-setting", key, enabled })
 			// These settings decide what upstream answers with, and nothing is revalidated under a
 			// reader, so a page already in the cache goes on being the one the old value produced:
@@ -98,7 +98,7 @@ export function AccountSettingsUnavailable({ onRetry }: { onRetry: () => void })
 	return (
 		<div className="border-border flex flex-col items-start gap-4 rounded-xl border p-5">
 			<p className="text-muted-foreground text-sm">
-				Neotune could not reach your account settings. They are still yours to change on YouTube Music.
+				Nixie could not reach your account settings. They are still yours to change on YouTube Music.
 			</p>
 			<div className="flex items-center gap-4">
 				<Button variant="outline" size="sm" onClick={onRetry}>

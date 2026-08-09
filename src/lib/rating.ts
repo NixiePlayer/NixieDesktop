@@ -30,7 +30,7 @@ export async function rate(trackId: string, rating: TrackRating) {
 	asked.add(trackId);
 	emit();
 	try {
-		await window.neotune?.music.command({ type: "rate", trackId, rating });
+		await window.nixie?.music.command({ type: "rate", trackId, rating });
 	} catch {
 		if (previous) ratings.set(trackId, previous);
 		else ratings.delete(trackId);
@@ -54,7 +54,7 @@ export function useRating(trackId: string | undefined): TrackRating | undefined 
 	useEffect(() => {
 		if (!trackId || asked.has(trackId)) return;
 		asked.add(trackId);
-		void window.neotune?.music
+		void window.nixie?.music
 			.rating(trackId)
 			.then((value) => {
 				if (!value) return;

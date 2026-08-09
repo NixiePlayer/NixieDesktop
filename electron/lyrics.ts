@@ -148,7 +148,7 @@ export class LyricsClient {
 			net.fetch(url.toString(), {
 				credentials: "omit",
 				headers: {
-					"user-agent": "Neotune/0.1 (+https://github.com/NeotunePlayer/NeotuneDesktop)",
+					"user-agent": "Nixie/0.1 (+https://github.com/NixiePlayer/NixieDesktop)",
 					// NetEase answers an off-site referrer with an error body rather than results.
 					...(url.hostname.endsWith("music.163.com") ? { referer: "https://music.163.com" } : {}),
 				},

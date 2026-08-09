@@ -1,4 +1,4 @@
-import type { NeotuneBridge, PlaybackSnapshot, QueueContext, Settings, Track } from "#/shared/contracts";
+import type { NixieBridge, PlaybackSnapshot, QueueContext, Settings, Track } from "#/shared/contracts";
 import { defaultState } from "#/shared/defaults";
 import { isTrack } from "#/shared/entities";
 import { dbToLinear, normalizationGainDb, normalizationTargets, volumeGain } from "#/shared/normalization";
@@ -11,7 +11,7 @@ export interface EngineState {
 
 /** Injection points exist so the engine can be exercised in vitest's node environment. */
 export interface AudioEngineDeps {
-	bridge?: NeotuneBridge;
+	bridge?: NixieBridge;
 	createAudio?: () => HTMLAudioElement;
 	createAudioContext?: () => AudioContext;
 	random?: () => number;
@@ -76,7 +76,7 @@ export function createAudioEngine(deps: AudioEngineDeps = {}): AudioEngine {
 	const random = deps.random ?? Math.random;
 	const createAudio = deps.createAudio ?? (() => new Audio());
 	const createAudioContext = deps.createAudioContext ?? (() => new AudioContext());
-	const getBridge = () => deps.bridge ?? (typeof window === "undefined" ? undefined : window.neotune);
+	const getBridge = () => deps.bridge ?? (typeof window === "undefined" ? undefined : window.nixie);
 
 	let state: EngineState = { playback: defaultState().playback, gainDb: 0 };
 	let position = 0;
@@ -146,7 +146,7 @@ export function createAudioEngine(deps: AudioEngineDeps = {}): AudioEngine {
 		element.preload = "auto";
 		// `createMediaElementSource` is spec-required to output silence for a tainted element, and in
 		// development the page is served from the Vite origin while the stream comes from
-		// neotune://app, so without a CORS fetch the graph plays nothing. Packaged builds are
+		// nixie://app, so without a CORS fetch the graph plays nothing. Packaged builds are
 		// same-origin and unaffected either way.
 		element.crossOrigin = "anonymous";
 		// Pausing queues a final `timeupdate`, and switching tracks reuses the deck it just paused,
@@ -468,7 +468,7 @@ export function createAudioEngine(deps: AudioEngineDeps = {}): AudioEngine {
 			// Swallowing this is what made playback failures undiagnosable, so the reason is kept.
 			if (token !== generation) return;
 			const reason = error instanceof Error ? `${error.name}: ${error.message}` : "Unknown playback failure";
-			console.error("[neotune] play failed", error);
+			console.error("[nixie] play failed", error);
 			set({ status: "error", errorMessage: reason });
 		} finally {
 			if (token === generation) clearLoadingTimeout();

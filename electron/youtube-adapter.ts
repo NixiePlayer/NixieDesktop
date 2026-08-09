@@ -1088,7 +1088,7 @@ export function extractSections(value: unknown, registerArtwork: (url: string) =
  * `#home` mints the parameters into an opaque token, so nothing upstream states about a chip reaches
  * the renderer. The chip a response already answers is marked selected and carries no parameters.
  *
- * The podcasts chip is dropped: Neotune does not play them, so it is a feed of dead rows. It is
+ * The podcasts chip is dropped: Nixie does not play them, so it is a feed of dead rows. It is
  * matched on the label, which is the "podcast" loanword in most locales, since the params behind a
  * chip are an opaque protobuf with nothing stable to test and every chip shares one browse id.
  */

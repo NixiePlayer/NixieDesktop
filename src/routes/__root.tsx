@@ -46,7 +46,7 @@ function RootComponent() {
 	};
 
 	useEffect(() => {
-		const bridge = window.neotune;
+		const bridge = window.nixie;
 		if (!bridge) return setAuth({ status: "signed-out" });
 		void bridge.auth.state().then(setAuth);
 		void bridge.local.load().then((state) => applyTheme(state.settings.theme));

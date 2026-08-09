@@ -1,12 +1,12 @@
 {
-	"name": "neotune",
-	"version": "0.1.0",
+	"name": "nixie",
+	"version": "0.0.0",
 	"description": "A local-first desktop client for YouTube Music, with gapless playback, loudness normalization, and synced lyrics.",
 	"author": "Edoardo Ranghieri",
 	"license": "MIT",
 	"repository": {
 		"type": "git",
-		"url": "git+https://github.com/NeotunePlayer/NeotuneDesktop.git"
+		"url": "git+https://github.com/NixiePlayer/NixieDesktop.git"
 	},
 	"private": true,
 	"type": "module",
@@ -81,8 +81,8 @@
 		"vitest": "4.1.10"
 	},
 	"build": {
-		"appId": "com.theedoran.neotunedesktop",
-		"productName": "Neotune",
+		"appId": "com.theedoran.nixiedesktop",
+		"productName": "Nixie",
 		"publish": {
 			"provider": "github",
 			"releaseType": "draft"

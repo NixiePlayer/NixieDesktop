@@ -30,7 +30,7 @@ jobs:
       - run: pnpm check
       - run: pnpm release:gate
         env:
-          NEOTUNE_RELEASE_GATES_ACCEPTED: ${{ secrets.NEOTUNE_RELEASE_GATES_ACCEPTED }}
+          NIXIE_RELEASE_GATES_ACCEPTED: ${{ secrets.NIXIE_RELEASE_GATES_ACCEPTED }}
       # The one release everything else here attaches to. electron-builder is not allowed to create
       # it: it runs a publisher per architecture and starts both before either has created
       # anything, and a draft is not keyed to its tag, so GitHub refuses neither. v0.1.1 produced

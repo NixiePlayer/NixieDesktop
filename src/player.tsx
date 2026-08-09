@@ -19,8 +19,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 	}, [engine]);
 
 	useEffect(() => {
-		if (!window.neotune) return;
-		return window.neotune.player.onMediaCommand((command) => {
+		if (!window.nixie) return;
+		return window.nixie.player.onMediaCommand((command) => {
 			void engine.start().then(() => {
 				if (command.type === "play") void engine.play();
 				if (command.type === "pause") engine.pause();
@@ -66,7 +66,7 @@ export function usePlaybackPosition(): number {
 
 /**
  * Chromium downloads Now Playing artwork itself rather than reusing the page's copy, and it does not
- * resolve the `neotune:` scheme, so the cover goes over as a data URL. The size is measured rather than
+ * resolve the `nixie:` scheme, so the cover goes over as a data URL. The size is measured rather than
  * claimed: an entry stating none scores as sizeless and can lose the selection to nothing at all.
  */
 async function artworkImage(url: string): Promise<MediaImage> {

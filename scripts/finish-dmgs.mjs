@@ -5,8 +5,8 @@ import { promisify } from "node:util";
 const run = promisify(execFile);
 
 // electron-builder names an artifact after the architecture it was built for, and drops the
-// suffix entirely for x64, so the two files a reader picks between arrive as "Neotune-1.2.3.dmg"
-// and "Neotune-1.2.3-arm64.dmg". Neither says which Mac it is for, and the one that says nothing
+// suffix entirely for x64, so the two files a reader picks between arrive as "Nixie-1.2.3.dmg"
+// and "Nixie-1.2.3-arm64.dmg". Neither says which Mac it is for, and the one that says nothing
 // at all is the Intel build, which is the wrong way round for a reader guessing. There is no
 // per-architecture `artifactName`: the template's only lever is `${arch}`, which is the raw
 // "x64" or "arm64", so the rename happens here, after both are built and before either is

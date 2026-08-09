@@ -1,4 +1,4 @@
-# Signing and notarizing Neotune for macOS
+# Signing and notarizing Nixie for macOS
 
 This is the macOS half of the release. Notarization, stapling, Gatekeeper and the Developer ID
 certificate are Apple's alone, and every command here needs a Mac to run on. Windows and Linux
@@ -46,7 +46,7 @@ cp electron-builder.env.example electron-builder.env
 APPLE_ID=you@example.com
 APPLE_TEAM_ID=XXXXXXXXXX
 APPLE_APP_SPECIFIC_PASSWORD=xxxx-xxxx-xxxx-xxxx
-NEOTUNE_RELEASE_GATES_ACCEPTED=auth,range,pcm,lyrics-rights
+NIXIE_RELEASE_GATES_ACCEPTED=auth,range,pcm,lyrics-rights
 ```
 
 `electron-builder.env` is gitignored, is read by electron-builder's own CLI from the project root,
@@ -67,8 +67,8 @@ That runs the release gates, builds, signs with the keychain identity, notarizes
 ticket to the app, and produces the DMG and ZIP for both architectures under `release/`. Each disk
 image is then signed with the same identity, submitted to Apple in its own right, and stapled: it
 is the file a reader double-clicks, and Gatekeeper judges it before the app inside it is ever
-reached. The DMGs are named `Neotune-<version>-intel.dmg` and
-`Neotune-<version>-applesilicon.dmg`, which `scripts/finish-dmgs.mjs` does after the build, since
+reached. The DMGs are named `Nixie-<version>-intel.dmg` and
+`Nixie-<version>-applesilicon.dmg`, which `scripts/finish-dmgs.mjs` does after the build, since
 electron-builder itself names the Intel one after no architecture at all. That same hook is what
 notarizes them, and it renames first so the file Apple mints a ticket for is the file that ships.
 The ZIPs beside them keep `arm64` in the name on purpose: that substring is how the updater tells
@@ -78,9 +78,9 @@ ZIP blockmaps and `latest-mac.yml`, so a local build is the release rehearsed.
 Verify the image first, in the order a reader meets it:
 
 ```sh
-codesign --verify --strict --verbose=2 release/Neotune-<version>-applesilicon.dmg
-xcrun stapler validate release/Neotune-<version>-applesilicon.dmg
-spctl -a -vvv -t open --context context:primary-signature release/Neotune-<version>-applesilicon.dmg
+codesign --verify --strict --verbose=2 release/Nixie-<version>-applesilicon.dmg
+xcrun stapler validate release/Nixie-<version>-applesilicon.dmg
+spctl -a -vvv -t open --context context:primary-signature release/Nixie-<version>-applesilicon.dmg
 ```
 
 `spctl` must report `accepted` with `source=Notarized Developer ID`. An image that is signed but
@@ -91,16 +91,16 @@ not stand in for.
 Then the app inside it:
 
 ```sh
-codesign -dv --verbose=4 release/mac-arm64/Neotune.app 2>&1 | grep -E "Authority|Runtime"
-spctl -a -vvv -t install release/mac-arm64/Neotune.app
-xcrun stapler validate release/mac-arm64/Neotune.app
+codesign -dv --verbose=4 release/mac-arm64/Nixie.app 2>&1 | grep -E "Authority|Runtime"
+spctl -a -vvv -t install release/mac-arm64/Nixie.app
+xcrun stapler validate release/mac-arm64/Nixie.app
 ```
 
 `spctl` must report `source=Notarized Developer ID` here too. `stapler validate` must report that
 the ticket is present, which is what lets a downloaded copy open on a Mac that is offline or behind
 a firewall. `release/mac-arm64` is the arm64 slice and `release/mac` the x64 one, and both ship, so
 run all six against each. Mounting the image with `hdiutil attach` and running the app checks
-against `/Volumes/Neotune <version>-arm64/Neotune.app` is the same thing done to the copy that
+against `/Volumes/Nixie <version>-arm64/Nixie.app` is the same thing done to the copy that
 actually ships, and worth it once before a release.
 
 `pnpm dist` makes four submissions, an app and an image per architecture, and the two images go up
@@ -171,7 +171,7 @@ its own.
    - `CSC_LINK`, the base64 blob
    - `CSC_KEY_PASSWORD`, the `.p12` password
    - `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID`
-   - `NEOTUNE_RELEASE_GATES_ACCEPTED`, `auth,range,pcm,lyrics-rights`
+   - `NIXIE_RELEASE_GATES_ACCEPTED`, `auth,range,pcm,lyrics-rights`
 
 4. Delete the `.p12` from disk.
 5. Cut a release with `pnpm release:patch` (or `:minor`, `:major`), read what it is about to publish

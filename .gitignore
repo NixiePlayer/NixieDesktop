@@ -1,7 +1,7 @@
 node_modules
 .DS_Store
 .playwright-mcp
-neotune-home.png
+nixie-home.png
 release
 dist
 dist-electron

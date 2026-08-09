@@ -210,7 +210,7 @@ export interface LyricsResult {
 export interface AuthState {
 	/**
 	 * `unentitled` is a session YouTube recognises but that holds no Music Premium subscription. It is
-	 * its own status and not an error, since it is the account that is wrong for Neotune rather than
+	 * its own status and not an error, since it is the account that is wrong for Nixie rather than
 	 * the sign-in, and the only way out of it is another account or a subscription.
 	 */
 	status: "signed-out" | "signing-in" | "authenticated" | "expired" | "unentitled";
@@ -228,7 +228,7 @@ export interface BrowserAccount {
 	accountName?: string;
 	/**
 	 * The Google account signed in to that browser profile. Usually, but not always, the account
-	 * owning its YouTube cookies, so nothing may present it as the account Neotune will use.
+	 * owning its YouTube cookies, so nothing may present it as the account Nixie will use.
 	 */
 	accountEmail?: string;
 	/** Data URL of the profile's picture, read off disk. Never a path and never a Google URL. */
@@ -361,7 +361,7 @@ export interface MediaCommand {
 	positionSeconds?: number;
 }
 
-export interface NeotuneBridge {
+export interface NixieBridge {
 	auth: {
 		state(): Promise<AuthState>;
 		browsers(): Promise<BrowserAccount[]>;
@@ -411,6 +411,6 @@ export interface NeotuneBridge {
 
 declare global {
 	interface Window {
-		neotune?: NeotuneBridge;
+		nixie?: NixieBridge;
 	}
 }

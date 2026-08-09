@@ -37,7 +37,7 @@ const commandTypes = new Set([
 	"playlist-delete",
 	"account-setting",
 ]);
-/** Only what Neotune draws a switch for. A key outside this set names an endpoint main never held. */
+/** Only what Nixie draws a switch for. A key outside this set names an endpoint main never held. */
 const accountSettingKeys: string[] = [
 	"likedFromYouTube",
 	"dynamicQueue",

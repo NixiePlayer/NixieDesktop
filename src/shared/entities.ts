@@ -88,7 +88,7 @@ export function autoPlaylist(
 
 function artworkProxy(url: string) {
 	const id = btoa(url).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
-	return `neotune://app/artwork/${id}`;
+	return `nixie://app/artwork/${id}`;
 }
 
 const autoCovers: Record<string, string> = {

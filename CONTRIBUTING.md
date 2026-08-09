@@ -1,4 +1,4 @@
-# Contributing to Neotune
+# Contributing to Nixie
 
 Thanks for looking. Bug reports, fixes and features are all welcome.
 
@@ -6,7 +6,7 @@ Thanks for looking. Bug reports, fixes and features are all welcome.
 
 Open an issue first for anything beyond a small fix.
 
-Neotune has opinions, and most of them are written down in [AGENTS.md](AGENTS.md) with the
+Nixie has opinions, and most of them are written down in [AGENTS.md](AGENTS.md) with the
 reasoning attached. A fair number of the obvious approaches in this codebase were tried and
 do not work: the YouTube client that returns streams with no URL, the wrapper that throws
 on today's response, the handoff driven off the `ended` event that arrives too late. A pull

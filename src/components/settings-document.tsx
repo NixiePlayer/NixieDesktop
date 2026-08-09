@@ -25,10 +25,10 @@ export function DocumentRow({
 
 	useEffect(() => {
 		if (!open || text !== undefined) return;
-		void window.neotune?.local
+		void window.nixie?.local
 			.document(name)
 			.then(setText)
-			.catch(() => setText(`Neotune could not read ${name} from this build.`));
+			.catch(() => setText(`Nixie could not read ${name} from this build.`));
 	}, [open, text, name]);
 
 	return (

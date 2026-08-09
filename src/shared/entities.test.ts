@@ -60,13 +60,13 @@ describe("chart position", () => {
 describe("auto-generated playlists", () => {
 	it("covers and labels the two nobody made, with or without the browse prefix", () => {
 		for (const id of ["VLLM", "LM", "VLSE", "SE"]) {
-			expect(autoPlaylist(id)?.artworkUrl).toMatch(/^neotune:\/\/app\/artwork\//);
+			expect(autoPlaylist(id)?.artworkUrl).toMatch(/^nixie:\/\/app\/artwork\//);
 		}
 		expect(autoPlaylist("LM")?.artworkUrl).toBe(
-			`neotune://app/artwork/${Buffer.from("https://www.gstatic.com/youtube/media/ytm/images/pbg/liked-songs-delhi-1200.png").toString("base64url")}`
+			`nixie://app/artwork/${Buffer.from("https://www.gstatic.com/youtube/media/ytm/images/pbg/liked-songs-delhi-1200.png").toString("base64url")}`
 		);
 		expect(autoPlaylist("SE")?.artworkUrl).toBe(
-			`neotune://app/artwork/${Buffer.from("https://www.gstatic.com/youtube/media/ytm/images/pbg/podcast-queue-delhi-1200.png").toString("base64url")}`
+			`nixie://app/artwork/${Buffer.from("https://www.gstatic.com/youtube/media/ytm/images/pbg/podcast-queue-delhi-1200.png").toString("base64url")}`
 		);
 		expect(autoPlaylist("VLLM")).toMatchObject({
 			title: "Liked music",
@@ -80,9 +80,7 @@ describe("auto-generated playlists", () => {
 
 	it("leaves an ordinary playlist to its own cover and author", () => {
 		expect(autoPlaylist("VLPLcool")).toBeUndefined();
-		expect(entityArtwork({ ...playlist, artworkUrl: "neotune://app/artwork/cover" })).toBe(
-			"neotune://app/artwork/cover"
-		);
+		expect(entityArtwork({ ...playlist, artworkUrl: "nixie://app/artwork/cover" })).toBe("nixie://app/artwork/cover");
 		expect(entitySubtitle({ ...playlist, author: "Edoardo" })).toBe("Edoardo");
 	});
 });

@@ -75,7 +75,7 @@ function PlaylistPage() {
 		const previous = items;
 		setItems(next);
 		try {
-			await window.neotune?.music.command(command);
+			await window.nixie?.music.command(command);
 			toast.add({ title: "Playlist updated", description: "Your change is now on YouTube Music.", type: "success" });
 		} catch {
 			setItems(previous);
@@ -155,7 +155,7 @@ function PlaylistPage() {
 									setPrivacy(nextPrivacy);
 									// The navigation rail names it too, and reads that name out of the store.
 									updatePlaylist(id, { title: nextTitle, description: nextDescription, privacy: nextPrivacy });
-									void window.neotune?.music
+									void window.nixie?.music
 										.command({
 											type: "playlist-update",
 											playlistId: id,

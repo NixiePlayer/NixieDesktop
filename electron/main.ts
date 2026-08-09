@@ -40,7 +40,7 @@ import { SecureResourceRegistry } from "./media-protocol";
 import { StateStore } from "./state-store";
 import { YouTubeAdapter } from "./youtube-adapter";
 
-const authPartition = "persist:neotune-auth";
+const authPartition = "persist:nixie-auth";
 // Exact hostnames, so `youtube.com` does not stand in for `www.youtube.com`. A link to a host that
 // is not named here opens nothing at all, silently, which is the easy mistake when adding one.
 const externalHosts = new Set([
@@ -58,10 +58,10 @@ const csp = [
 	"script-src 'self'",
 	"style-src 'self' 'unsafe-inline'",
 	"font-src 'self'",
-	"img-src 'self' data: neotune:",
-	"media-src 'self' neotune:",
-	// `neotune:` is here because the lyrics panel fetches neotune://app/lyrics from the renderer.
-	"connect-src 'self' neotune: https://lrclib.net",
+	"img-src 'self' data: nixie:",
+	"media-src 'self' nixie:",
+	// `nixie:` is here because the lyrics panel fetches nixie://app/lyrics from the renderer.
+	"connect-src 'self' nixie: https://lrclib.net",
 	"object-src 'none'",
 	"base-uri 'none'",
 	"frame-ancestors 'none'",
@@ -69,16 +69,16 @@ const csp = [
 
 protocol.registerSchemesAsPrivileged([
 	{
-		scheme: "neotune",
+		scheme: "nixie",
 		privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true, corsEnabled: true },
 	},
 ]);
 
 // A development window sits beside an installed one, so it says so in the app menu and the About
 // panel. The Dock label and the Cmd-Tab entry read the bundle instead, which is what
-// `scripts/dev-app-name.mjs` writes. The released app is just "Neotune": its own prerelease state is
+// `scripts/dev-app-name.mjs` writes. The released app is just "Nixie": its own prerelease state is
 // on the icon, and nothing has to be renamed back at 1.0.
-const APP_NAME = process.env.VITE_DEV_SERVER_URL ? "Neotune (Dev)" : "Neotune";
+const APP_NAME = process.env.VITE_DEV_SERVER_URL ? "Nixie (Dev)" : "Nixie";
 
 // macOS reads the name once, while the first menu is built, so setting this after `whenReady` was too
 // late and the menu bar and About panel both still said "Electron".
@@ -86,7 +86,7 @@ app.setName(APP_NAME);
 // The data path carries the channel, so a development run holds its own linked account, settings,
 // playback state and cookies, and the two can be open at once: one profile directory shared between
 // two Chromium processes is two writers on the same cookie and Local Storage databases. It is set
-// rather than left to Electron so the packaged path stays `Neotune` whatever the bundle is called.
+// rather than left to Electron so the packaged path stays `Nixie` whatever the bundle is called.
 app.setPath("userData", join(app.getPath("appData"), APP_NAME));
 
 // `release()` is a kernel version and says nothing about which system it came from, so the diagnostics
@@ -96,7 +96,7 @@ const OS_NAMES: Record<string, string> = { darwin: "macOS", win32: "Windows", li
 
 // Nothing upstream needs to know this is Electron, and YouTube serves cut-down responses to clients
 // that say so, so every request goes out as the plain Chrome underneath.
-app.userAgentFallback = app.userAgentFallback.replace(/\s(?:neotune|Electron)\/\S+/gi, "");
+app.userAgentFallback = app.userAgentFallback.replace(/\s(?:nixie|Electron)\/\S+/gi, "");
 
 let mainWindow: BrowserWindow | undefined;
 let stateStore: StateStore;
@@ -106,7 +106,7 @@ const resources = new SecureResourceRegistry({
 	log: (message) => void logger.write("error", message),
 	// In development the renderer is served by Vite, so the decks fetch the stream cross-origin.
 	// An Origin header carries no path, so the dev URL is reduced to its origin before comparing.
-	allowedOrigins: ["neotune://app", process.env.VITE_DEV_SERVER_URL]
+	allowedOrigins: ["nixie://app", process.env.VITE_DEV_SERVER_URL]
 		.filter((value) => value !== undefined)
 		.map((value) => (value.startsWith("http") ? new URL(value).origin : value)),
 });
@@ -116,7 +116,7 @@ const lyrics = new LyricsClient((videoId) => youtube.lyrics(videoId));
 function trusted(event: IpcMainInvokeEvent) {
 	const url = event.senderFrame?.url ?? "";
 	const devUrl = process.env.VITE_DEV_SERVER_URL;
-	if (url.startsWith("neotune://app/")) return;
+	if (url.startsWith("nixie://app/")) return;
 	if (devUrl && new URL(url).origin === new URL(devUrl).origin) return;
 	throw new Error("Untrusted IPC sender");
 }
@@ -138,7 +138,7 @@ function linkPath() {
  * macOS draws it as the notification's content image, which is the thumbnail on its trailing edge.
  */
 async function artworkIcon(url: string | undefined) {
-	const id = url?.startsWith("neotune://app/artwork/") ? url.split("/").at(-1) : undefined;
+	const id = url?.startsWith("nixie://app/artwork/") ? url.split("/").at(-1) : undefined;
 	if (!id || !url) return undefined;
 	const response = await resources.handleArtwork(new Request(url), id).catch(() => undefined);
 	if (!response?.ok) return undefined;
@@ -243,7 +243,7 @@ async function cookieHeader() {
 }
 
 /**
- * Neotune plays without advertisements, in the background, and out of its own audio engine, which are
+ * Nixie plays without advertisements, in the background, and out of its own audio engine, which are
  * three things YouTube sells as Music Premium. Asked of an account that pays for them, it hands back
  * what that account has already bought; asked of a free one, it hands over what YouTube charges for.
  * So a session that holds no subscription is refused here, at the one place every entry passes
@@ -289,10 +289,10 @@ async function importFromBrowser(account: unknown) {
 	await writeCookies(cookies);
 	youtube = createAdapter();
 	const state = await authState();
-	// Nothing is written for an account Neotune will not play, so a refused profile leaves no link
+	// Nothing is written for an account Nixie will not play, so a refused profile leaves no link
 	// behind and the next attempt starts from nothing.
 	if (state.status === "unentitled") {
-		throw new Error("That account has no YouTube Music Premium subscription, which Neotune requires");
+		throw new Error("That account has no YouTube Music Premium subscription, which Nixie requires");
 	}
 	if (state.status !== "authenticated") throw new Error("That browser profile is not signed in to YouTube");
 	await writeFile(linkPath(), JSON.stringify({ browser: account.browser, profile: account.profile }), {
@@ -388,7 +388,7 @@ function configureUpdater() {
 	if (!app.isPackaged) return;
 	// On, so the only thing ever asked of the listener is the restart. It is also what makes "later"
 	// free rather than a deferral: `autoInstallOnAppQuit` is electron-updater's default, so a build
-	// downloaded and left alone installs itself the next time Neotune is quit, with no second prompt
+	// downloaded and left alone installs itself the next time Nixie is quit, with no second prompt
 	// and no second download.
 	autoUpdater.autoDownload = true;
 	// electron-updater's own logger writes the feed URL and the cache path it downloads into, which
@@ -532,7 +532,7 @@ function registerIpc() {
 
 async function exportDiagnostics() {
 	const result = await dialog.showSaveDialog(mainWindow!, {
-		defaultPath: `neotune-diagnostics-${new Date().toISOString().slice(0, 10)}.log`,
+		defaultPath: `nixie-diagnostics-${new Date().toISOString().slice(0, 10)}.log`,
 		filters: [{ name: "Log", extensions: ["log"] }],
 	});
 	if (result.canceled || !result.filePath) return;
@@ -541,7 +541,7 @@ async function exportDiagnostics() {
 }
 
 function registerAppProtocol() {
-	protocol.handle("neotune", async (request) => {
+	protocol.handle("nixie", async (request) => {
 		const url = new URL(request.url);
 		if (url.host !== "app") return new Response("Not found", { status: 404 });
 		const segments = url.pathname.split("/").filter(Boolean);
@@ -663,7 +663,7 @@ async function createWindow() {
 		void stateStore.save(state);
 	});
 	if (process.env.VITE_DEV_SERVER_URL) await mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL);
-	else await mainWindow.loadURL("neotune://app/");
+	else await mainWindow.loadURL("nixie://app/");
 }
 
 void app
@@ -703,7 +703,7 @@ void app
 	})
 	.catch((error: unknown) => {
 		void logger?.write("error", error instanceof Error ? error.message : "Application startup failed");
-		dialog.showErrorBox("Neotune could not start", error instanceof Error ? error.message : "Unknown startup error");
+		dialog.showErrorBox("Nixie could not start", error instanceof Error ? error.message : "Unknown startup error");
 		app.quit();
 	});
 

@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 /** The store is module state, so every test imports a fresh copy of it against its own bridge. */
 async function freshLibrary(command: () => Promise<unknown>) {
 	vi.resetModules();
-	Object.assign(globalThis, { window: { neotune: { music: { command } } } });
+	Object.assign(globalThis, { window: { nixie: { music: { command } } } });
 	return import("#/lib/library");
 }
 
