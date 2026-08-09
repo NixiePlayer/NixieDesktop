@@ -1,4 +1,4 @@
-import { createRootRoute, useRouter } from "@tanstack/react-router";
+import { createRootRoute, rootRouteId, useRouter } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { AppShell } from "#/components/app-shell";
 import { SignInView } from "#/components/sign-in";
@@ -36,7 +36,13 @@ function RootComponent() {
 		resetLibrary();
 		// So do the feeds and mixes held outside the router's cache, which invalidating does not reach.
 		dropHeldPages();
-		void router.invalidate();
+		// `forcePending`, not a plain invalidate: the loaders already ran against the signed-out bridge
+		// and cached the empty pages they answered with, and a revalidation renders that data while it
+		// refetches. So the first thing a reader saw after signing in was "your home feed has nothing to
+		// show yet", sitting there for the length of the first browse. Forcing the matches back to
+		// pending draws each route's own skeleton instead. The root is left alone: it holds the gate
+		// being rendered, and it has no loader to rerun anyway.
+		void router.invalidate({ forcePending: true, filter: (match) => match.routeId !== rootRouteId });
 	};
 
 	useEffect(() => {
