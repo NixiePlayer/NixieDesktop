@@ -99,6 +99,9 @@ const OS_NAMES: Record<string, string> = { darwin: "macOS", win32: "Windows", li
 app.userAgentFallback = app.userAgentFallback.replace(/\s(?:nixie|Electron)\/\S+/gi, "");
 
 let mainWindow: BrowserWindow | undefined;
+// The window's close button hides it rather than destroying it, so this is what tells a real quit
+// from a close: it is set by `before-quit`, which is the only path Cmd-Q and the Dock's Quit take.
+let quitting = false;
 let stateStore: StateStore;
 let logger: LocalLogger;
 let youtube: YouTubeAdapter;
@@ -676,12 +679,21 @@ async function createWindow() {
 		if (!current || new URL(url).origin !== new URL(current).origin) event.preventDefault();
 	});
 	mainWindow.once("ready-to-show", () => mainWindow?.show());
-	mainWindow.on("close", () => {
+	mainWindow.on("close", (event) => {
 		const bounds = mainWindow?.getBounds();
-		if (!bounds) return;
-		const state: PersistedState = stateStore.snapshot;
-		state.windowBounds = bounds;
-		void stateStore.save(state);
+		if (bounds) {
+			const state: PersistedState = stateStore.snapshot;
+			state.windowBounds = bounds;
+			void stateStore.save(state);
+		}
+		// The audio engine, the queue and the whole session live in the renderer, so destroying the
+		// window on macOS stops the music and the next Dock click loads the app from nothing. The
+		// close button hides it instead, which is what every macOS music player does, and `quitting`
+		// is what still lets Cmd-Q and the Dock's Quit through.
+		if (process.platform === "darwin" && !quitting) {
+			event.preventDefault();
+			mainWindow?.hide();
+		}
 	});
 	if (process.env.VITE_DEV_SERVER_URL) await mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL);
 	else await mainWindow.loadURL("nixie://app/");
@@ -719,7 +731,8 @@ void app
 		configureUpdater();
 		await logger.write("info", "Application started");
 		app.on("activate", () => {
-			if (BrowserWindow.getAllWindows().length === 0) void createWindow();
+			if (mainWindow && !mainWindow.isDestroyed()) mainWindow.show();
+			else void createWindow();
 		});
 	})
 	.catch((error: unknown) => {
@@ -734,6 +747,9 @@ app.on("window-all-closed", () => {
 
 let stateSavedBeforeQuit = false;
 app.on("before-quit", (event) => {
+	// Set before the early return, since the second pass through here is the one that reaches the
+	// window's `close` handler, which refuses to be destroyed until this says a quit is under way.
+	quitting = true;
 	if (stateSavedBeforeQuit || !stateStore) return;
 	event.preventDefault();
 	void stateStore.save(stateStore.snapshot).finally(() => {
