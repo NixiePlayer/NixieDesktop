@@ -23,10 +23,13 @@ import {
 // and a named import of it from an ES module resolves to nothing at runtime.
 import electronUpdater from "electron-updater";
 import type { AudioQuality, AuthState, PersistedState, Track, UpdateState } from "../src/shared/contracts";
+import type { LinkedAccount } from "../src/shared/contracts";
 import { artistNames } from "../src/shared/entities";
 import {
 	validateBrowserAccount,
 	validateDocumentName,
+	validateInstallId,
+	validateLinkedAccount,
 	validateMusicCommand,
 	validateMusicQuery,
 	validateState,
@@ -37,6 +40,8 @@ import { configureRestrictedEvaluator, evaluateRestricted } from "./decipher";
 import { LocalLogger } from "./logger";
 import { LyricsClient } from "./lyrics";
 import { SecureResourceRegistry } from "./media-protocol";
+import { EXTENSION_ID, NATIVE_HOST_NAME, registerNativeHost } from "./native-host-register";
+import { NativeHostServer } from "./native-host-server";
 import { StateStore } from "./state-store";
 import { YouTubeAdapter } from "./youtube-adapter";
 
@@ -117,6 +122,7 @@ let quitting = false;
 let stateStore: StateStore;
 let logger: LocalLogger;
 let youtube: YouTubeAdapter;
+let nativeHost: NativeHostServer;
 const resources = new SecureResourceRegistry({
 	log: (message) => void logger.write("error", message),
 	// In development the renderer is served by Vite, so the decks fetch the stream cross-origin.
@@ -267,9 +273,13 @@ async function writeCookies(cookies: ImportedCookie[]) {
 async function refreshLinkedCookies() {
 	if (Date.now() - refreshedAt < 60_000) return;
 	refreshedAt = Date.now();
-	const account: unknown = JSON.parse(await readFile(linkPath(), "utf8"));
-	validateBrowserAccount(account);
-	await writeCookies(await readYouTubeCookies(account));
+	const link: unknown = JSON.parse(await readFile(linkPath(), "utf8"));
+	validateLinkedAccount(link);
+	// The disk read and the extension answer the same question with the same shape, which is why the
+	// adapter and cookieHeader are untouched: only where the cookies come from changes. The pull is
+	// bounded, since a browser that has closed must not hold the header open behind it.
+	const cookies = link.source === "extension" ? await nativeHost.pull(link.installId) : await readYouTubeCookies(link);
+	await writeCookies(cookies);
 }
 
 async function cookieHeader() {
@@ -317,24 +327,40 @@ async function authState(): Promise<AuthState> {
  * on this computer is what is left, so the account arrives already signed in and nobody handles a
  * cookie by hand.
  */
-async function importFromBrowser(account: unknown) {
-	validateBrowserAccount(account);
-	const cookies = await readYouTubeCookies(account);
+/**
+ * Everything a session needs once its cookies are in hand, whichever door they came through: the
+ * partition is cleared, the adapter is rebuilt, the entitlement is checked, and the link is written
+ * only for a session Nixie will actually play. A refused profile leaves no link behind, so the next
+ * attempt starts from nothing. The two callers differ only in where the cookies came from and what
+ * `source` the link records.
+ */
+async function linkSession(cookies: ImportedCookie[], link: LinkedAccount) {
 	await session.fromPartition(authPartition).clearStorageData();
 	await rm(linkPath(), { force: true });
 	await writeCookies(cookies);
 	youtube = createAdapter();
 	const state = await authState();
-	// Nothing is written for an account Nixie will not play, so a refused profile leaves no link
-	// behind and the next attempt starts from nothing.
 	if (state.status === "unentitled") {
 		throw new Error("That account has no YouTube Music Premium subscription, which Nixie requires");
 	}
-	if (state.status !== "authenticated") throw new Error("That browser profile is not signed in to YouTube");
-	await writeFile(linkPath(), JSON.stringify({ browser: account.browser, profile: account.profile }), {
-		mode: 0o600,
-	});
+	if (state.status !== "authenticated") throw new Error("That profile is not signed in to YouTube");
+	await writeFile(linkPath(), JSON.stringify(link), { mode: 0o600 });
 	return state;
+}
+
+async function importFromBrowser(account: unknown) {
+	validateBrowserAccount(account);
+	const cookies = await readYouTubeCookies(account);
+	return linkSession(cookies, { source: "browser", browser: account.browser, profile: account.profile });
+}
+
+/** The extension's counterpart of importFromBrowser: pull the profile's cookies through the host. */
+async function importFromExtension(installId: unknown) {
+	validateInstallId(installId);
+	const source = nativeHost.connections().find((connection) => connection.installId === installId);
+	if (!source) throw new Error("That browser is no longer connected");
+	const cookies = await nativeHost.pull(installId);
+	return linkSession(cookies, { source: "extension", installId, browser: source.browser });
 }
 
 function createAdapter() {
@@ -354,6 +380,33 @@ function createAdapter() {
 		void logger.write("error", `InnerTube warm-up failed: ${error instanceof Error ? error.message : "unknown"}`);
 	});
 	return adapter;
+}
+
+/**
+ * The pipe server the browser extension reaches through the native host, and the per-browser
+ * registration that points the host at it. Both are non-fatal: a session that came from a disk read
+ * needs neither, and the extension path simply stays unavailable if either fails. The server is
+ * assigned before the try so `connections()` and `pull()` answer even when the listen did not.
+ */
+async function setupNativeHost() {
+	nativeHost = new NativeHostServer();
+	try {
+		await nativeHost.listen(app.getPath("userData"), [`chrome-extension://${EXTENSION_ID}/`]);
+		await registerNativeHost({
+			platform: process.platform,
+			userDataPath: app.getPath("userData"),
+			executable: process.execPath,
+			// Shipped outside the asar through `build.extraResources`, so the path is a real file the
+			// Electron binary can run as Node. In development it is the repository copy.
+			hostScript: app.isPackaged
+				? join(process.resourcesPath, "native-host", "host.cjs")
+				: join(app.getAppPath(), "electron", "native-host", "host.cjs"),
+			extensionId: EXTENSION_ID,
+			hostName: NATIVE_HOST_NAME,
+		});
+	} catch (error: unknown) {
+		void logger.write("error", `native host setup failed: ${error instanceof Error ? error.message : "unknown"}`);
+	}
 }
 
 const execFileAsync = promisify(execFile);
@@ -470,6 +523,8 @@ function registerIpc() {
 		return Promise.all(accounts.map(async (account) => ({ ...account, icon: await browserIcon(account.browser) })));
 	});
 	handle("auth:import-browser", (_event, account) => importFromBrowser(account));
+	handle("auth:extension-sources", () => nativeHost.connections());
+	handle("auth:link-extension", (_event, installId) => importFromExtension(installId));
 	handle("auth:sign-out", async () => {
 		await session.fromPartition(authPartition).clearStorageData();
 		await rm(linkPath(), { force: true });
@@ -789,9 +844,13 @@ void app
 		youtube = createAdapter();
 		registerAppProtocol();
 		await verifyRestrictedEvaluator();
+		await setupNativeHost();
 		registerIpc();
 		installMenu();
 		await createWindow();
+		nativeHost.onChange((sources) => {
+			if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send("auth:extension-sources", sources);
+		});
 		// After the window, so the first state reaches a renderer that exists, and not awaited: a
 		// GitHub that cannot be reached must not hold up the app it is checking.
 		configureUpdater();

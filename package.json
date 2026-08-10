@@ -103,6 +103,15 @@
 			"THIRD_PARTY_LICENSES.txt",
 			"THIRD_PARTY_NOTICES.md"
 		],
+		"extraResources": [
+			{
+				"from": "electron/native-host",
+				"to": "native-host",
+				"filter": [
+					"host.cjs"
+				]
+			}
+		],
 		"mac": {
 			"category": "public.app-category.music",
 			"icon": "build/icon.icns",
@@ -146,7 +155,8 @@
 			"oneClick": true,
 			"perMachine": false,
 			"createDesktopShortcut": true,
-			"shortcutName": "Nixie"
+			"shortcutName": "Nixie",
+			"include": "build/installer.nsh"
 		},
 		"linux": {
 			"icon": "build/icon.png",
