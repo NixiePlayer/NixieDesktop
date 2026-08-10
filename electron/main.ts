@@ -359,6 +359,9 @@ async function importFromExtension(installId: unknown) {
 	validateInstallId(installId);
 	const source = nativeHost.connections().find((connection) => connection.installId === installId);
 	if (!source) throw new Error("That browser is no longer connected");
+	// The UI refuses a signed-out row, but the channel says so too rather than letting the pull run its
+	// full timeout and report a timeout for a profile that simply holds no session.
+	if (!source.signedIn) throw new Error("That browser is not signed in to YouTube");
 	const cookies = await nativeHost.pull(installId);
 	return linkSession(cookies, { source: "extension", installId, browser: source.browser });
 }
@@ -395,7 +398,10 @@ async function setupNativeHost() {
 		await registerNativeHost({
 			platform: process.platform,
 			userDataPath: app.getPath("userData"),
-			executable: process.execPath,
+			// Inside an AppImage `process.execPath` is a per-run mount path that dies with the process, so
+			// the wrapper written from it would be stale by the next launch. APPIMAGE is the stable path to
+			// the image itself, and is set only there.
+			executable: process.env.APPIMAGE ?? process.execPath,
 			// Shipped outside the asar through `build.extraResources`, so the path is a real file the
 			// Electron binary can run as Node. In development it is the repository copy.
 			hostScript: app.isPackaged
@@ -405,7 +411,10 @@ async function setupNativeHost() {
 			hostName: NATIVE_HOST_NAME,
 		});
 	} catch (error: unknown) {
-		void logger.write("error", `native host setup failed: ${error instanceof Error ? error.message : "unknown"}`);
+		// The reason, never the message: a node fs or net error carries the failing path, which the log
+		// must not (AGENTS.md). `EADDRINUSE`, `EACCES` and the like are enough to say what went wrong.
+		const reason = error && typeof error === "object" && "code" in error ? String(error.code) : "unknown";
+		void logger.write("error", `native host setup failed: ${reason}`);
 	}
 }
 
@@ -888,6 +897,9 @@ app.on("before-quit", (event) => {
 	// Set before the early return, since the second pass through here is the one that reaches the
 	// window's `close` handler, which refuses to be destroyed until this says a quit is under way.
 	quitting = true;
+	// Removes the unix socket file so the next launch does not have to reclaim a stale one. Idempotent,
+	// so the second pass through here is harmless.
+	if (nativeHost) void nativeHost.close().catch(() => undefined);
 	if (stateSavedBeforeQuit || !stateStore) return;
 	event.preventDefault();
 	void stateStore.save(stateStore.snapshot).finally(() => {

@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { mkdir, writeFile } from "node:fs/promises";
+import { access, mkdir, writeFile } from "node:fs/promises";
 import { dirname, join, posix } from "node:path";
 import { promisify } from "node:util";
 
@@ -71,10 +71,14 @@ export function wrapperScript(
 	configPath: string
 ): string {
 	if (platform === "win32") {
+		// cmd expands %VAR% even inside double quotes, so a `%` in an account name or install path (both
+		// legal on NTFS) would corrupt the argument. Doubling it is how a literal percent survives; `%*`,
+		// which forwards Chrome's own origin argument, is left alone.
+		const literal = (value: string) => value.replaceAll("%", "%%");
 		return [
 			"@echo off",
 			"set ELECTRON_RUN_AS_NODE=1",
-			`"${executable}" "${hostScript}" "--config=${configPath}" %*`,
+			`"${literal(executable)}" "${literal(hostScript)}" "--config=${literal(configPath)}" %*`,
 			"",
 		].join("\r\n");
 	}
@@ -130,29 +134,38 @@ export async function registerNativeHost(options: RegisterOptions) {
 		// host, and this write is what makes it real.
 		const manifestPath = join(dir, `${options.hostName}.json`);
 		await writeFile(manifestPath, manifest, { mode: 0o600 });
+		// reg.exe by absolute path for the same reason the manifest launcher uses one: the per-user
+		// install directory is the process working directory, which libuv searches before PATH on Windows.
+		const regExe = join(process.env.SystemRoot ?? "C:\\Windows", "System32", "reg.exe");
 		for (const target of targets) {
 			if (!target.registryKey) continue;
-			// reg.exe writes HKCU with no elevation, and no registry API in node is worth a dependency. A
-			// browser that is not installed still gets its key, which is harmless and idempotent.
-			await execFileAsync("reg.exe", [
-				"add",
-				target.registryKey,
-				"/ve",
-				"/t",
-				"REG_SZ",
-				"/d",
-				manifestPath,
-				"/f",
-			]).catch(() => undefined);
+			// HKCU needs no elevation, and no registry API in node is worth a dependency. A browser that is
+			// not installed still gets its key, which is harmless and idempotent (the key is inert without it).
+			await execFileAsync(regExe, ["add", target.registryKey, "/ve", "/t", "REG_SZ", "/d", manifestPath, "/f"]).catch(
+				() => undefined
+			);
 		}
 		return;
 	}
 
 	for (const target of targets) {
 		if (!target.manifestPath) continue;
+		// Only into a browser that is installed: the manifest sits two levels down (in the browser's own
+		// NativeMessagingHosts), so its grandparent existing is what says the browser is there. Writing it
+		// regardless would create Chrome, Brave and Vivaldi data directories on a Mac that has none, which
+		// other tools read as those browsers being installed.
+		const browserDir = dirname(dirname(target.manifestPath));
+		if (!(await exists(browserDir))) continue;
 		await mkdir(dirname(target.manifestPath), { recursive: true }).catch(() => undefined);
 		await writeFile(target.manifestPath, manifest, { mode: 0o600 }).catch(() => undefined);
 	}
+}
+
+async function exists(path: string) {
+	return access(path).then(
+		() => true,
+		() => false
+	);
 }
 
 function homeDir(): string {

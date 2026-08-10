@@ -65,6 +65,7 @@ describe("NativeHostServer", () => {
 	afterEach(async () => {
 		for (const socket of sockets) socket.destroy();
 		sockets.length = 0;
+		await server.close();
 		await rm(dir, { recursive: true, force: true });
 	});
 
@@ -122,6 +123,24 @@ describe("NativeHostServer", () => {
 		const request = await peer.next();
 		peer.send({ type: "cookies", id: request.id, cookies: [cookie("TRACKING", "x")] });
 		await expect(pulled).rejects.toThrow(/timed out/);
+	});
+
+	it("drops the socket on a second hello rather than orphaning the first registration", async () => {
+		const peer = client(server.config.pipe);
+		sockets.push(peer.socket);
+		await peer.ready();
+		peer.send({ v: 1, token: server.config.token, origin: ORIGIN });
+		peer.send({ type: "hello", installId: INSTALL_ID, browser: "Google Chrome", signedIn: true, cookies: [cookie()] });
+		await vi_poll(() => server.connections().length === 1);
+		peer.send({
+			type: "hello",
+			installId: "abcdef12-1234-4123-8123-1234567890ab",
+			browser: "Brave",
+			signedIn: true,
+			cookies: [cookie()],
+		});
+		await vi_poll(() => server.connections().length === 0);
+		expect(server.connections()).toHaveLength(0);
 	});
 });
 

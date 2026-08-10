@@ -65,6 +65,8 @@ function main() {
 	socket.on("error", () => process.exit(0));
 	socket.on("close", () => process.exit(0));
 	socket.setEncoding("utf8");
+	// The browser is gone: an EPIPE on the write back is a clean exit rather than an uncaught throw.
+	process.stdout.on("error", () => process.exit(0));
 
 	socket.on("connect", () => {
 		socket.write(`${JSON.stringify({ v: 1, token: config.token, origin })}\n`);
@@ -75,6 +77,7 @@ function main() {
 	let pending = "";
 	socket.on("data", (text) => {
 		pending += text;
+		if (pending.length > MAX_FRAME) process.exit(1);
 		let index;
 		while ((index = pending.indexOf("\n")) !== -1) {
 			const line = pending.slice(0, index);
@@ -107,4 +110,12 @@ function main() {
 
 module.exports = { frame, reader };
 
-if (require.main === module) main();
+// A missing, truncated (the app mid-write) or older-schema config throws in the synchronous setup, and
+// a stack trace on stderr carries the config path into Chrome's own log. Exit quietly instead.
+if (require.main === module) {
+	try {
+		main();
+	} catch {
+		process.exit(1);
+	}
+}

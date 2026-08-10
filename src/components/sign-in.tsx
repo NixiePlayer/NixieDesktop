@@ -196,7 +196,10 @@ export function SignInView({ onSignedIn }: { onSignedIn: (auth: AuthState) => vo
 	// Read once and follow the pushes, since the reader installs the extension with this screen open.
 	useEffect(() => {
 		if (!window.nixie) return;
-		void window.nixie.auth.extensionSources().then(setSources).catch(undefined);
+		void window.nixie.auth
+			.extensionSources()
+			.then(setSources)
+			.catch(() => undefined);
 		return window.nixie.auth.onExtensionSources(setSources);
 	}, []);
 
