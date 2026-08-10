@@ -160,7 +160,7 @@ function TopBar({
 	const router = useRouter();
 
 	return (
-		<header className="drag-region window-controls-inset border-border col-span-3 flex items-center gap-2 border-b px-3">
+		<header className="drag-region window-controls-inset border-border col-span-3 flex items-center gap-2 border-b">
 			{/* macOS overlays its traffic lights on the hiddenInset title bar, outside the page, so they
 			    cannot be measured from here and the padding is fixed. Windows and Linux draw the controls
 			    into the page, and window-controls-inset clears them from whichever edge they sit on. */}

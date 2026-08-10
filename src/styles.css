@@ -223,8 +223,12 @@ textarea:focus-visible {
    page-level scrollbar, so there is nothing to subtract, and a percentage would resolve against the
    containing block instead of the window. */
 .window-controls-inset {
-	padding-inline-start: env(titlebar-area-x, 0px);
-	padding-inline-end: calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw));
+	/* The 0.75rem is the top bar's own padding, which this replaces rather than adds to: the class is
+	   unlayered so it wins over a `px-*` utility, and a physical and a logical longhand resolve to one
+	   property. Baking it in is what keeps the bar's padding on macOS, where the env vars are undefined
+	   and fall back to 0, so the header does not lose its inset on the one platform this must not touch. */
+	padding-inline-start: calc(0.75rem + env(titlebar-area-x, 0px));
+	padding-inline-end: calc(0.75rem + 100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw));
 }
 
 .drag-region button,
