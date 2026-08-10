@@ -12,11 +12,17 @@ concurrency:
 
 jobs:
   check:
-    # Ubuntu rather than the macos-15 the release runs on: no test here touches
-    # `process.platform`, the Keychain or `mdfind`, and `scripts/dev-app-name.mjs` is a
-    # no-op off macOS, so `pnpm check` passes on Linux at a fraction of the runner cost.
-    # Anything that starts depending on macOS moves this to `macos-15`.
-    runs-on: ubuntu-latest
+    # Ubuntu is the cheap default and still the only place the whole check has to pass: no test here
+    # touches `process.platform`, the Keychain or `mdfind`, and `scripts/dev-app-name.mjs` is a no-op
+    # off macOS. Windows is here because the release now builds there too, and `scripts/licenses.mjs`
+    # shells out to pnpm, which is a `.cmd` on Windows: a break in it takes `pnpm build` down with it,
+    # and this is where that is caught on a pull request rather than at tag time. macOS stays absent;
+    # anything that starts depending on it moves this to `macos-15`.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
