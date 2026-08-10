@@ -69,6 +69,10 @@ administrator, and updates install themselves the same way they do everywhere el
 **Linux.** An AppImage is a single file. Mark it executable with `chmod +x` and run it. It
 carries a static runtime, so it needs no `libfuse2` on Ubuntu 24.04 and later. Updating
 itself only works when it is run as the AppImage, which is the ordinary way to run it.
+Sign-in reads browsers installed the traditional way, under `~/.config` (or
+`$XDG_CONFIG_HOME`) and `~/.mozilla`. A browser installed as a snap or a flatpak keeps its
+profile elsewhere and is not found yet, so on a stock Ubuntu, whose Firefox and Chromium are
+snaps, install a browser from its own repository or use the extension.
 
 Windows Chrome and Edge need one extra step to sign in, because of how they encrypt their
 cookies. [docs/extension.md](docs/extension.md) covers it, and
