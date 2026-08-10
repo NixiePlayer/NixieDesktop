@@ -260,6 +260,9 @@ export function MediaCard({
 				</EntityLink>
 				<span className="text-muted-foreground line-clamp-1 text-xs">
 					{artists?.length ? <ArtistLinks artists={artists} /> : entitySubtitle(item)}
+					{/* A release states its year where upstream gave one. An artist page's own shelves name
+					    no artist at all (the page is the artist), so that line was empty there. */}
+					{isAlbum(item) && item.year && (artists?.length ? ` • ${item.year}` : item.year)}
 				</span>
 			</div>
 		</EntityContextMenu>

@@ -1192,7 +1192,16 @@ export function extractEntities(
 				return;
 			}
 			case "album": {
-				const album: Album = { id, title, artists, artworkUrl: artwork, explicit: explicitFrom(node) || undefined };
+				// Upstream states the year as the last subtitle run of a release card, and only where the
+				// row names no artist, which is exactly an artist page's own "Albums" and "Singles" shelves.
+				const album: Album = {
+					id,
+					title,
+					artists,
+					year: firstString(node, "year"),
+					artworkUrl: artwork,
+					explicit: explicitFrom(node) || undefined,
+				};
 				items.push(album);
 				return;
 			}
