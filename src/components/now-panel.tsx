@@ -144,6 +144,8 @@ function ContextLink({ context }: { context: QueueContext }) {
 		<Link
 			to={context.type === "album" ? "/album/$id" : "/playlist/$id"}
 			params={{ id: context.id }}
+			// The queue's source, not a row in it: neither page has a track to mark or a filter to open.
+			search={{ track: undefined, find: undefined }}
 			className="text-foreground hover:underline"
 		>
 			{context.title}

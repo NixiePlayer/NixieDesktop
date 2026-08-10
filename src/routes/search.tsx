@@ -270,7 +270,7 @@ function TopResult({
 		"group/open focus-visible:ring-ring/50 flex min-w-0 flex-1 items-center self-stretch rounded-xl focus-visible:ring-3 focus-visible:outline-none";
 	const linkedInfo = track ? (
 		releaseId ? (
-			<Link to="/album/$id" params={{ id: releaseId }} className={linkClass}>
+			<Link to="/album/$id" params={{ id: releaseId }} search={{ track: track.id }} className={linkClass}>
 				{info}
 			</Link>
 		) : (

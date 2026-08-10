@@ -143,7 +143,15 @@ export function TrackLink({
 	// had landed anywhere else on the row.
 	if (!id || matchRoute({ to: "/album/$id", params: { id } })) return <span className={className}>{children}</span>;
 	return (
-		<Link to="/album/$id" params={{ id }} className={className} onClick={(event) => event.stopPropagation()}>
+		<Link
+			to="/album/$id"
+			params={{ id }}
+			// The song that was clicked, so the release opens with that row marked rather than leaving the
+			// reader to find it among twenty.
+			search={{ track: track.id }}
+			className={className}
+			onClick={(event) => event.stopPropagation()}
+		>
 			{children}
 		</Link>
 	);
@@ -221,7 +229,9 @@ export function MediaCard({
 	);
 	const artwork = (
 		<div className="relative">
-			{isTrack(item) ? image : <EntityLink item={item}>{image}</EntityLink>}
+			{/* The cover opens what the card names, a song included: only the play button over it starts
+			    anything. `EntityLink` renders plain for a song upstream named no release for. */}
+			<EntityLink item={item}>{image}</EntityLink>
 			{isTrack(item) && (
 				<Button
 					size="icon"
@@ -792,6 +802,7 @@ export function TrackRow({
 	showAlbum = true,
 	showPlays = false,
 	showRating = false,
+	marked = false,
 	action,
 }: {
 	track: Track;
@@ -802,6 +813,8 @@ export function TrackRow({
 	/** Whole-list, not per-row: a column only some rows reserve is a column that lands nowhere. */
 	showPlays?: boolean;
 	showRating?: boolean;
+	/** The row the reader asked for on the way in. The hover fill, held, since it says the same thing. */
+	marked?: boolean;
 	/** Menu items only this row's owner can offer, appended to the shared menu below. */
 	action?: React.ReactNode;
 }) {
@@ -811,6 +824,16 @@ export function TrackRow({
 	const current = playback.currentTrack?.id === track.id;
 	// Paused, idle after the queue ran out, or failed: the row offers play back on hover.
 	const running = playback.status === "playing" || playback.status === "loading";
+	const row = useRef<HTMLDivElement>(null);
+
+	// A release runs longer than the window, so the marked row is often below the fold and a highlight
+	// nobody can see is no indication at all. `nearest` is what makes this cost nothing when the row
+	// already shows, and the scroll margin keeps it off the bottom edge when it does not. A passive
+	// effect is deliberate: the router scrolls the page to the top from a layout effect, and every one
+	// of those runs before any of these, so this lands after it rather than under it.
+	useEffect(() => {
+		if (marked) row.current?.scrollIntoView({ block: "nearest" });
+	}, [marked]);
 
 	return (
 		<EntityContextMenu
@@ -818,7 +841,11 @@ export function TrackRow({
 			extra={action}
 			render={
 				<div
-					className="group/row hover:bg-accent grid cursor-pointer items-center gap-4 rounded-lg px-2 py-1.5"
+					ref={row}
+					className={cn(
+						"group/row hover:bg-accent grid cursor-pointer items-center gap-4 rounded-lg px-2 py-1.5",
+						marked && "bg-accent scroll-mb-24"
+					)}
 					style={trackColumns(columns)}
 					// The row plays, like every mixed row in the app. The artist links and the menu inside it
 					// stop the click, and the play button in the index column is the keyboard path.
@@ -897,6 +924,7 @@ export function TrackList({
 	context,
 	showAlbum = true,
 	headers = false,
+	marked,
 	renderAction,
 }: {
 	tracks: Track[];
@@ -904,6 +932,8 @@ export function TrackList({
 	showAlbum?: boolean;
 	/** A page whose rows are the page. A shelf of five stays a shelf and names no columns. */
 	headers?: boolean;
+	/** The track the reader followed a link to get here, if any. */
+	marked?: string;
 	/** Menu items only this list's owner can offer, by row: a playlist reorders and removes. */
 	renderAction?: (index: number) => React.ReactNode;
 }) {
@@ -926,6 +956,7 @@ export function TrackList({
 					showAlbum={columns.album}
 					showPlays={columns.plays}
 					showRating={columns.rating}
+					marked={marked === track.id}
 					action={renderAction?.(index)}
 				/>
 			))}

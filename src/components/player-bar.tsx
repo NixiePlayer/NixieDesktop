@@ -121,7 +121,7 @@ function TrackLinks({ track }: { track: Track }) {
 			{track.album && (
 				<>
 					{track.artists.length > 0 && " • "}
-					<Link to="/album/$id" params={{ id: track.album.id }} className={linkClass}>
+					<Link to="/album/$id" params={{ id: track.album.id }} search={{ track: track.id }} className={linkClass}>
 						{track.album.title}
 					</Link>
 				</>

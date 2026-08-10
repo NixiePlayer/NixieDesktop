@@ -380,7 +380,7 @@ function MenuItems({
 				    portaled, so it is nobody's descendant. Both are omitted when upstream named a
 				    release or an artist without identifying one, which leaves nowhere to go. */}
 				{albumId && (
-					<DropdownMenuItem render={<Link to="/album/$id" params={{ id: albumId }} />}>
+					<DropdownMenuItem render={<Link to="/album/$id" params={{ id: albumId }} search={{ track: track?.id }} />}>
 						<Disc3 />
 						Go to album
 					</DropdownMenuItem>

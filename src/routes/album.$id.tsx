@@ -9,12 +9,16 @@ import { usePlayer } from "#/player";
 import { isAlbum, toTracks } from "#/shared/entities";
 
 export const Route = createFileRoute("/album/$id")({
+	// The song a link named on the way in, marked in the list below. It decides nothing the loader
+	// fetches, so it is no `loaderDep`.
+	validateSearch: (search) => ({ track: typeof search.track === "string" ? search.track : undefined }),
 	loader: ({ params }) => queryMusic({ type: "album", id: params.id }),
 	component: AlbumPage,
 });
 
 function AlbumPage() {
 	const { id } = Route.useParams();
+	const { track: marked } = Route.useSearch();
 	const { items } = Route.useLoaderData();
 	const engine = usePlayer();
 	const tracks = toTracks(items);
@@ -60,7 +64,7 @@ function AlbumPage() {
 			/>
 			{/* No footer under the rows: YouTube sends no © or ℗ line for a release, only the year the
 			    header already carries. */}
-			<TrackList tracks={tracks} context={context} showAlbum={false} headers />
+			<TrackList tracks={tracks} context={context} showAlbum={false} headers marked={marked} />
 		</div>
 	);
 }

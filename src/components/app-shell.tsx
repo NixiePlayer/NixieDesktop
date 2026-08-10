@@ -333,7 +333,7 @@ function SearchField({ inputRef }: { inputRef: React.RefObject<HTMLInputElement 
 		if (isPlaylistItem(item) || isTrack(item)) {
 			const track = isPlaylistItem(item) ? item.track : item;
 			const id = trackAlbumId(track);
-			if (id) void navigate({ to: "/album/$id", params: { id } });
+			if (id) void navigate({ to: "/album/$id", params: { id }, search: { track: track.id } });
 			return;
 		}
 		void navigate({ to: entityRoute(item), params: { id: item.id } });
