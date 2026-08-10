@@ -541,9 +541,19 @@ function registerIpc() {
 
 	handle("update:state", () => updateState);
 	handle("update:check", () => checkForUpdates());
-	// Quitting runs the `before-quit` handler below, which saves the session before the installer
-	// takes over and relaunches the app.
-	handle("update:install", () => autoUpdater.quitAndInstall());
+	// `quitAndInstall` closes every window first and only calls `app.quit()` once they are all gone,
+	// which is the reverse of every other quit here: `before-quit` has not run, so `quitting` is still
+	// false when the window's `close` handler sees it, and the window is hidden rather than destroyed.
+	// The app then never quits and the installer never runs, which reads as the button doing nothing.
+	// So the quit is declared here, and the session saved here too: `before-quit` refuses the first
+	// quit to save, and the one Electron raises for the installer must not be refused.
+	handle("update:install", async () => {
+		quitting = true;
+		// ponytail: a save that fails must not hold back an update that is already downloaded.
+		await stateStore.save(stateStore.snapshot).catch(() => {});
+		stateSavedBeforeQuit = true;
+		autoUpdater.quitAndInstall();
+	});
 
 	handle("app:info", () => ({
 		version: app.getVersion(),
