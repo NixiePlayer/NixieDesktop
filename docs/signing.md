@@ -1,8 +1,8 @@
 # Signing and notarizing Nixie for macOS
 
 This is the macOS half of the release. Notarization, stapling, Gatekeeper and the Developer ID
-certificate are Apple's alone, and every command here needs a Mac to run on. Windows and Linux
-artifacts are signed their own way and are not covered by this document.
+certificate are Apple's alone, and every command here needs a Mac to run on. Windows and Linux ship
+unsigned today, which the last section covers.
 
 Everything below assumes the repository as it stands: there is no `mac.identity` in the build
 config and no entitlements file, because electron-builder finds the certificate in your keychain by
@@ -136,7 +136,7 @@ then is the fast path.
 ## 4. Local builds that skip all of it
 
 ```sh
-pnpm package
+pnpm package:mac
 ```
 
 builds an ad-hoc signed app directory and never contacts Apple, even with the credentials sitting in
@@ -181,12 +181,15 @@ its own.
    and the version stays the one nobody has seen. After the push it is a fact, and the only way out
    of a bad release is the next one.
 
-No token has to be created for the publish itself. `GH_TOKEN` in the build step is the
-`secrets.GITHUB_TOKEN` Actions mints for the run, and `permissions: contents: write` on the job is
-what lets it write a release. electron-builder infers the GitHub provider from the `repository`
-field in `package.json`, uploads the DMGs, the ZIPs and the `latest-mac.yml` the installed app
-reads for updates, and leaves the release a draft until the step after it attaches the generated
-notes and publishes it.
+No token has to be created for the publish itself. `GH_TOKEN` is the `secrets.GITHUB_TOKEN` Actions
+mints for the run, set once at the workflow level, and `permissions: contents: write` beside it is
+what lets the run write a release. The Windows and Linux jobs need none of the secrets above, and
+the Windows one is deliberately not given `CSC_LINK`. Every build step runs `--publish never` and a
+`gh release upload` step attaches its own artifacts afterwards, into the draft the `prepare` job
+created: electron-builder must not do the publishing, since it runs a publisher per architecture and
+a draft is not keyed to its tag, which is what produced two drafts for one tag in v0.1.1. The
+release stays a draft, invisible to every installed copy, until the final job attaches the generated
+notes and publishes it in one move.
 
 ## Certificate maintenance
 
@@ -230,3 +233,43 @@ password all survive a renewal. Export the new certificate for CI as in step 5 a
 `CSC_LINK`, plus `CSC_KEY_PASSWORD` if the new `.p12` takes a different password. Renew a few weeks
 early rather than on the day, since certificates overlap happily and the alternative is doing this
 under pressure with a release waiting.
+
+## Windows and Linux: unsigned, on purpose
+
+Neither platform is signed, and `pnpm package:win`, `pnpm package:linux` and the two release jobs
+need no credentials at all. The Windows job deliberately sets no `CSC_LINK` either: the secret holds
+a macOS Developer ID certificate, and electron-builder picking it up there fails the build rather
+than producing anything useful.
+
+Linux costs nothing for it. An AppImage carries no signature anybody checks, and nothing on a Linux
+desktop refuses one for the lack of it.
+
+Windows costs one warning. SmartScreen shows the blue "Windows protected your PC" box on a first
+download and the reader has to choose **More info** and then **Run anyway**. That is Microsoft
+reporting an absence of reputation rather than a finding about the file, and reputation accrues per
+build as installs happen, which means every new version starts most of the way back at the
+beginning. The updater is unaffected: electron-updater verifies a signature only when the build
+declares a `publisherName`, and an unsigned build declares none, so an installed copy updates itself
+exactly as a macOS one does.
+
+Adopting Windows signing is three things, in this order:
+
+1. **A certificate.** An OV code signing certificate is issued to a verified organisation and is the
+   cheaper option; an EV certificate is the one that starts with SmartScreen reputation rather than
+   earning it, costs more, and since June 2023 has to live on a FIPS 140-2 Level 2 token or in a
+   cloud HSM, which a GitHub Actions runner cannot hold. In practice that means a signing service
+   (Azure Trusted Signing, SignPath, DigiCert KeyLocker) rather than a `.p12` in a secret.
+2. **`WIN_CSC_LINK` and `WIN_CSC_KEY_PASSWORD`** on the Windows release job, which is how
+   electron-builder reaches a `.pfx` the way `CSC_LINK` reaches a `.p12`. They are named apart from
+   the macOS pair precisely so one platform's certificate never reaches the other's build. A signing
+   service is configured instead through `win.signtoolOptions`, or a custom `sign` hook.
+3. **Knowing what changes for installed copies.** A signed build declares a `publisherName`, and
+   from that release on electron-updater starts verifying it against every update it downloads. A
+   later release signed under a different name, or an unsigned one, is then refused as an update,
+   which strands installs with no remote fix. So this is a one-way door: take it with a certificate
+   that will be renewed under the same subject, exactly as the macOS certificate has to be renewed
+   under the same team.
+
+`scripts/staple.mjs` already returns early unless the platform is `darwin` rather than relying on
+electron-builder not calling it, so adding Windows signing does not accidentally send a `.exe` to
+`xcrun stapler`.
