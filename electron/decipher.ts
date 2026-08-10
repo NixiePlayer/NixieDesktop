@@ -17,8 +17,11 @@ export function configureRestrictedEvaluator() {
 // Windows machine (Defender's first touch of the binary, a cold page cache) the spawn alone can eat
 // most of a single budget. When it did, the whole app refused to start behind verifyRestrictedEvaluator,
 // naming a timeout rather than the wait it actually was. The evaluate timer is armed only once the
-// child has spawned, so the two never share a clock.
-const SPAWN_TIMEOUT_MS = 10_000;
+// child has spawned, so the two never share a clock. Development gets a longer spawn budget: the first
+// `pnpm dev` after a clone downloads the Electron binary and runs the Vite optimizer while this fork
+// races them, which starved it past 10 s. A packaged build never downloads Electron, so 10 s there is a
+// real failure rather than contention.
+const SPAWN_TIMEOUT_MS = process.env.VITE_DEV_SERVER_URL ? 30_000 : 10_000;
 const EVALUATE_TIMEOUT_MS = 1500;
 
 export async function evaluateRestricted(data: ScriptData, environment: Record<string, Primitive>) {

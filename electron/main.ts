@@ -780,6 +780,13 @@ async function createWindow() {
 		...(process.platform === "darwin"
 			? {}
 			: { titleBarOverlay: { ...(dark ? TITLE_BAR.dark : TITLE_BAR.light), height: TITLE_BAR.height } }),
+		// The window and taskbar icon. A packaged build carries it in the executable itself, and macOS
+		// draws its dock icon through `app.dock.setIcon`, so this is the development window on Windows and
+		// Linux, which would otherwise wear the stock Electron mark. `scripts/dev-app-name.mjs` is the
+		// macOS counterpart and is a no-op off it.
+		...(process.env.VITE_DEV_SERVER_URL && process.platform !== "darwin"
+			? { icon: join(app.getAppPath(), "build", "icon-dev.png") }
+			: {}),
 		backgroundColor: dark ? "#0f0f0f" : "#ffffff",
 		webPreferences: {
 			preload: join(import.meta.dirname, "../preload/preload.mjs"),
