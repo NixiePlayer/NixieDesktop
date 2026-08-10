@@ -106,6 +106,14 @@ app.setAppUserModelId("com.theedoran.nixiedesktop");
 // never protected, two `pnpm dev` runs sharing the dev channel's single userData.
 if (!app.requestSingleInstanceLock()) app.exit(0);
 
+// macOS draws overlay scrollbars: they float over the content, take no layout width and fade out when
+// nothing is scrolling, which is what every page in this app is laid out against. Windows and Linux
+// draw a classic gutter instead, always visible and eating width, which is a different app in the same
+// window. Chromium has the macOS behaviour on those two behind a feature of its own, so it is asked for
+// rather than approximated in CSS: a `::-webkit-scrollbar` rule can only restyle the gutter, never take
+// its space back or make it fade. It must be set before the app is ready.
+if (process.platform !== "darwin") app.commandLine.appendSwitch("enable-features", "OverlayScrollbar");
+
 // `release()` is a kernel version and says nothing about which system it came from, so the diagnostics
 // line names the platform itself. An unrecognised one prints its own `process.platform`, which is the
 // only honest thing left to say about it.

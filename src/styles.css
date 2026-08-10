@@ -241,35 +241,10 @@ textarea:focus-visible {
 	-webkit-app-region: no-drag;
 }
 
-/* macOS draws thin overlay scrollbars that take no layout space and fade when idle, which is the look
-   the app was designed against. Windows and Linux draw a classic, always-on bar that eats layout width
-   and reads as heavy against this chrome, so they get a thin floating thumb over a transparent track to
-   match. macOS is left untouched (`data-platform="darwin"` excluded) so its native overlay stays. The
-   thumb is inset with a transparent border clipped to the content box, which is what makes it read as a
-   floating pill rather than a filled gutter. */
-:root:not([data-platform="darwin"]) *::-webkit-scrollbar {
-	width: 10px;
-	height: 10px;
-}
-
-:root:not([data-platform="darwin"]) *::-webkit-scrollbar-track {
-	background: transparent;
-}
-
-:root:not([data-platform="darwin"]) *::-webkit-scrollbar-thumb {
-	background-color: color-mix(in oklab, var(--foreground) 20%, transparent);
-	background-clip: content-box;
-	border: 3px solid transparent;
-	border-radius: 9999px;
-}
-
-:root:not([data-platform="darwin"]) *::-webkit-scrollbar-thumb:hover {
-	background-color: color-mix(in oklab, var(--foreground) 35%, transparent);
-}
-
-:root:not([data-platform="darwin"]) *::-webkit-scrollbar-corner {
-	background: transparent;
-}
+/* Nothing here styles a scrollbar on purpose. macOS draws overlay scrollbars natively, and Windows and
+   Linux are asked for the same thing through Chromium's own `OverlayScrollbar` feature in
+   `electron/main.ts`. A `::-webkit-scrollbar` rule would undo that: styling the pseudo-element opts the
+   page back into a classic gutter, which is the layout width and the always-on bar this is avoiding. */
 
 /* Now-playing indicator: three bars whose heights encode nothing but "audio is running". */
 @keyframes equalizer {
