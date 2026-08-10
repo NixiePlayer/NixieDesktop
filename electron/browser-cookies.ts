@@ -1,11 +1,12 @@
 import { execFile } from "node:child_process";
-import { createDecipheriv, createHash, pbkdf2Sync, randomBytes } from "node:crypto";
-import { access, copyFile, readdir, readFile, rm } from "node:fs/promises";
+import { createDecipheriv, createHash, pbkdf2Sync } from "node:crypto";
+import { access, copyFile, mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { promisify } from "node:util";
 import type { BrowserAccount } from "../src/shared/contracts";
+import type { SessionCookie } from "../src/shared/youtube-cookies";
 
 const execFileAsync = promisify(execFile);
 
@@ -98,15 +99,9 @@ interface ProfileLocation extends BrowserAccount {
 	chromium?: ChromiumBrowser;
 }
 
-export interface ImportedCookie {
-	name: string;
-	value: string;
-	domain: string;
-	path: string;
-	secure: boolean;
-	httpOnly: boolean;
-	expirationDate?: number;
-}
+// One cookie shape across the app. The disk read here and the extension pull both produce it, and
+// `writeCookies` takes it, so it lives once in `src/shared` rather than being restated per producer.
+export type ImportedCookie = SessionCookie;
 
 interface ChromiumRow {
 	host_key: string;
@@ -139,7 +134,9 @@ function chromiumRoot(browser: ChromiumBrowser) {
 	if (process.platform === "darwin")
 		return join(homedir(), "Library", "Application Support", ...browser.mac.split("/"));
 	if (process.platform === "win32") return join(process.env.LOCALAPPDATA ?? homedir(), ...browser.win.split("/"));
-	return join(homedir(), ".config", ...browser.linux.split("/"));
+	// XDG_CONFIG_HOME rather than a hard-coded `.config`, to match native-host-register: a reader who
+	// sets it would otherwise get a registered host and an empty profile list.
+	return join(process.env.XDG_CONFIG_HOME || join(homedir(), ".config"), ...browser.linux.split("/"));
 }
 
 function firefoxRoot() {
@@ -234,7 +231,12 @@ async function locateProfiles(): Promise<ProfileLocation[]> {
 
 /** The browser keeps its store locked while running, so every read happens against a throwaway copy. */
 async function withCookieDatabase<T>(path: string, read: (database: DatabaseSync) => T) {
-	const copy = join(tmpdir(), `nixie-cookies-${randomBytes(8).toString("hex")}`);
+	// mkdtemp rather than a named file in the temp root: Firefox stores its cookie values in the clear,
+	// and on Linux the temp root is `/tmp`, shared by every user. mkdtemp creates a 0700 directory, so
+	// the copy inside it is unreadable to anyone else even though the temp root is listable. macOS and
+	// Windows have a per-user temp directory, but the directory is the honest fix on all three.
+	const dir = await mkdtemp(join(tmpdir(), "nixie-cookies-"));
+	const copy = join(dir, "db");
 	await copyFile(path, copy);
 	// Recent writes can still be sitting in the write-ahead log.
 	await copyFile(`${path}-wal`, `${copy}-wal`).catch(() => undefined);
@@ -243,8 +245,7 @@ async function withCookieDatabase<T>(path: string, read: (database: DatabaseSync
 		return read(database);
 	} finally {
 		database.close();
-		await rm(copy, { force: true });
-		await rm(`${copy}-wal`, { force: true });
+		await rm(dir, { recursive: true, force: true });
 	}
 }
 
@@ -293,6 +294,10 @@ export function decryptGcm(encrypted: Uint8Array, key: Buffer, hostKey: string) 
 	// it has to be listed as unreadable rather than attempted. The message is what says which it was.
 	if (scheme === APP_BOUND_SCHEME) throw new Error("App-bound encryption is not supported");
 	if (scheme !== "v10") throw new Error("Unsupported cookie encryption");
+	// A buffer shorter than the prefix, nonce and tag has no ciphertext, and slicing it would hand an
+	// empty body and a short tag to the cipher. The per-row caller already swallows a throw, but this is
+	// exported and unit tested on its own.
+	if (buffer.length < 3 + GCM_NONCE_LENGTH + GCM_TAG_LENGTH) throw new Error("Cookie value too short");
 	const nonce = buffer.subarray(3, 3 + GCM_NONCE_LENGTH);
 	const body = buffer.subarray(3 + GCM_NONCE_LENGTH, buffer.length - GCM_TAG_LENGTH);
 	const decipher = createDecipheriv("aes-256-gcm", key, nonce);
@@ -351,16 +356,26 @@ async function secretToolPassword(secret: string) {
 /**
  * DPAPI has no interface outside the Win32 API: no command of its own, and unwrapping in process
  * would need a native module. PowerShell is on every Windows install and reaches .NET, so it is
- * spawned for this and for nothing else. The wrapped key is a trailing argument of the script block
- * rather than text inside it, which is what keeps it out of the parser; base64 carries no quote,
- * no space and no backtick, so there is nothing there to escape either way.
+ * spawned for this and for nothing else. `-Command` concatenates its remaining arguments into one
+ * command string and reparses it, so the wrapped key is safe not because it stays out of the parser
+ * but because it is re-encoded base64 (`A-Za-z0-9+/=`), none of which is a metacharacter where it
+ * lands after the script block. It is passed as a trailing argument rather than interpolated so a
+ * future edit cannot turn it into code.
  */
 const DPAPI_SCRIPT =
 	"& { Add-Type -AssemblyName System.Security; [Convert]::ToBase64String(" +
 	"[System.Security.Cryptography.ProtectedData]::Unprotect([Convert]::FromBase64String($args[0]), $null, 'CurrentUser')) }";
 
+// The absolute path, never the bare name: the app installs per user into a writable directory that is
+// also the process working directory, and libuv searches the working directory before PATH on Windows,
+// so a planted `powershell.exe` beside the app would otherwise run with the app's identity and be
+// handed the wrapped key. macOS uses `/usr/bin/security` for the same reason.
+function windowsSystem32(exe: string) {
+	return join(process.env.SystemRoot ?? "C:\\Windows", "System32", exe);
+}
+
 async function dpapiUnprotect(wrapped: Buffer) {
-	const { stdout } = await execFileAsync("powershell.exe", [
+	const { stdout } = await execFileAsync(windowsSystem32("WindowsPowerShell\\v1.0\\powershell.exe"), [
 		"-NoProfile",
 		"-NonInteractive",
 		"-Command",
@@ -369,6 +384,7 @@ async function dpapiUnprotect(wrapped: Buffer) {
 	]);
 	const key = Buffer.from(stdout.trim(), "base64");
 	// A refusal comes back as an empty stdout rather than a non-zero exit, so the length is the check.
+	// Constrained Language Mode (WDAC, AppLocker) blocks Add-Type, which is one way this arrives empty.
 	if (key.length !== 32) throw new Error("Unusable cookie encryption key");
 	return key;
 }

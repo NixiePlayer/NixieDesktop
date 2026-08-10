@@ -49,9 +49,11 @@ export const YOUTUBE_COOKIE_NAMES = new Set([
 
 const MAX_COOKIES = 32;
 const MAX_VALUE_LENGTH = 4096;
-// A cookie value ends up verbatim in a request header, so a control character in one is not a value
-// to clean, it is a payload to refuse: printable ASCII and nothing else.
-const VALUE = /^[!-~]+$/;
+// RFC 6265 cookie-octet: printable ASCII without space, and without the four characters that would let
+// a value carry structure into the store (`"`, `,`, `;`, `\`). The value goes into Chromium's own
+// cookie store through `cookies.set`, which reparses it, so this refuses ahead of that what a `;` in a
+// value could otherwise smuggle: a second name the allowlist would have rejected.
+const VALUE = /^[\x21\x23-\x2b\x2d-\x3a\x3c-\x5b\x5d-\x7e]+$/;
 
 function valid(cookie: unknown): cookie is SessionCookie {
 	if (typeof cookie !== "object" || cookie === null) return false;

@@ -93,6 +93,12 @@ describe("decryptGcm", () => {
 	it("refuses a value whose tag does not match the key", () => {
 		expect(() => decryptGcm(encryptGcm("secret-value", gcmKey), randomBytes(32), ".youtube.com")).toThrow();
 	});
+
+	it("refuses a value too short to hold a nonce and a tag", () => {
+		expect(() => decryptGcm(Buffer.concat([Buffer.from("v10"), randomBytes(8)]), gcmKey, ".youtube.com")).toThrow(
+			/too short/
+		);
+	});
 });
 
 describe("stripDomainHash", () => {
