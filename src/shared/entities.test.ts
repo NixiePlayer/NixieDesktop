@@ -134,6 +134,19 @@ describe("home feed", () => {
 		expect(homeShelves({ items: [], sections: [shelf, { title: "Empty", items: [] }] }, true)).toEqual([shelf]);
 	});
 
+	it("leads with the shelves worth opening on, and leaves the rest where upstream put them", () => {
+		const titles = ["Forgotten favourites", "Listen again", "Albums for you", "New releases", "Quick picks", "Mixed"];
+		const page = { items: [], sections: titles.map((title) => ({ title, items: [track] })) };
+		expect(homeShelves(page, true).map((section) => section.title)).toEqual([
+			"Quick picks",
+			"New releases",
+			"Listen again",
+			"Albums for you",
+			"Forgotten favourites",
+			"Mixed",
+		]);
+	});
+
 	it("synthesises shelves by kind only for a first page", () => {
 		const flat = { items: [track, album, artist, playlist] };
 		expect(homeShelves(flat, true).map((section) => section.title)).toEqual([

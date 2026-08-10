@@ -169,6 +169,21 @@ export function entityKind(item: MusicEntity): string {
 }
 
 /**
+ * The shelves worth opening a feed on, in the order they are wanted. Upstream reorders home between
+ * fetches, so these are pinned to the top and everything else keeps the order it arrived in.
+ *
+ * Matched on the title's opening words, which upstream localises: a feed in another language matches
+ * none of them and keeps upstream's own order, which is the honest fallback.
+ */
+const LEAD_SHELVES = ["quick picks", "new releases", "trending", "listen again", "albums for you"];
+
+function shelfRank(title: string): number {
+	const name = title.toLowerCase();
+	const index = LEAD_SHELVES.findIndex((lead) => name.startsWith(lead));
+	return index === -1 ? LEAD_SHELVES.length : index;
+}
+
+/**
  * A home page's shelves. Upstream states them, and the four kind shelves are the fallback for a feed
  * that came back flat.
  *
@@ -185,7 +200,8 @@ export function homeShelves(page: Page<MusicEntity>, allowFallback: boolean): Mu
 					{ title: "Artists", items: page.items.filter(isArtist) },
 					{ title: "Playlists", items: page.items.filter(isPlaylist) },
 				];
-	return sections.filter((section) => section.items.length);
+	// Sorting is stable, so a shelf none of the lead titles names keeps the place upstream gave it.
+	return sections.filter((section) => section.items.length).sort((a, b) => shelfRank(a.title) - shelfRank(b.title));
 }
 
 /** The shelves a home feed has grown past its first page, and which feed they belong to. */
