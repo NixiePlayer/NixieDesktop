@@ -7,10 +7,16 @@ import type {
 	MusicCommand,
 	MusicQuery,
 	NixieBridge,
+	NixiePlatform,
 	PersistedState,
 	Track,
 	UpdateState,
 } from "../src/shared/contracts";
+
+// The sandboxed preload gets Electron's polyfilled `process`, which carries `platform`. Anything that
+// is not one of the two named platforms is treated as Linux, whose chrome the app draws.
+const platform: NixiePlatform =
+	process.platform === "darwin" || process.platform === "win32" ? process.platform : "linux";
 
 let mediaCommandListener: ((command: MediaCommand) => void) | undefined;
 const pendingMediaCommands: MediaCommand[] = [];
@@ -79,6 +85,7 @@ const bridge: NixieBridge = {
 	},
 	app: {
 		info: () => ipcRenderer.invoke("app:info"),
+		platform,
 	},
 	update: {
 		state: () => ipcRenderer.invoke("update:state"),

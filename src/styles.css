@@ -17,6 +17,15 @@
 	}
 }
 
+/* Window chrome is the one thing the app cannot draw the same way everywhere, so the platform is on
+   the document (`src/lib/platform.ts`) and a variant reaches it. macOS is the only one named: the
+   other two share a shape. Absent under Vitest and `vite preview`, where the attribute is `linux`. */
+@custom-variant mac {
+	&:where([data-platform="darwin"], [data-platform="darwin"] *) {
+		@slot;
+	}
+}
+
 @theme inline {
 	--font-sans: "Inter Variable", sans-serif;
 	--color-sidebar-ring: var(--sidebar-ring);
@@ -205,6 +214,17 @@ textarea:focus-visible {
 /* The frameless window is moved by dragging the top bar, so interactive children opt out. */
 .drag-region {
 	-webkit-app-region: drag;
+}
+
+/* Windows and Linux draw the window controls inside the page, over the top bar, so the bar ends where
+   they begin. The insets are read rather than assumed because a Linux window manager may put them on
+   the leading edge, and the fallbacks make the whole rule inert wherever no overlay is enabled (macOS,
+   and any preview with no window controls). 100vw, not 100%: the shell is a fixed grid with no
+   page-level scrollbar, so there is nothing to subtract, and a percentage would resolve against the
+   containing block instead of the window. */
+.window-controls-inset {
+	padding-inline-start: env(titlebar-area-x, 0px);
+	padding-inline-end: calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw));
 }
 
 .drag-region button,

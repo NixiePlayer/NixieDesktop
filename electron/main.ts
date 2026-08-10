@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { release } from "node:os";
-import { join, relative, resolve, sep } from "node:path";
+import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import {
@@ -88,6 +88,18 @@ app.setName(APP_NAME);
 // two Chromium processes is two writers on the same cookie and Local Storage databases. It is set
 // rather than left to Electron so the packaged path stays `Nixie` whatever the bundle is called.
 app.setPath("userData", join(app.getPath("appData"), APP_NAME));
+
+// Windows attributes a toast, a taskbar group and the media transport controls to this id, and draws
+// nothing at all when it does not match the Start Menu shortcut the installer writes, which carries the
+// appId. It is a no-op on macOS and Linux, so it is set unconditionally rather than guarded.
+app.setAppUserModelId("com.theedoran.nixiedesktop");
+
+// One instance per data path. macOS keeps a second launch off the bundle through LaunchServices, but
+// nothing does on Windows or Linux, where a second copy is a second writer on the state file, the log
+// and the auth partition. `exit` rather than `quit`: quitting is asynchronous and the startup chain
+// below would run in the process that is already leaving. This also fixes the one macOS path that was
+// never protected, two `pnpm dev` runs sharing the dev channel's single userData.
+if (!app.requestSingleInstanceLock()) app.exit(0);
 
 // `release()` is a kernel version and says nothing about which system it came from, so the diagnostics
 // line names the platform itself. An unrecognised one prints its own `process.platform`, which is the
@@ -370,7 +382,11 @@ const browserIcons = new Map<string, Promise<string | undefined>>();
 function browserIcon(browser: string) {
 	const cached = browserIcons.get(browser);
 	if (cached) return cached;
-	const bundleId = BROWSER_BUNDLE_IDS[browser];
+	// Spotlight is the whole lookup, so this is macOS and nothing else. Windows would want the browser's
+	// registered executable out of the registry and Linux its `.desktop` entry and icon theme, two more
+	// lookups for one 32px image; a row with no icon still names its account and still links it. This also
+	// stops spawning a missing `/usr/bin/mdfind` once per browser on every `auth:browsers` call.
+	const bundleId = process.platform === "darwin" ? BROWSER_BUNDLE_IDS[browser] : undefined;
 	const icon = bundleId
 		? execFileAsync("/usr/bin/mdfind", [`kMDItemCFBundleIdentifier == '${bundleId}'`])
 				.then(({ stdout }) => stdout.split("\n")[0]?.trim())
@@ -519,9 +535,12 @@ function registerIpc() {
 	handle("player:notify-refused", () => notificationsRefused);
 
 	handle("local:load", () => stateStore.snapshot);
-	handle("local:save", (_event, value) => {
+	handle("local:save", async (_event, value) => {
 		validateState(value);
-		return stateStore.save(value);
+		await stateStore.save(value);
+		// The stored theme decides the overlay's colours, and it is written through here, so this is where
+		// the window controls follow a theme change. A no-op on macOS.
+		syncTitleBarOverlay();
 	});
 	handle("local:clear", async (_event, selection) => {
 		if (!["session", "all"].includes(String(selection))) throw new TypeError("Invalid clear selection");
@@ -587,7 +606,10 @@ function registerAppProtocol() {
 		const pathname = url.pathname === "/" ? "index.html" : decodeURIComponent(url.pathname.slice(1));
 		const filePath = resolve(root, pathname);
 		const relativePath = relative(root, filePath);
-		if (!relativePath || relativePath.startsWith(`..${sep}`) || relativePath === "..") {
+		// `isAbsolute` is the Windows half of this test: `relative` returns the target itself when the two
+		// paths sit on different drives, so `nixie://app/C:/Windows/win.ini` produced a relative path that
+		// started with neither `..` nor the root and was served. Inert on macOS and Linux.
+		if (!relativePath || relativePath.startsWith(`..${sep}`) || relativePath === ".." || isAbsolute(relativePath)) {
 			return new Response("Bad request", { status: 400 });
 		}
 		const response = await net.fetch(pathToFileURL(filePath).toString());
@@ -600,6 +622,12 @@ function registerAppProtocol() {
 function installMenu() {
 	const send = (type: "play" | "pause" | "next" | "previous") =>
 		mainWindow?.webContents.send("player:media-command", { type });
+	// Off macOS every role in this template is either inert (hide, unhide) or already delivered by
+	// Chromium without a menu at all (copy, paste, select all), and what is left would be drawn as a
+	// menu bar inside a window whose whole point is that it has no chrome. The two playback accelerators
+	// move into the renderer (`app-shell.tsx`), which is also the only place that can tell a text field
+	// from the transport.
+	if (process.platform !== "darwin") return Menu.setApplicationMenu(null);
 	Menu.setApplicationMenu(
 		Menu.buildFromTemplate([
 			{
@@ -644,13 +672,34 @@ async function verifyRestrictedEvaluator() {
 	}
 }
 
+// Off macOS the window controls are drawn back into the page by the overlay, which Chromium paints
+// rather than the renderer, so it cannot read a CSS variable. `height` is the header row (`3.5rem` in
+// `app-shell.tsx`), and the two colour pairs are `--background`/`--foreground` from `src/styles.css`:
+// change one and change the other.
+const TITLE_BAR = {
+	height: 56,
+	dark: { color: "#0f0f0f", symbolColor: "#f1f1f1" },
+	light: { color: "#ffffff", symbolColor: "#0f0f0f" },
+};
+
+function darkAppearance() {
+	const theme = stateStore.snapshot.settings.theme;
+	return theme === "system" ? nativeTheme.shouldUseDarkColors : theme === "dark";
+}
+
+// Windows and Linux only: macOS draws its own traffic lights and has no overlay to restyle.
+function syncTitleBarOverlay() {
+	if (process.platform === "darwin" || !mainWindow || mainWindow.isDestroyed()) return;
+	const palette = darkAppearance() ? TITLE_BAR.dark : TITLE_BAR.light;
+	mainWindow.setTitleBarOverlay({ ...palette, height: TITLE_BAR.height });
+}
+
 async function createWindow() {
 	const saved = stateStore.snapshot.windowBounds;
 	// What the window is painted with until the renderer's first frame lands. It is the stored theme's
 	// own `--background` from `src/styles.css`, so a light window never opens on a dark rectangle: a
 	// colour fixed at one appearance is the flash the renderer's synchronous paint cannot reach.
-	const theme = stateStore.snapshot.settings.theme;
-	const dark = theme === "system" ? nativeTheme.shouldUseDarkColors : theme === "dark";
+	const dark = darkAppearance();
 	mainWindow = new BrowserWindow({
 		width: saved?.width ?? 1440,
 		height: saved?.height ?? 900,
@@ -659,7 +708,14 @@ async function createWindow() {
 		minWidth: 1040,
 		minHeight: 680,
 		show: false,
-		titleBarStyle: "hiddenInset",
+		// "hiddenInset" insets the traffic lights that the top bar's leading padding clears. Off macOS the
+		// title bar is hidden and the controls are drawn back into the page by the overlay, which keeps the
+		// native frame: `frame: false` would lose the resize borders, the maximize geometry and the snap
+		// layouts, and have to reimplement all three.
+		titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "hidden",
+		...(process.platform === "darwin"
+			? {}
+			: { titleBarOverlay: { ...(dark ? TITLE_BAR.dark : TITLE_BAR.light), height: TITLE_BAR.height } }),
 		backgroundColor: dark ? "#0f0f0f" : "#ffffff",
 		webPreferences: {
 			preload: join(import.meta.dirname, "../preload/preload.mjs"),
@@ -744,6 +800,9 @@ void app
 			if (mainWindow && !mainWindow.isDestroyed()) mainWindow.show();
 			else void createWindow();
 		});
+		// Only while the stored theme is `system`: the OS appearance changing then flips the overlay's
+		// colours, which nothing else in the app is listening for. A no-op on macOS.
+		nativeTheme.on("updated", syncTitleBarOverlay);
 	})
 	.catch((error: unknown) => {
 		void logger?.write("error", error instanceof Error ? error.message : "Application startup failed");
@@ -753,6 +812,16 @@ void app
 
 app.on("window-all-closed", () => {
 	if (process.platform !== "darwin") app.quit();
+});
+
+// A second launch on Windows or Linux hands its lock to the instance that holds it rather than opening
+// a second window on the same data path. macOS never reaches here, since LaunchServices refuses the
+// second copy before it starts.
+app.on("second-instance", () => {
+	if (!mainWindow || mainWindow.isDestroyed()) return;
+	if (mainWindow.isMinimized()) mainWindow.restore();
+	mainWindow.show();
+	mainWindow.focus();
 });
 
 let stateSavedBeforeQuit = false;

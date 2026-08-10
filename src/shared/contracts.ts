@@ -4,6 +4,9 @@ export type { AccountSetting, AccountSettingKey };
 
 export type RemoteId = string;
 
+/** The three platforms Nixie runs on. Anything else is treated as Linux, whose chrome it draws. */
+export type NixiePlatform = "darwin" | "win32" | "linux";
+
 /**
  * A queue upstream already built and named in a button of its own: an artist's shuffled mix, or its
  * radio. Replayed exactly as it arrived rather than derived, since the shuffle is upstream's own
@@ -398,6 +401,8 @@ export interface NixieBridge {
 	};
 	app: {
 		info(): Promise<AppInfo>;
+		/** A value, not a call: the shell paints its window-control padding before an await could answer. */
+		platform: NixiePlatform;
 	};
 	update: {
 		/** The state as main holds it now, for a page that mounted after the events. */
