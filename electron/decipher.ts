@@ -34,33 +34,54 @@ export async function evaluateRestricted(data: ScriptData, environment: Record<s
 	});
 	const id = randomUUID();
 	const result = await new Promise<unknown>((resolve, reject) => {
+		// The gate at startup awaits this, so a promise that never settles is a window that never opens
+		// with nothing logged. `exit` therefore rejects unconditionally when nothing has answered yet: a
+		// child that spawns and exits 0 without a message (a killed worker, a permission refusal) would
+		// otherwise leave this pending forever.
+		let settled = false;
+		let spawned = false;
 		let evaluateTimer: ReturnType<typeof setTimeout> | undefined;
-		const spawnTimer = setTimeout(() => {
-			child.kill();
-			reject(new Error("Restricted evaluator failed to spawn in time"));
-		}, SPAWN_TIMEOUT_MS);
-		child.once("spawn", () => {
+		const settle = (run: () => void) => {
+			if (settled) return;
+			settled = true;
 			clearTimeout(spawnTimer);
-			evaluateTimer = setTimeout(() => {
-				child.kill();
-				reject(new Error("Restricted evaluator timed out"));
-			}, EVALUATE_TIMEOUT_MS);
+			clearTimeout(evaluateTimer);
+			run();
+		};
+		const spawnTimer = setTimeout(
+			() => settle(() => reject(new Error("Restricted evaluator failed to spawn in time"))),
+			SPAWN_TIMEOUT_MS
+		);
+		child.once("spawn", () => {
+			spawned = true;
+			clearTimeout(spawnTimer);
+			evaluateTimer = setTimeout(
+				() => settle(() => reject(new Error("Restricted evaluator timed out"))),
+				EVALUATE_TIMEOUT_MS
+			);
 			child.postMessage({ id, source: data.output, environment });
 		});
-		child.once("message", (message: unknown) => {
-			clearTimeout(evaluateTimer);
-			if (typeof message !== "object" || message === null || !("id" in message) || message.id !== id) {
-				reject(new Error("Restricted evaluator returned an invalid response"));
-				return;
-			}
-			if ("error" in message) reject(new Error(String(message.error)));
-			else resolve("result" in message ? message.result : undefined);
-		});
-		child.once("exit", (code) => {
-			clearTimeout(spawnTimer);
-			clearTimeout(evaluateTimer);
-			if (code !== 0) reject(new Error(`Restricted evaluator exited with ${code}`));
-		});
+		child.once("message", (message: unknown) =>
+			settle(() => {
+				if (typeof message !== "object" || message === null || !("id" in message) || message.id !== id) {
+					reject(new Error("Restricted evaluator returned an invalid response"));
+					return;
+				}
+				if ("error" in message) reject(new Error(String(message.error)));
+				else resolve("result" in message ? message.result : undefined);
+			})
+		);
+		child.once("exit", (code) =>
+			settle(() =>
+				reject(
+					new Error(
+						code === 0 && spawned
+							? "Restricted evaluator exited without answering"
+							: `Restricted evaluator exited with ${code}`
+					)
+				)
+			)
+		);
 	});
 	child.kill();
 	return result;
