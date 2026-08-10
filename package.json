@@ -25,14 +25,16 @@
 		"generate-routes": "tsr generate",
 		"licenses:write": "node scripts/licenses.mjs",
 		"build": "pnpm licenses:write && vite build",
-		"package": "pnpm build && electron-builder --mac --dir -c.mac.identity=- --publish never",
+		"package:mac": "pnpm build && electron-builder --mac --dir -c.mac.identity=- --publish never",
+		"package:win": "pnpm build && electron-builder --win --x64 --publish never",
+		"package:linux": "pnpm build && electron-builder --linux --x64 --publish never",
 		"dist": "pnpm release:gate && pnpm build && electron-builder --mac -c.mac.notarize=true --publish never",
 		"release:gate": "node --env-file-if-exists=electron-builder.env scripts/release-gates.mjs",
 		"release:patch": "pnpm version patch -m \"chore(release): v%s\"",
 		"release:minor": "pnpm version minor -m \"chore(release): v%s\"",
 		"release:major": "pnpm version major -m \"chore(release): v%s\"",
 		"release:notes": "pnpm dlx git-cliff@2.13.1 --latest --strip all",
-		"release:retag": "V=$(node -p \"require('./package.json').version\") && git tag -f -m \"chore(release): v$V\" \"v$V\"",
+		"release:retag": "node scripts/retag.mjs",
 		"release:push": "git push --follow-tags",
 		"preversion": "pnpm check",
 		"preview": "vite preview",
@@ -127,6 +129,48 @@
 		"dmg": {
 			"sign": true,
 			"writeUpdateInfo": false
+		},
+		"win": {
+			"icon": "build/icon.png",
+			"target": [
+				{
+					"target": "nsis",
+					"arch": [
+						"x64"
+					]
+				}
+			]
+		},
+		"nsis": {
+			"artifactName": "${productName}-${version}-setup.${ext}",
+			"oneClick": true,
+			"perMachine": false,
+			"createDesktopShortcut": true,
+			"shortcutName": "Nixie"
+		},
+		"linux": {
+			"icon": "build/icon.png",
+			"category": "AudioVideo",
+			"desktop": {
+				"entry": {
+					"Categories": "AudioVideo;Audio;Player;",
+					"StartupWMClass": "Nixie"
+				}
+			},
+			"target": [
+				{
+					"target": "AppImage",
+					"arch": [
+						"x64"
+					]
+				}
+			]
+		},
+		"appImage": {
+			"artifactName": "${productName}-${version}-${arch}.${ext}"
+		},
+		"toolsets": {
+			"appimage": "1.0.3"
 		},
 		"afterSign": "scripts/staple.mjs",
 		"afterAllArtifactBuild": "scripts/finish-dmgs.mjs"
