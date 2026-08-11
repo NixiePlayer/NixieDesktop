@@ -237,15 +237,19 @@ async function withCookieDatabase<T>(path: string, read: (database: DatabaseSync
 	// Windows have a per-user temp directory, but the directory is the honest fix on all three.
 	const dir = await mkdtemp(join(tmpdir(), "nixie-cookies-"));
 	const copy = join(dir, "db");
-	await copyFile(path, copy);
-	// Recent writes can still be sitting in the write-ahead log.
-	await copyFile(`${path}-wal`, `${copy}-wal`).catch(() => undefined);
-	const database = new DatabaseSync(copy, { readOnly: true });
+	let database: DatabaseSync | undefined;
 	try {
+		await copyFile(path, copy);
+		// Recent writes can still be sitting in the write-ahead log.
+		await copyFile(`${path}-wal`, `${copy}-wal`).catch(() => undefined);
+		database = new DatabaseSync(copy, { readOnly: true });
 		return read(database);
 	} finally {
-		database.close();
-		await rm(dir, { recursive: true, force: true });
+		try {
+			database?.close();
+		} finally {
+			await rm(dir, { recursive: true, force: true });
+		}
 	}
 }
 
