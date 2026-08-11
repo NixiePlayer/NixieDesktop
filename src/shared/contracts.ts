@@ -83,7 +83,13 @@ export interface Playlist {
 }
 
 export interface PlaylistItem {
-	itemId: RemoteId;
+	/**
+	 * The row rather than the song in it, which is what removing and reordering address: one playlist
+	 * holds the same song twice and only a position tells the copies apart. Upstream states it for a
+	 * playlist the account can edit and for no other, so a row without one can be listed and played
+	 * and never moved or removed.
+	 */
+	itemId?: RemoteId;
 	track: Track;
 }
 

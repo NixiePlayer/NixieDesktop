@@ -8,6 +8,7 @@ import { usePlayback, usePlayer } from "#/player";
 import type { Album, Artist, BrowseTarget, MusicEntity, Playlist, QueueContext, Track } from "#/shared/contracts";
 import {
 	entityArtwork,
+	entityKey,
 	entityKind,
 	entityRank,
 	entitySubtitle,
@@ -495,7 +496,7 @@ export function MediaShelf({
 				{items.map((item, index) =>
 					asRows ? (
 						<MediaRow
-							key={`${"track" in item ? item.itemId : item.id}-${index}`}
+							key={`${entityKey(item)}-${index}`}
 							item={item}
 							queue={tracks}
 							context={context}
@@ -505,7 +506,7 @@ export function MediaShelf({
 						/>
 					) : (
 						<MediaCard
-							key={`${"track" in item ? item.itemId : item.id}-${index}`}
+							key={`${entityKey(item)}-${index}`}
 							item={item}
 							queue={tracks}
 							context={context}
@@ -641,7 +642,7 @@ export function MediaList({
 		<div className="flex flex-col">
 			{items.map((item, index) => (
 				<MediaRow
-					key={"track" in item ? item.itemId : item.id}
+					key={entityKey(item)}
 					item={item}
 					queue={tracks}
 					context={context}
@@ -660,7 +661,7 @@ export function MediaGrid({ items, context }: { items: MusicEntity[]; context?: 
 	return (
 		<div className="grid grid-cols-[repeat(auto-fill,minmax(9.5rem,1fr))] gap-x-4 gap-y-6">
 			{items.map((item) => (
-				<MediaCard key={"track" in item ? item.itemId : item.id} item={item} queue={tracks} context={context} />
+				<MediaCard key={entityKey(item)} item={item} queue={tracks} context={context} />
 			))}
 		</div>
 	);
