@@ -116,10 +116,11 @@ it is the best thing you can attach to it.
 
 The browser extension that carries the Windows Chrome and Edge sign-in path is not in this
 repository. It lives at
-[NixiePlayer/nixie-connector-extension](https://github.com/NixiePlayer/nixie-connector-extension),
+[NixiePlayer/nixie-link-extension](https://github.com/NixiePlayer/nixie-link-extension),
 and what is here is the app's half: the native messaging host under `electron/native-host/`
-and the registration and pipe server beside it. The two are pinned to each other by a fixed
-extension id, so a change to one is usually a change to both.
+and the registration and pipe server beside it. The two use a fixed extension id for routing
+and a private pairing protocol for authentication, so a protocol change to one is usually a
+change to both.
 
 One rule about `src/shared/` worth stating on its own: anything in there crosses an IPC
 boundary, so it has to be serializable and pure. No Electron imports, no DOM, no upstream

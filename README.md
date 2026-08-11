@@ -207,10 +207,10 @@ Which browsers it can read from depends on how each one stores its cookies:
 Chrome 127 and later on Windows wrap the cookie key so that only the browser's own signed
 binary can unwrap it. Getting at it means pretending to be Chrome, which this project will
 not do, so those profiles are not offered at all rather than offered and then failing. The
-[Nixie browser extension](https://github.com/NixiePlayer/nixie-connector-extension) is the
+[Nixie browser extension](https://github.com/NixiePlayer/nixie-link-extension) is the
 way in there: it reads its own cookies through the API the browser gives every extension,
-and hands them to Nixie over the messaging channel the browser itself brokers. Nothing is
-worked around, and nothing is pasted.
+authenticates Nixie's request with a private pairing code, and encrypts the cookie payload
+before native messaging carries it. Nothing is worked around, and no cookie is pasted.
 [docs/extension.md](docs/extension.md) is the walkthrough. The extension is optional
 everywhere else, where reading the profile from disk already works.
 

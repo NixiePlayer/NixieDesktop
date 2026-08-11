@@ -1,85 +1,54 @@
-# Signing in through the browser extension
+# Signing in through Nixie Link
 
-Nixie signs in by adopting the YouTube session from a browser you are already signed in to on the
-same machine. On macOS and Linux it reads that profile's cookie store off disk. On Windows it cannot,
-for Chrome and usually for Edge, Brave, Vivaldi and Chromium too, and the extension is the way in
-there instead.
+Nixie signs in by adopting the YouTube session from a browser on the same computer. Current Chromium
+browsers on Windows use App-Bound Encryption, so Nixie cannot read those browser cookie databases
+without impersonating the browser. Nixie refuses that workaround. The Nixie Link extension asks the
+browser for the same cookies through its normal extension API instead.
 
-This document is the reader-facing half of that path. `AGENTS.md` holds the design and the reasoning.
+## Install
 
-## Why it exists
+Nixie Link is not published to a browser marketplace. Install it only from its GitHub repository:
+[NixiePlayer/nixie-link-extension](https://github.com/NixiePlayer/nixie-link-extension).
 
-Chrome 127 and later added app-bound encryption on Windows. The key that decrypts the cookie store is
-wrapped a second time and handed back only to Chrome's own signed binary, through an elevation
-service that checks the caller's signature. There is no permission to ask for and no prompt to
-approve: getting at that key means pretending to be Chrome, which this project will not do. So a
-profile written under app-bound encryption is not offered on the sign-in screen at all, rather than
-offered and then failing with a message about an elevation service.
+1. Install and start Nixie.
+2. Download and unzip the latest `nixie-link-<version>.zip` GitHub release.
+3. Open `chrome://extensions`, `edge://extensions`, `brave://extensions`, or the equivalent page.
+4. Turn on **Developer mode**, select **Load unpacked**, and select the unzipped folder.
+5. Confirm that the extension ID is `pgknibkmcmahfafgbkndpkkcpciigleb`.
+6. Open Nixie Link from the toolbar and copy its pairing code.
+7. Paste the code into the connected browser row on Nixie's sign-in screen, then select **Connect**.
 
-The extension answers the same question a different way. It reads its own cookies through
-`chrome.cookies`, which is the browser handing an extension what you granted it when you installed
-it, and passes them to Nixie over Chrome native messaging, a channel the browser itself brokers.
-Nothing is decrypted, worked around or pasted by hand.
+The stable extension ID lets the browser find Nixie's native host. It does not authenticate unpacked
+code. The private pairing code authenticates each cookie request. Download only from the named
+repository and keep the pairing code private.
 
-Everywhere the disk read already works, the extension is optional. It is offered below the browser
-list on macOS and Linux, and above it on Windows, where the disk list reaches Firefox and nothing
-else.
+## Security and refresh
 
-## Installing it
+The extension sends no cookies in its connection hello. Nixie sends a fresh nonce and HMAC proof when
+it needs current cookies, at most once a minute. The extension ignores a request without a valid proof
+and encrypts each accepted payload with AES-256-GCM. The native relay cannot read that payload. Nixie
+also binds each response to the socket that received its request and validates every cookie field.
 
-The extension lives in its own repository:
-[NixiePlayer/nixie-connector-extension](https://github.com/NixiePlayer/nixie-connector-extension).
+Nixie protects its saved pairing value through Electron `safeStorage`. On Linux, pairing needs an
+unlocked system keyring. Nixie refuses the insecure `basic_text` fallback.
 
-It is not in the Chrome Web Store or the Edge Add-ons store yet, so for now it is loaded unpacked:
+Signing out of YouTube returns an authenticated empty set, which clears the copied Nixie session.
+Resetting the pairing code or removing the extension makes refresh fail, which also clears the copied
+extension session. Signing out inside Nixie clears its session and linked-account record immediately.
 
-1. Clone or download the extension repository.
-2. Open `chrome://extensions` (or `edge://extensions`, `brave://extensions`, and so on).
-3. Turn on **Developer mode**.
-4. **Load unpacked**, and pick the extension's directory.
-5. Open the extension once from the toolbar.
+This protects against a simple replacement of the registered native host. It cannot protect against
+malware that already runs as the same operating-system user and can read or alter the browser profile.
+The extension is unpacked, and the Windows app is currently unsigned.
 
-The extension keeps a fixed id across installs, which is what Nixie pins it to, so loading it
-unpacked does not change which extension the app will talk to.
+## Troubleshooting
 
-Nothing has to be done on the Nixie side. The app registers the native messaging host itself the
-first time it runs, on every platform, and the Windows installer writes the same registry keys so a
-fresh install works even before Nixie has been opened. There is no manifest to copy and no path to
-paste anywhere.
-
-Then, with Nixie running: sign in at `music.youtube.com` in that browser if you have not, and the
-profile appears on Nixie's sign-in screen on its own. Nothing needs a refresh. A connected profile
-that holds no YouTube session is still listed, dimmed, saying so, rather than quietly not appearing.
-
-## Keeping it working
-
-Nixie must be running for the extension to hand anything over. The connection is made by the browser
-launching the host, and the host leaves without a word if the app is not there; the extension retries
-about once a minute, so starting Nixie after the browser is fine and needs no clicking.
-
-Nothing is pushed and nothing is cached. Google expires the session every few minutes and only the
-browser holds the current value, so Nixie asks for it when it needs it, at most once a minute, for as
-long as the account stays linked. Signing out of Nixie ends that. Removing the extension, or signing
-out of YouTube in the browser, ends it too.
-
-The extension is only needed for the browser whose session you linked. It does not have to be
-installed anywhere else, and it does nothing for a Firefox profile, which Nixie reads off disk on
-every platform.
-
-## When something goes wrong
-
-Chrome's own native messaging errors are worth being able to read, since each one names a different
-missing piece:
-
-| Message | What it means |
+| Message or state | Meaning and action |
 | --- | --- |
-| "Specified native messaging host not found" | The registry key (Windows) or the host manifest file (macOS, Linux) is missing. Start Nixie once, which writes both, then reload the extension. |
-| "Access to the specified native messaging host is forbidden" | The extension's id is not the one the host manifest allows. It is an extension built or repacked with a different id than the app is pinned to. |
-| "Native host has exited" | The host started and left. Either Nixie is not running, or the token check failed, which happens when a stale config is being read: quit Nixie, start it again, and reload the extension. |
+| Specified native messaging host not found | Start Nixie once, then reload the extension. |
+| Access to the specified native messaging host is forbidden | The extension ID is not the fixed ID that Nixie allows. Use the official repository copy. |
+| Native host has exited | Nixie is not running, or its per-run local token is stale. Restart Nixie and reload the extension. |
+| Extension pull timed out | The pairing code is wrong, was reset, or the browser closed. Copy the current code again. |
+| Unlock a system keyring before pairing | Linux has no secure keyring backend available. Start or unlock the desktop keyring and retry. |
 
-Two more things that look like faults and are not:
-
-- A profile missing from the **disk** list on Windows while that browser is open. A running Chromium
-  holds its cookie file with an exclusive lock and nothing can be copied out from under it. Quit the
-  browser and look again, or use the extension, which has no such problem.
-- Nothing at all appearing after installing the extension. Open the extension once from the toolbar.
-  Until it has run, it has not connected to anything.
+A running Chromium browser can lock its cookie database on Windows, which can hide it from Nixie's
+disk list. Nixie Link reads through the browser API and does not have that file-lock problem.
