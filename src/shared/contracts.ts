@@ -267,7 +267,7 @@ export interface ExtensionSource {
  */
 export type LinkedAccount =
 	| { source: "browser"; browser: string; profile: string }
-	| { source: "extension"; installId: string; browser: string };
+	| { source: "extension"; installId: string; browser: string; pairingKey: string };
 
 export interface Settings {
 	theme: Theme;
@@ -401,8 +401,8 @@ export interface NixieBridge {
 		signOut(): Promise<AuthState>;
 		/** Browser profiles connected through the extension, as main holds them now. */
 		extensionSources(): Promise<ExtensionSource[]>;
-		/** Adopt the session an extension source holds, pulling its cookies through the native host. */
-		linkExtension(installId: string): Promise<AuthState>;
+		/** Adopt the session an extension source holds after authenticating it with its pairing code. */
+		linkExtension(installId: string, pairingSecret: string): Promise<AuthState>;
 		/**
 		 * The sign-in view is open while the user goes off to install the extension, so a row that only
 		 * appeared on a poll would be a spinner nobody trusts. Pushed the way `update.onState` is.

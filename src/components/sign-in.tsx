@@ -5,6 +5,8 @@ import markProd from "#/assets/logo.png";
 import { platform } from "#/lib/platform";
 import type { AuthState, BrowserAccount, ExtensionSource } from "#/shared/contracts";
 import { Button } from "./ui/button";
+import { Field, FieldDescription, FieldGroup, FieldLabel } from "./ui/field";
+import { Input } from "./ui/input";
 import { Skeleton } from "./ui/skeleton";
 
 // One SVG filter, inlined so the panel needs no asset and no network. It is what keeps the
@@ -104,7 +106,7 @@ function ExtensionBlock({
 }: {
 	sources: ExtensionSource[];
 	disabled: boolean;
-	onLink: (installId: string) => void;
+	onLink: (installId: string, pairingSecret: string) => void;
 }) {
 	return (
 		<div className="flex flex-col gap-3">
@@ -113,23 +115,7 @@ function ExtensionBlock({
 				<div className="flex flex-col gap-2">
 					{sources.map((source) =>
 						source.signedIn ? (
-							<button
-								key={source.installId}
-								type="button"
-								disabled={disabled}
-								onClick={() => onLink(source.installId)}
-								aria-label={`Continue with ${source.browser}`}
-								className="border-border bg-card hover:bg-accent flex items-center gap-3 rounded-xl border p-3 text-left transition-colors disabled:pointer-events-none disabled:opacity-60"
-							>
-								<span className="bg-muted flex size-8 shrink-0 items-center justify-center rounded-md">
-									<Puzzle className="text-muted-foreground size-4" />
-								</span>
-								<span className="flex min-w-0 flex-col">
-									<span className="truncate text-sm font-medium">{source.browser}</span>
-									<span className="text-muted-foreground truncate text-xs">Connected through the extension</span>
-								</span>
-								<ChevronRight className="text-muted-foreground ml-auto size-4 shrink-0" />
-							</button>
+							<ExtensionPairingRow key={source.installId} source={source} disabled={disabled} onLink={onLink} />
 						) : (
 							<div
 								key={source.installId}
@@ -161,7 +147,7 @@ function ExtensionBlock({
 					<p className="text-muted-foreground text-sm">
 						Install the{" "}
 						<a
-							href="https://github.com/NixiePlayer/nixie-connector-extension"
+							href="https://github.com/NixiePlayer/nixie-link-extension"
 							target="_blank"
 							rel="noreferrer"
 							className="text-foreground underline underline-offset-4"
@@ -173,6 +159,60 @@ function ExtensionBlock({
 				</div>
 			)}
 		</div>
+	);
+}
+
+function ExtensionPairingRow({
+	source,
+	disabled,
+	onLink,
+}: {
+	source: ExtensionSource;
+	disabled: boolean;
+	onLink: (installId: string, pairingSecret: string) => void;
+}) {
+	const [pairingSecret, setPairingSecret] = useState("");
+	const id = `pairing-${source.installId}`;
+	return (
+		<form
+			className="border-border bg-card flex flex-col gap-3 rounded-xl border p-3"
+			onSubmit={(event) => {
+				event.preventDefault();
+				onLink(source.installId, pairingSecret.trim());
+			}}
+		>
+			<div className="flex items-center gap-3">
+				<span className="bg-muted flex size-8 shrink-0 items-center justify-center rounded-md">
+					<Puzzle className="text-muted-foreground size-4" />
+				</span>
+				<span className="flex min-w-0 flex-col">
+					<span className="truncate text-sm font-medium">{source.browser}</span>
+					<span className="text-muted-foreground truncate text-xs">Connected through the extension</span>
+				</span>
+			</div>
+			<FieldGroup className="gap-3">
+				<Field data-disabled={disabled}>
+					<FieldLabel htmlFor={id}>Pairing code</FieldLabel>
+					<Input
+						id={id}
+						type="password"
+						value={pairingSecret}
+						onChange={(event) => setPairingSecret(event.target.value)}
+						pattern="[A-Za-z0-9_-]{43}"
+						minLength={43}
+						maxLength={43}
+						autoComplete="off"
+						spellCheck={false}
+						disabled={disabled}
+						required
+					/>
+					<FieldDescription>Copy this code from the Nixie Link popup.</FieldDescription>
+				</Field>
+				<Button type="submit" disabled={disabled || pairingSecret.trim().length !== 43}>
+					Connect
+				</Button>
+			</FieldGroup>
+		</form>
 	);
 }
 
@@ -245,7 +285,7 @@ export function SignInView({ onSignedIn }: { onSignedIn: (auth: AuthState) => vo
 						<ExtensionBlock
 							sources={sources}
 							disabled={busy}
-							onLink={(installId) => run(window.nixie?.auth.linkExtension(installId))}
+							onLink={(installId, pairingSecret) => run(window.nixie?.auth.linkExtension(installId, pairingSecret))}
 						/>
 					)}
 
@@ -321,7 +361,7 @@ export function SignInView({ onSignedIn }: { onSignedIn: (auth: AuthState) => vo
 						<ExtensionBlock
 							sources={sources}
 							disabled={busy}
-							onLink={(installId) => run(window.nixie?.auth.linkExtension(installId))}
+							onLink={(installId, pairingSecret) => run(window.nixie?.auth.linkExtension(installId, pairingSecret))}
 						/>
 					)}
 

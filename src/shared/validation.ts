@@ -263,10 +263,18 @@ export function validateBrowserAccount(value: unknown): asserts value is Browser
 	}
 }
 
-const installIdPattern = /^[0-9a-f-]{36}$/;
+const installIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+const pairingSecretPattern = /^[A-Za-z0-9_-]{43}$/;
+const protectedPairingKeyPattern = /^[A-Za-z0-9+/]{16,8192}={0,2}$/;
 
 export function validateInstallId(value: unknown): asserts value is string {
 	if (typeof value !== "string" || !installIdPattern.test(value)) throw new TypeError("Invalid extension install id");
+}
+
+export function validatePairingSecret(value: unknown): asserts value is string {
+	if (typeof value !== "string" || !pairingSecretPattern.test(value)) {
+		throw new TypeError("Invalid extension pairing code");
+	}
 }
 
 /**
@@ -276,7 +284,7 @@ export function validateInstallId(value: unknown): asserts value is string {
  */
 export function validateLinkedAccount(value: unknown): asserts value is LinkedAccount {
 	if (!record(value)) throw new TypeError("Invalid linked account");
-	const source = value.source ?? "browser";
+	const source = value.source === undefined ? "browser" : value.source;
 	if (source === "browser") {
 		if (typeof value.browser !== "string" || typeof value.profile !== "string") {
 			throw new TypeError("Invalid linked account");
@@ -284,7 +292,13 @@ export function validateLinkedAccount(value: unknown): asserts value is LinkedAc
 		return;
 	}
 	if (source === "extension") {
-		if (typeof value.browser !== "string") throw new TypeError("Invalid linked account");
+		if (
+			typeof value.browser !== "string" ||
+			typeof value.pairingKey !== "string" ||
+			!protectedPairingKeyPattern.test(value.pairingKey)
+		) {
+			throw new TypeError("Invalid linked account");
+		}
 		validateInstallId(value.installId);
 		return;
 	}

@@ -15,6 +15,7 @@ import {
 	net,
 	Notification,
 	protocol,
+	safeStorage,
 	session,
 	shell,
 	type IpcMainInvokeEvent,
@@ -32,6 +33,7 @@ import {
 	validateLinkedAccount,
 	validateMusicCommand,
 	validateMusicQuery,
+	validatePairingSecret,
 	validateState,
 	validateTrack,
 } from "../src/shared/validation";
@@ -248,9 +250,11 @@ async function notifyTrackChange(track: Track) {
 }
 
 let refreshedAt = 0;
+let refreshInFlight: Promise<void> | undefined;
 
 async function writeCookies(cookies: ImportedCookie[]) {
 	const authSession = session.fromPartition(authPartition);
+	await authSession.clearStorageData({ storages: ["cookies"] });
 	for (const cookie of cookies) {
 		await authSession.cookies
 			.set({
@@ -280,14 +284,29 @@ async function writeCookies(cookies: ImportedCookie[]) {
  */
 async function refreshLinkedCookies() {
 	if (Date.now() - refreshedAt < 60_000) return;
-	refreshedAt = Date.now();
-	const link: unknown = JSON.parse(await readFile(linkPath(), "utf8"));
-	validateLinkedAccount(link);
-	// The disk read and the extension answer the same question with the same shape, which is why the
-	// adapter and cookieHeader are untouched: only where the cookies come from changes. The pull is
-	// bounded, since a browser that has closed must not hold the header open behind it.
-	const cookies = link.source === "extension" ? await nativeHost.pull(link.installId) : await readYouTubeCookies(link);
-	await writeCookies(cookies);
+	if (refreshInFlight) return refreshInFlight;
+	refreshInFlight = (async () => {
+		let link: unknown;
+		try {
+			link = JSON.parse(await readFile(linkPath(), "utf8"));
+			validateLinkedAccount(link);
+		} catch (error) {
+			await writeCookies([]);
+			throw error;
+		}
+		if (link.source !== "extension") return writeCookies(await readYouTubeCookies(link));
+		try {
+			const secret = safeStorage.decryptString(Buffer.from(link.pairingKey, "base64"));
+			await writeCookies(await nativeHost.pull(link.installId, secret));
+		} catch (error) {
+			// A missing, signed-out or replaced extension must not leave an old browser session active.
+			await writeCookies([]);
+			throw error;
+		}
+	})().finally(() => {
+		refreshInFlight = undefined;
+	});
+	return refreshInFlight;
 }
 
 async function cookieHeader() {
@@ -343,17 +362,23 @@ async function authState(): Promise<AuthState> {
  * `source` the link records.
  */
 async function linkSession(cookies: ImportedCookie[], link: LinkedAccount) {
-	await session.fromPartition(authPartition).clearStorageData();
+	const authSession = session.fromPartition(authPartition);
+	await authSession.clearStorageData();
 	await rm(linkPath(), { force: true });
 	await writeCookies(cookies);
-	youtube = createAdapter();
-	const state = await authState();
-	if (state.status === "unentitled") {
-		throw new Error("That account has no YouTube Music Premium subscription, which Nixie requires");
+	try {
+		youtube = createAdapter();
+		const state = await authState();
+		if (state.status === "unentitled") {
+			throw new Error("That account has no YouTube Music Premium subscription, which Nixie requires");
+		}
+		if (state.status !== "authenticated") throw new Error("That profile is not signed in to YouTube");
+		await writeFile(linkPath(), JSON.stringify(link), { mode: 0o600 });
+		return state;
+	} catch (error) {
+		await authSession.clearStorageData();
+		throw error;
 	}
-	if (state.status !== "authenticated") throw new Error("That profile is not signed in to YouTube");
-	await writeFile(linkPath(), JSON.stringify(link), { mode: 0o600 });
-	return state;
 }
 
 async function importFromBrowser(account: unknown) {
@@ -363,15 +388,26 @@ async function importFromBrowser(account: unknown) {
 }
 
 /** The extension's counterpart of importFromBrowser: pull the profile's cookies through the host. */
-async function importFromExtension(installId: unknown) {
+function protectPairingSecret(secret: string) {
+	if (!safeStorage.isEncryptionAvailable()) throw new Error("Secure storage is not available on this computer");
+	if (process.platform === "linux" && safeStorage.getSelectedStorageBackend() === "basic_text") {
+		throw new Error("Unlock a system keyring before pairing the extension");
+	}
+	return safeStorage.encryptString(secret).toString("base64");
+}
+
+async function importFromExtension(installId: unknown, pairingSecret: unknown) {
 	validateInstallId(installId);
+	validatePairingSecret(pairingSecret);
 	const source = nativeHost.connections().find((connection) => connection.installId === installId);
 	if (!source) throw new Error("That browser is no longer connected");
-	// The UI refuses a signed-out row, but the channel says so too rather than letting the pull run its
-	// full timeout and report a timeout for a profile that simply holds no session.
-	if (!source.signedIn) throw new Error("That browser is not signed in to YouTube");
-	const cookies = await nativeHost.pull(installId);
-	return linkSession(cookies, { source: "extension", installId, browser: source.browser });
+	const cookies = await nativeHost.pull(installId, pairingSecret);
+	return linkSession(cookies, {
+		source: "extension",
+		installId,
+		browser: source.browser,
+		pairingKey: protectPairingSecret(pairingSecret),
+	});
 }
 
 function createAdapter() {
@@ -541,7 +577,7 @@ function registerIpc() {
 	});
 	handle("auth:import-browser", (_event, account) => importFromBrowser(account));
 	handle("auth:extension-sources", () => nativeHost.connections());
-	handle("auth:link-extension", (_event, installId) => importFromExtension(installId));
+	handle("auth:link-extension", (_event, installId, pairingSecret) => importFromExtension(installId, pairingSecret));
 	handle("auth:sign-out", async () => {
 		await session.fromPartition(authPartition).clearStorageData();
 		await rm(linkPath(), { force: true });

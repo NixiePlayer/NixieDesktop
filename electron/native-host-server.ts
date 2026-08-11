@@ -1,4 +1,4 @@
-import { randomBytes, timingSafeEqual } from "node:crypto";
+import { createDecipheriv, createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { mkdir, unlink, writeFile } from "node:fs/promises";
 import { connect, createServer, type Server, type Socket } from "node:net";
 import { join } from "node:path";
@@ -19,11 +19,41 @@ const MAX_CONNECTIONS = 8;
 const MAX_SOCKETS = 32;
 // A socket that has not passed the token handshake within this is a peer that never will.
 const HANDSHAKE_TIMEOUT_MS = 5000;
-const INSTALL_ID = /^[0-9a-f-]{36}$/;
+const INSTALL_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+const PAIRING_SECRET = /^[A-Za-z0-9_-]{43}$/;
+const BASE64URL = /^[A-Za-z0-9_-]+$/;
+const AUTH_CONTEXT = "nixie-link pull authentication v1\0";
+const ENCRYPTION_CONTEXT = "nixie-link cookie encryption v1\0";
 const BROWSERS = new Set(["Google Chrome", "Microsoft Edge", "Brave", "Vivaldi", "Opera", "Chromium", "Chrome"]);
 
 interface Connection extends ExtensionConnection {
 	socket: Socket;
+}
+
+interface PendingPull {
+	installId: string;
+	nonce: string;
+	secret: Buffer;
+	socket: Socket;
+	resolve: (cookies: SessionCookie[]) => void;
+	reject: (error: Error) => void;
+	timer: ReturnType<typeof setTimeout>;
+}
+
+function decodeSecret(value: string) {
+	if (!PAIRING_SECRET.test(value)) return;
+	const secret = Buffer.from(value, "base64url");
+	return secret.length === 32 && secret.toString("base64url") === value ? secret : undefined;
+}
+
+function derivedKey(context: string, secret: Buffer) {
+	return createHash("sha256").update(context).update(secret).digest();
+}
+
+function pullProof(id: number, nonce: string, installId: string, secret: Buffer) {
+	return createHmac("sha256", derivedKey(AUTH_CONTEXT, secret))
+		.update(`pull\0${id}\0${nonce}\0${installId}`)
+		.digest("base64url");
 }
 
 /**
@@ -32,16 +62,13 @@ interface Connection extends ExtensionConnection {
  * sits inside a `0o700` userData directory and the token is belt and braces; on Windows a named pipe
  * carries a default DACL that lets any local process connect and node exposes no way to set one, so
  * the pipe name is randomised per install and the first line has to carry a token only this user can
- * read (the config file is `0o600` inside their own profile). Nothing confidential travels outward on
- * this pipe: the app sends pull requests and never a cookie, so a process that guessed both could
- * offer this app a session and could never take one from it.
+ * read (the config file is `0o600` inside their own profile). The pipe gate is separate from cookie
+ * access: every pull is authenticated with the user-paired secret and each cookie payload is
+ * AES-256-GCM ciphertext that is bound to its request and socket.
  */
 export class NativeHostServer {
 	readonly #connections = new Map<string, Connection>();
-	readonly #pending = new Map<
-		number,
-		{ resolve: (cookies: SessionCookie[]) => void; timer: ReturnType<typeof setTimeout> }
-	>();
+	readonly #pending = new Map<number, PendingPull>();
 	readonly #listeners = new Set<(connections: ExtensionConnection[]) => void>();
 	readonly #sockets = new Set<Socket>();
 	#server: Server | undefined;
@@ -96,7 +123,10 @@ export class NativeHostServer {
 
 	/** Closes the server, drops every connection and pending pull, and removes the socket file. */
 	async close() {
-		for (const { timer } of this.#pending.values()) clearTimeout(timer);
+		for (const { reject, timer } of this.#pending.values()) {
+			clearTimeout(timer);
+			reject(new Error("Native host closed"));
+		}
 		this.#pending.clear();
 		for (const socket of this.#sockets) socket.destroy();
 		this.#sockets.clear();
@@ -119,17 +149,22 @@ export class NativeHostServer {
 	}
 
 	/** The cookies that profile holds now, pulled through the extension, or a rejection on timeout. */
-	async pull(installId: string, timeoutMs = 4000): Promise<SessionCookie[]> {
+	async pull(installId: string, pairingSecret: string, timeoutMs = 4000): Promise<SessionCookie[]> {
 		const connection = this.#connections.get(installId);
 		if (!connection) throw new Error("Extension not connected");
+		const secret = decodeSecret(pairingSecret);
+		if (!secret) throw new Error("Invalid extension pairing code");
 		const id = this.#nextId++;
+		const nonce = randomBytes(16).toString("base64url");
 		return new Promise<SessionCookie[]>((resolve, reject) => {
 			const timer = setTimeout(() => {
 				this.#pending.delete(id);
 				reject(new Error("Extension pull timed out"));
 			}, timeoutMs);
-			this.#pending.set(id, { resolve, timer });
-			connection.socket.write(`${JSON.stringify({ type: "pull", id })}\n`);
+			this.#pending.set(id, { installId, nonce, secret, socket: connection.socket, resolve, reject, timer });
+			connection.socket.write(
+				`${JSON.stringify({ type: "pull", id, nonce, proof: pullProof(id, nonce, installId, secret) })}\n`
+			);
 		});
 	}
 
@@ -170,7 +205,7 @@ export class NativeHostServer {
 				const type =
 					typeof message === "object" && message !== null ? (message as Record<string, unknown>).type : undefined;
 				if (type === "hello" && installId) return socket.destroy();
-				installId = this.#dispatch(socket, message) ?? installId;
+				installId = this.#dispatch(socket, message, installId) ?? installId;
 			}
 		});
 		socket.on("close", () => {
@@ -179,6 +214,12 @@ export class NativeHostServer {
 			if (installId && this.#connections.get(installId)?.socket === socket) {
 				this.#connections.delete(installId);
 				this.#emit();
+			}
+			for (const [id, waiter] of this.#pending) {
+				if (waiter.socket !== socket) continue;
+				this.#pending.delete(id);
+				clearTimeout(waiter.timer);
+				waiter.reject(new Error("Extension disconnected"));
 			}
 		});
 		socket.on("error", () => socket.destroy());
@@ -197,11 +238,12 @@ export class NativeHostServer {
 	}
 
 	/** Returns the installId a hello registered, so the socket's close can drop it. */
-	#dispatch(socket: Socket, message: unknown): string | undefined {
+	#dispatch(socket: Socket, message: unknown, installId?: string): string | undefined {
 		if (typeof message !== "object" || message === null) return undefined;
 		const record = message as Record<string, unknown>;
 		if (record.type === "hello") return this.#hello(socket, record);
-		if (record.type === "cookies") this.#cookies(record);
+		if (record.type === "status") this.#status(socket, installId, record);
+		if (record.type === "cookies") this.#cookies(socket, record);
 		return undefined;
 	}
 
@@ -213,9 +255,6 @@ export class NativeHostServer {
 		}
 		const browser = typeof record.browser === "string" && BROWSERS.has(record.browser) ? record.browser : "Chromium";
 		const signedIn = record.signedIn === true;
-		// The hello carries the profile's cookies too, and they are deliberately ignored here: the session
-		// comes from the pull the link makes in a moment, which is validated on arrival, so registration
-		// only needs the identity and whether a session exists at all.
 		if (this.#connections.size >= MAX_CONNECTIONS && !this.#connections.has(installId)) {
 			socket.destroy();
 			return undefined;
@@ -226,12 +265,40 @@ export class NativeHostServer {
 		return installId;
 	}
 
-	#cookies(record: Record<string, unknown>) {
+	#status(socket: Socket, installId: string | undefined, record: Record<string, unknown>) {
+		if (record.installId !== installId || !installId) return;
+		const connection = this.#connections.get(installId);
+		if (!connection || connection.socket !== socket || typeof record.signedIn !== "boolean") return;
+		connection.signedIn = record.signedIn;
+		this.#emit();
+	}
+
+	#cookies(socket: Socket, record: Record<string, unknown>) {
 		const id = record.id;
-		if (typeof id !== "number") return;
+		if (typeof id !== "number" || !Number.isSafeInteger(id)) return;
 		const waiter = this.#pending.get(id);
-		if (!waiter) return;
-		const cookies = sanitizeCookies(record.cookies);
+		if (!waiter || waiter.socket !== socket || record.nonce !== waiter.nonce) return;
+		if (
+			typeof record.iv !== "string" ||
+			!BASE64URL.test(record.iv) ||
+			typeof record.ciphertext !== "string" ||
+			!BASE64URL.test(record.ciphertext)
+		) {
+			return;
+		}
+		let cookies: SessionCookie[] | undefined;
+		try {
+			const iv = Buffer.from(record.iv, "base64url");
+			const encrypted = Buffer.from(record.ciphertext, "base64url");
+			if (iv.length !== 12 || encrypted.length < 16) return;
+			const decipher = createDecipheriv("aes-256-gcm", derivedKey(ENCRYPTION_CONTEXT, waiter.secret), iv);
+			decipher.setAAD(Buffer.from(`cookies\0${id}\0${waiter.nonce}\0${waiter.installId}`));
+			decipher.setAuthTag(encrypted.subarray(-16));
+			const plain = Buffer.concat([decipher.update(encrypted.subarray(0, -16)), decipher.final()]);
+			cookies = sanitizeCookies(JSON.parse(plain.toString("utf8")));
+		} catch {
+			return;
+		}
 		// A malformed answer is left to time out rather than resolved with a bad session or cleared into
 		// silence, which is the same failure a browser that closed mid-pull produces. Only a valid answer
 		// settles the promise and cancels its timer.

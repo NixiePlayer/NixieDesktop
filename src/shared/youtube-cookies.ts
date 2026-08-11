@@ -80,7 +80,7 @@ function valid(cookie: unknown): cookie is SessionCookie {
  * malformed cookie refuses the lot rather than being quietly skipped.
  */
 export function sanitizeCookies(input: unknown): SessionCookie[] | undefined {
-	if (!Array.isArray(input) || input.length === 0 || input.length > MAX_COOKIES) return undefined;
+	if (!Array.isArray(input) || input.length > MAX_COOKIES) return undefined;
 	const cookies: SessionCookie[] = [];
 	for (const entry of input) {
 		if (!valid(entry)) return undefined;

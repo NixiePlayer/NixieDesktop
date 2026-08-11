@@ -58,7 +58,8 @@ const bridge: NixieBridge = {
 		importFromBrowser: (account: BrowserAccount) => ipcRenderer.invoke("auth:import-browser", account),
 		signOut: () => ipcRenderer.invoke("auth:sign-out"),
 		extensionSources: () => ipcRenderer.invoke("auth:extension-sources"),
-		linkExtension: (installId: string) => ipcRenderer.invoke("auth:link-extension", installId),
+		linkExtension: (installId: string, pairingSecret: string) =>
+			ipcRenderer.invoke("auth:link-extension", installId, pairingSecret),
 		onExtensionSources: (listener: (sources: ExtensionSource[]) => void) => {
 			const handler = (_event: unknown, sources: ExtensionSource[]) => listener(sources);
 			ipcRenderer.on("auth:extension-sources", handler);

@@ -26,8 +26,8 @@ describe("sanitizeCookies", () => {
 		expect(result?.[0]?.expirationDate).toBeUndefined();
 	});
 
-	it("refuses an empty array", () => {
-		expect(sanitizeCookies([])).toBeUndefined();
+	it("accepts an empty array so browser sign-out can revoke the session", () => {
+		expect(sanitizeCookies([])).toEqual([]);
 	});
 
 	it("refuses more than the cap", () => {
