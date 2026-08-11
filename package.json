@@ -11,6 +11,7 @@
 	"private": true,
 	"type": "module",
 	"main": "dist-electron/main/index.js",
+	"desktopName": "Nixie.desktop",
 	"packageManager": "pnpm@11.16.0",
 	"engines": {
 		"node": "26",
@@ -53,7 +54,7 @@
 		"class-variance-authority": "0.7.1",
 		"clsx": "2.1.1",
 		"cmdk": "1.1.1",
-		"electron-updater": "^6.8.9",
+		"electron-updater": "6.8.9",
 		"lucide-react": "1.27.0",
 		"react": "19.2.8",
 		"react-dom": "19.2.8",
@@ -161,10 +162,10 @@
 		"linux": {
 			"icon": "build/icon.png",
 			"category": "AudioVideo",
+			"syncDesktopName": true,
 			"desktop": {
 				"entry": {
-					"Categories": "AudioVideo;Audio;Player;",
-					"StartupWMClass": "Nixie"
+					"Categories": "AudioVideo;Audio;Player;"
 				}
 			},
 			"target": [
@@ -177,7 +178,7 @@
 			]
 		},
 		"appImage": {
-			"artifactName": "${productName}-${version}-${arch}.${ext}"
+			"artifactName": "${productName}-${version}-x64.${ext}"
 		},
 		"toolsets": {
 			"appimage": "1.0.3"
