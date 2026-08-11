@@ -241,6 +241,20 @@ textarea:focus-visible {
 	-webkit-app-region: no-drag;
 }
 
+/* A popup is portaled to the body, so it is drawn over the top bar without ever being inside it, and
+   the rule above cannot reach it however it is written. Chromium computes the draggable area as a
+   rectangle out of the layout and knows nothing about what is stacked on top of it, so a popup that
+   reaches across that strip loses every click in it to the window drag. A menu clamped to the top of a
+   short window is exactly that: the row menu's "Save to playlist" submenu runs the height of the
+   viewport, opens at y=5 with "New playlist" at the top of it, and that one item sat under the bar and
+   did nothing until the window was maximised, which is the only size where the submenu opens lower down.
+   A popup is never a handle for moving the window, so each one opts out on its own. */
+[role="menu"],
+[role="listbox"],
+[role="dialog"] {
+	-webkit-app-region: no-drag;
+}
+
 /* Nothing here styles a scrollbar on purpose. macOS draws overlay scrollbars natively, and Windows and
    Linux are asked for the same thing through Chromium's own `OverlayScrollbar` feature in
    `electron/main.ts`. A `::-webkit-scrollbar` rule would undo that: styling the pseudo-element opts the

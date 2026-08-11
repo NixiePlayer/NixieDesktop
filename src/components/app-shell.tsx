@@ -24,6 +24,7 @@ import type { AuthState, MusicEntity, Track } from "#/shared/contracts";
 import {
 	autoPlaylist,
 	entityArtwork,
+	entityKey,
 	entityKind,
 	entitySubtitle,
 	entityTitle,
@@ -408,8 +409,8 @@ function SearchField({ inputRef }: { inputRef: React.RefObject<HTMLInputElement 
 										const track = isPlaylistItem(item) ? item.track : isTrack(item) ? item : undefined;
 										return (
 											<CommandItem
-												key={"track" in item ? item.itemId : item.id}
-												value={`r:${"track" in item ? item.itemId : item.id}`}
+												key={entityKey(item)}
+												value={`r:${entityKey(item)}`}
 												onSelect={() => openEntity(item)}
 											>
 												<div className="relative shrink-0">
