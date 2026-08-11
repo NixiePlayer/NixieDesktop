@@ -857,8 +857,10 @@ export function TrackRow({
 					// "New playlist" dialog) leaves the row's DOM and stays its child in the React tree, and a
 					// synthetic event travels that tree, so without this every menu item ran its command and
 					// then played this row on top of it.
+					// `target` is an `EventTarget`, and `instanceof` is what narrows it rather than a cast
+					// asserting what the type does not know.
 					onClick={(event) => {
-						if (!row.current?.contains(event.target as Node)) return;
+						if (!(event.target instanceof Node) || !row.current?.contains(event.target)) return;
 						void engine.play(track, queue, context);
 					}}
 				/>
