@@ -5,6 +5,9 @@ import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
 
+const cmdLiteral = (value: string) => value.replaceAll("%", "%%");
+const shellLiteral = (value: string) => `'${value.replaceAll("'", `'"'"'`)}'`;
+
 // The reverse-DNS name the browser looks the host up by, and the extension id the pinned key derives.
 // The same id appears in the extension's manifest `key`, in the host manifest's allowed_origins, and
 // in the config the pipe server checks the handshake against: three copies of one contract, and a
@@ -74,17 +77,16 @@ export function wrapperScript(
 		// cmd expands %VAR% even inside double quotes, so a `%` in an account name or install path (both
 		// legal on NTFS) would corrupt the argument. Doubling it is how a literal percent survives; `%*`,
 		// which forwards Chrome's own origin argument, is left alone.
-		const literal = (value: string) => value.replaceAll("%", "%%");
 		return [
 			"@echo off",
 			"set ELECTRON_RUN_AS_NODE=1",
-			`"${literal(executable)}" "${literal(hostScript)}" "--config=${literal(configPath)}" %*`,
+			`"${cmdLiteral(executable)}" "${cmdLiteral(hostScript)}" "--config=${cmdLiteral(configPath)}" %*`,
 			"",
 		].join("\r\n");
 	}
 	return [
 		"#!/bin/sh",
-		`ELECTRON_RUN_AS_NODE=1 exec "${executable}" "${hostScript}" "--config=${configPath}" "$@"`,
+		`ELECTRON_RUN_AS_NODE=1 exec ${shellLiteral(executable)} ${shellLiteral(hostScript)} ${shellLiteral(`--config=${configPath}`)} "$@"`,
 		"",
 	].join("\n");
 }

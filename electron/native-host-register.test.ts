@@ -42,8 +42,15 @@ describe("wrapperScript", () => {
 		const script = wrapperScript("linux", "/opt/nixie/nixie", "/opt/nixie/host.cjs", "/home/x/config.json");
 		expect(script.startsWith("#!/bin/sh")).toBe(true);
 		expect(script).toContain(
-			'ELECTRON_RUN_AS_NODE=1 exec "/opt/nixie/nixie" "/opt/nixie/host.cjs" "--config=/home/x/config.json" "$@"'
+			`ELECTRON_RUN_AS_NODE=1 exec '/opt/nixie/nixie' '/opt/nixie/host.cjs' '--config=/home/x/config.json' "$@"`
 		);
 		expect(script).not.toContain("\r\n");
+	});
+
+	it("quotes POSIX launcher paths as data", () => {
+		const script = wrapperScript("linux", "/opt/nixie's/$app", "/res/`host`.cjs", "/home/a b/config.json");
+		expect(script).toContain(
+			"exec '/opt/nixie'\"'\"'s/$app' '/res/`host`.cjs' '--config=/home/a b/config.json' \"$@\""
+		);
 	});
 });
