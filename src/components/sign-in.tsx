@@ -1,9 +1,12 @@
-import { ChevronRight, Globe } from "lucide-react";
+import { ChevronRight, Globe, Puzzle } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import markDev from "#/assets/logo-dev.png";
 import markProd from "#/assets/logo.png";
-import type { AuthState, BrowserAccount } from "#/shared/contracts";
+import { platform } from "#/lib/platform";
+import type { AuthState, BrowserAccount, ExtensionSource } from "#/shared/contracts";
 import { Button } from "./ui/button";
+import { Field, FieldDescription, FieldGroup, FieldLabel } from "./ui/field";
+import { Input } from "./ui/input";
 import { Skeleton } from "./ui/skeleton";
 
 // One SVG filter, inlined so the panel needs no asset and no network. It is what keeps the
@@ -89,12 +92,140 @@ function AccountRow({
 	);
 }
 
+/**
+ * The extension path, primary on Windows where the disk read reaches only Firefox, secondary
+ * elsewhere. A connected profile that holds no session is shown and refused rather than hidden, since
+ * "nothing happened" reads worse than a row that says why. The account name is not shown because the
+ * extension cannot know it: it is filled in from the linked session after, the same rule the disk
+ * path follows.
+ */
+function ExtensionBlock({
+	sources,
+	disabled,
+	onLink,
+}: {
+	sources: ExtensionSource[];
+	disabled: boolean;
+	onLink: (installId: string, pairingSecret: string) => void;
+}) {
+	return (
+		<div className="flex flex-col gap-3">
+			<h2 className="text-sm font-medium">Connect Chrome, Edge, Brave or Vivaldi</h2>
+			{sources.length > 0 ? (
+				<div className="flex flex-col gap-2">
+					{sources.map((source) =>
+						source.signedIn ? (
+							<ExtensionPairingRow key={source.installId} source={source} disabled={disabled} onLink={onLink} />
+						) : (
+							<div
+								key={source.installId}
+								className="border-border flex items-center gap-3 rounded-xl border p-3 opacity-60"
+							>
+								<span className="bg-muted flex size-8 shrink-0 items-center justify-center rounded-md">
+									<Puzzle className="text-muted-foreground size-4" />
+								</span>
+								<span className="flex min-w-0 flex-col">
+									<span className="truncate text-sm font-medium">{source.browser}</span>
+									<span className="text-muted-foreground truncate text-xs">
+										Not signed in to{" "}
+										<a
+											href="https://music.youtube.com"
+											target="_blank"
+											rel="noreferrer"
+											className="text-foreground underline underline-offset-4"
+										>
+											music.youtube.com
+										</a>
+									</span>
+								</span>
+							</div>
+						)
+					)}
+				</div>
+			) : (
+				<div className="border-border flex flex-col gap-2 rounded-xl border border-dashed p-4">
+					<p className="text-muted-foreground text-sm">
+						{platform === "win32"
+							? "Windows protects these browsers' cookies so that only the browser can read them. Nixie Link asks the browser for your YouTube session instead. "
+							: "If Nixie cannot find this browser profile, use Nixie Link instead. "}
+						The extension is not in browser marketplaces. Follow the{" "}
+						<a
+							href="https://github.com/NixiePlayer/nixie-link-extension#install"
+							target="_blank"
+							rel="noreferrer"
+							className="text-foreground underline underline-offset-4"
+						>
+							manual installation guide
+						</a>
+						, then open Nixie Link once. Your profile appears here automatically.
+					</p>
+				</div>
+			)}
+		</div>
+	);
+}
+
+function ExtensionPairingRow({
+	source,
+	disabled,
+	onLink,
+}: {
+	source: ExtensionSource;
+	disabled: boolean;
+	onLink: (installId: string, pairingSecret: string) => void;
+}) {
+	const [pairingSecret, setPairingSecret] = useState("");
+	const id = `pairing-${source.installId}`;
+	return (
+		<form
+			className="border-border bg-card flex flex-col gap-3 rounded-xl border p-3"
+			onSubmit={(event) => {
+				event.preventDefault();
+				onLink(source.installId, pairingSecret.trim());
+			}}
+		>
+			<div className="flex items-center gap-3">
+				<span className="bg-muted flex size-8 shrink-0 items-center justify-center rounded-md">
+					<Puzzle className="text-muted-foreground size-4" />
+				</span>
+				<span className="flex min-w-0 flex-col">
+					<span className="truncate text-sm font-medium">{source.browser}</span>
+					<span className="text-muted-foreground truncate text-xs">Connected through the extension</span>
+				</span>
+			</div>
+			<FieldGroup className="gap-3">
+				<Field data-disabled={disabled}>
+					<FieldLabel htmlFor={id}>Pairing code</FieldLabel>
+					<Input
+						id={id}
+						type="password"
+						value={pairingSecret}
+						onChange={(event) => setPairingSecret(event.target.value)}
+						pattern="[A-Za-z0-9_-]{43}"
+						minLength={43}
+						maxLength={43}
+						autoComplete="off"
+						spellCheck={false}
+						disabled={disabled}
+						required
+					/>
+					<FieldDescription>Copy this code from the Nixie Link popup.</FieldDescription>
+				</Field>
+				<Button type="submit" disabled={disabled || pairingSecret.trim().length !== 43}>
+					Connect
+				</Button>
+			</FieldGroup>
+		</form>
+	);
+}
+
 /** The whole app is behind this. Nothing renders until an account is linked. */
 export function SignInView({ onSignedIn }: { onSignedIn: (auth: AuthState) => void }) {
 	const [error, setError] = useState("");
 	const [busy, setBusy] = useState(false);
 	// Undefined until detection answers, so the empty state never renders over a running scan.
 	const [accounts, setAccounts] = useState<BrowserAccount[] | undefined>(undefined);
+	const [sources, setSources] = useState<ExtensionSource[]>([]);
 
 	const findAccounts = useCallback(() => {
 		setAccounts(undefined);
@@ -104,6 +235,16 @@ export function SignInView({ onSignedIn }: { onSignedIn: (auth: AuthState) => vo
 			.catch(() => setAccounts([]));
 	}, []);
 	useEffect(findAccounts, [findAccounts]);
+
+	// Read once and follow the pushes, since the reader installs the extension with this screen open.
+	useEffect(() => {
+		if (!window.nixie) return;
+		void window.nixie.auth
+			.extensionSources()
+			.then(setSources)
+			.catch(() => undefined);
+		return window.nixie.auth.onExtensionSources(setSources);
+	}, []);
 
 	const run = (work?: Promise<AuthState>) => {
 		if (!work) return setError("Sign-in is only available in the Nixie desktop app.");
@@ -140,6 +281,17 @@ export function SignInView({ onSignedIn }: { onSignedIn: (auth: AuthState) => vo
 						</p>
 					)}
 
+					{/* Windows Chrome, Edge, Brave and Vivaldi encrypt their cookies in a way only the browser
+					    itself can read, so the extension is the primary path there and sits above the disk list,
+					    which reaches only Firefox. */}
+					{platform === "win32" && (
+						<ExtensionBlock
+							sources={sources}
+							disabled={busy}
+							onLink={(installId, pairingSecret) => run(window.nixie?.auth.linkExtension(installId, pairingSecret))}
+						/>
+					)}
+
 					{accounts === undefined ? (
 						<div className="flex flex-col gap-2">
 							{[0, 1].map((row) => (
@@ -173,21 +325,47 @@ export function SignInView({ onSignedIn }: { onSignedIn: (auth: AuthState) => vo
 					) : (
 						<div className="border-border flex flex-col items-start gap-3 rounded-xl border border-dashed p-4">
 							<p className="text-muted-foreground text-sm">
-								No signed-in browser found. Sign in at{" "}
-								<a
-									href="https://music.youtube.com"
-									target="_blank"
-									rel="noreferrer"
-									className="text-foreground underline underline-offset-4"
-								>
-									music.youtube.com
-								</a>{" "}
-								in Chrome, Brave, Edge, Vivaldi, or Firefox, then check again.
+								{platform === "win32" ? (
+									<>
+										No signed-in Firefox found. Sign in at{" "}
+										<a
+											href="https://music.youtube.com"
+											target="_blank"
+											rel="noreferrer"
+											className="text-foreground underline underline-offset-4"
+										>
+											music.youtube.com
+										</a>{" "}
+										in Firefox, or connect Chrome, Edge, Brave or Vivaldi through the extension above.
+									</>
+								) : (
+									<>
+										No signed-in browser found. Sign in at{" "}
+										<a
+											href="https://music.youtube.com"
+											target="_blank"
+											rel="noreferrer"
+											className="text-foreground underline underline-offset-4"
+										>
+											music.youtube.com
+										</a>{" "}
+										in Chrome, Brave, Edge, Vivaldi, or Firefox, then check again.
+									</>
+								)}
 							</p>
 							<Button variant="outline" size="sm" onClick={findAccounts}>
 								Check again
 							</Button>
 						</div>
+					)}
+
+					{/* Elsewhere the disk read handles every browser, so the extension is the secondary path. */}
+					{platform !== "win32" && (
+						<ExtensionBlock
+							sources={sources}
+							disabled={busy}
+							onLink={(installId, pairingSecret) => run(window.nixie?.auth.linkExtension(installId, pairingSecret))}
+						/>
 					)}
 
 					{/*

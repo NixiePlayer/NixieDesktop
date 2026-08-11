@@ -27,10 +27,11 @@ import { Switch } from "#/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "#/components/ui/tabs";
 import { toast } from "#/components/ui/toast";
 import { dropHeldPages, queryMusic } from "#/lib/api";
+import { platform } from "#/lib/platform";
 import { applyTheme, storedTheme } from "#/lib/theme";
 import { checkForUpdates, useUpdateState } from "#/lib/updates";
 import { cn } from "#/lib/utils";
-import type { AppInfo, NormalizationLevel, Settings } from "#/shared/contracts";
+import type { AppInfo, NixiePlatform, NormalizationLevel, Settings } from "#/shared/contracts";
 import { defaultState } from "#/shared/defaults";
 import { maxBoostDb, normalizationTargets } from "#/shared/normalization";
 import { regionCode } from "#/shared/regions";
@@ -40,6 +41,15 @@ const themes = [
 	{ value: "light", label: "Light", caption: "Always", icon: Sun },
 	{ value: "system", label: "System", caption: "Follows the device", icon: Monitor },
 ] as const;
+
+// Where the switch that is on and silent is turned back on. Each platform hides it somewhere else.
+const NOTIFICATION_SETTINGS_HINT: Record<NixiePlatform, string> = {
+	darwin: "Allow notifications for Nixie in System Settings, under Notifications.",
+	win32:
+		"Allow notifications for Nixie in Settings, under System and then Notifications, and check that Do not disturb is off.",
+	linux:
+		"Allow notifications for Nixie in your desktop's notification settings, and check that a notification service is running.",
+};
 
 // The label carries the loudness each level aims for, which is the whole difference between them.
 type Level = Exclude<NormalizationLevel, "off">;
@@ -441,8 +451,7 @@ function SettingsPage() {
 							>
 								{notificationsRefused && settings.notifyTrackChange !== false && (
 									<p className="text-destructive text-sm">
-										Your system refused the last one. Allow notifications for Nixie in System Settings, under
-										Notifications.
+										Your system refused the last one. {NOTIFICATION_SETTINGS_HINT[platform]}
 									</p>
 								)}
 							</Setting>

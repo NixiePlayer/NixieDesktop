@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { release } from "node:os";
-import { join, relative, resolve, sep } from "node:path";
+import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import {
@@ -15,6 +15,7 @@ import {
 	net,
 	Notification,
 	protocol,
+	safeStorage,
 	session,
 	shell,
 	type IpcMainInvokeEvent,
@@ -23,12 +24,16 @@ import {
 // and a named import of it from an ES module resolves to nothing at runtime.
 import electronUpdater from "electron-updater";
 import type { AudioQuality, AuthState, PersistedState, Track, UpdateState } from "../src/shared/contracts";
+import type { LinkedAccount } from "../src/shared/contracts";
 import { artistNames } from "../src/shared/entities";
 import {
 	validateBrowserAccount,
 	validateDocumentName,
+	validateInstallId,
+	validateLinkedAccount,
 	validateMusicCommand,
 	validateMusicQuery,
+	validatePairingSecret,
 	validateState,
 	validateTrack,
 } from "../src/shared/validation";
@@ -37,6 +42,8 @@ import { configureRestrictedEvaluator, evaluateRestricted } from "./decipher";
 import { LocalLogger } from "./logger";
 import { LyricsClient } from "./lyrics";
 import { SecureResourceRegistry } from "./media-protocol";
+import { EXTENSION_ID, NATIVE_HOST_NAME, registerNativeHost } from "./native-host-register";
+import { NativeHostServer } from "./native-host-server";
 import { StateStore } from "./state-store";
 import { YouTubeAdapter } from "./youtube-adapter";
 
@@ -89,6 +96,26 @@ app.setName(APP_NAME);
 // rather than left to Electron so the packaged path stays `Nixie` whatever the bundle is called.
 app.setPath("userData", join(app.getPath("appData"), APP_NAME));
 
+// Windows attributes a toast, a taskbar group and the media transport controls to this id, and draws
+// nothing at all when it does not match the Start Menu shortcut the installer writes, which carries the
+// appId. It is a no-op on macOS and Linux, so it is set unconditionally rather than guarded.
+app.setAppUserModelId("com.theedoran.nixiedesktop");
+
+// One instance per data path. macOS keeps a second launch off the bundle through LaunchServices, but
+// nothing does on Windows or Linux, where a second copy is a second writer on the state file, the log
+// and the auth partition. `exit` rather than `quit`: quitting is asynchronous and the startup chain
+// below would run in the process that is already leaving. This also fixes the one macOS path that was
+// never protected, two `pnpm dev` runs sharing the dev channel's single userData.
+if (!app.requestSingleInstanceLock()) app.exit(0);
+
+// macOS draws overlay scrollbars: they float over the content, take no layout width and fade out when
+// nothing is scrolling, which is what every page in this app is laid out against. Windows and Linux
+// draw a classic gutter instead, always visible and eating width, which is a different app in the same
+// window. Chromium has the macOS behaviour on those two behind a feature of its own, so it is asked for
+// rather than approximated in CSS: a `::-webkit-scrollbar` rule can only restyle the gutter, never take
+// its space back or make it fade. It must be set before the app is ready.
+if (process.platform !== "darwin") app.commandLine.appendSwitch("enable-features", "OverlayScrollbar");
+
 // `release()` is a kernel version and says nothing about which system it came from, so the diagnostics
 // line names the platform itself. An unrecognised one prints its own `process.platform`, which is the
 // only honest thing left to say about it.
@@ -105,6 +132,7 @@ let quitting = false;
 let stateStore: StateStore;
 let logger: LocalLogger;
 let youtube: YouTubeAdapter;
+let nativeHost: NativeHostServer;
 const resources = new SecureResourceRegistry({
 	log: (message) => void logger.write("error", message),
 	// In development the renderer is served by Vite, so the decks fetch the stream cross-origin.
@@ -222,9 +250,11 @@ async function notifyTrackChange(track: Track) {
 }
 
 let refreshedAt = 0;
+let refreshInFlight: Promise<void> | undefined;
 
 async function writeCookies(cookies: ImportedCookie[]) {
 	const authSession = session.fromPartition(authPartition);
+	await authSession.clearStorageData({ storages: ["cookies"] });
 	for (const cookie of cookies) {
 		await authSession.cookies
 			.set({
@@ -254,10 +284,29 @@ async function writeCookies(cookies: ImportedCookie[]) {
  */
 async function refreshLinkedCookies() {
 	if (Date.now() - refreshedAt < 60_000) return;
-	refreshedAt = Date.now();
-	const account: unknown = JSON.parse(await readFile(linkPath(), "utf8"));
-	validateBrowserAccount(account);
-	await writeCookies(await readYouTubeCookies(account));
+	if (refreshInFlight) return refreshInFlight;
+	refreshInFlight = (async () => {
+		let link: unknown;
+		try {
+			link = JSON.parse(await readFile(linkPath(), "utf8"));
+			validateLinkedAccount(link);
+		} catch (error) {
+			await writeCookies([]);
+			throw error;
+		}
+		if (link.source !== "extension") return writeCookies(await readYouTubeCookies(link));
+		try {
+			const secret = safeStorage.decryptString(Buffer.from(link.pairingKey, "base64"));
+			await writeCookies(await nativeHost.pull(link.installId, secret));
+		} catch (error) {
+			// A missing, signed-out or replaced extension must not leave an old browser session active.
+			await writeCookies([]);
+			throw error;
+		}
+	})().finally(() => {
+		refreshInFlight = undefined;
+	});
+	return refreshInFlight;
 }
 
 async function cookieHeader() {
@@ -305,24 +354,60 @@ async function authState(): Promise<AuthState> {
  * on this computer is what is left, so the account arrives already signed in and nobody handles a
  * cookie by hand.
  */
+/**
+ * Everything a session needs once its cookies are in hand, whichever door they came through: the
+ * partition is cleared, the adapter is rebuilt, the entitlement is checked, and the link is written
+ * only for a session Nixie will actually play. A refused profile leaves no link behind, so the next
+ * attempt starts from nothing. The two callers differ only in where the cookies came from and what
+ * `source` the link records.
+ */
+async function linkSession(cookies: ImportedCookie[], link: LinkedAccount) {
+	const authSession = session.fromPartition(authPartition);
+	await authSession.clearStorageData();
+	await rm(linkPath(), { force: true });
+	await writeCookies(cookies);
+	try {
+		youtube = createAdapter();
+		const state = await authState();
+		if (state.status === "unentitled") {
+			throw new Error("That account has no YouTube Music Premium subscription, which Nixie requires");
+		}
+		if (state.status !== "authenticated") throw new Error("That profile is not signed in to YouTube");
+		await writeFile(linkPath(), JSON.stringify(link), { mode: 0o600 });
+		return state;
+	} catch (error) {
+		await authSession.clearStorageData();
+		throw error;
+	}
+}
+
 async function importFromBrowser(account: unknown) {
 	validateBrowserAccount(account);
 	const cookies = await readYouTubeCookies(account);
-	await session.fromPartition(authPartition).clearStorageData();
-	await rm(linkPath(), { force: true });
-	await writeCookies(cookies);
-	youtube = createAdapter();
-	const state = await authState();
-	// Nothing is written for an account Nixie will not play, so a refused profile leaves no link
-	// behind and the next attempt starts from nothing.
-	if (state.status === "unentitled") {
-		throw new Error("That account has no YouTube Music Premium subscription, which Nixie requires");
+	return linkSession(cookies, { source: "browser", browser: account.browser, profile: account.profile });
+}
+
+/** The extension's counterpart of importFromBrowser: pull the profile's cookies through the host. */
+function protectPairingSecret(secret: string) {
+	if (!safeStorage.isEncryptionAvailable()) throw new Error("Secure storage is not available on this computer");
+	if (process.platform === "linux" && safeStorage.getSelectedStorageBackend() === "basic_text") {
+		throw new Error("Unlock a system keyring before pairing the extension");
 	}
-	if (state.status !== "authenticated") throw new Error("That browser profile is not signed in to YouTube");
-	await writeFile(linkPath(), JSON.stringify({ browser: account.browser, profile: account.profile }), {
-		mode: 0o600,
+	return safeStorage.encryptString(secret).toString("base64");
+}
+
+async function importFromExtension(installId: unknown, pairingSecret: unknown) {
+	validateInstallId(installId);
+	validatePairingSecret(pairingSecret);
+	const source = nativeHost.connections().find((connection) => connection.installId === installId);
+	if (!source) throw new Error("That browser is no longer connected");
+	const cookies = await nativeHost.pull(installId, pairingSecret);
+	return linkSession(cookies, {
+		source: "extension",
+		installId,
+		browser: source.browser,
+		pairingKey: protectPairingSecret(pairingSecret),
 	});
-	return state;
 }
 
 function createAdapter() {
@@ -342,6 +427,39 @@ function createAdapter() {
 		void logger.write("error", `InnerTube warm-up failed: ${error instanceof Error ? error.message : "unknown"}`);
 	});
 	return adapter;
+}
+
+/**
+ * The pipe server the browser extension reaches through the native host, and the per-browser
+ * registration that points the host at it. Both are non-fatal: a session that came from a disk read
+ * needs neither, and the extension path simply stays unavailable if either fails. The server is
+ * assigned before the try so `connections()` and `pull()` answer even when the listen did not.
+ */
+async function setupNativeHost() {
+	nativeHost = new NativeHostServer();
+	try {
+		await nativeHost.listen(app.getPath("userData"), [`chrome-extension://${EXTENSION_ID}/`]);
+		await registerNativeHost({
+			platform: process.platform,
+			userDataPath: app.getPath("userData"),
+			// Inside an AppImage `process.execPath` is a per-run mount path that dies with the process, so
+			// the wrapper written from it would be stale by the next launch. APPIMAGE is the stable path to
+			// the image itself, and is set only there.
+			executable: process.env.APPIMAGE ?? process.execPath,
+			// Shipped outside the asar through `build.extraResources`, so the path is a real file the
+			// Electron binary can run as Node. In development it is the repository copy.
+			hostScript: app.isPackaged
+				? join(process.resourcesPath, "native-host", "host.cjs")
+				: join(app.getAppPath(), "electron", "native-host", "host.cjs"),
+			extensionId: EXTENSION_ID,
+			hostName: NATIVE_HOST_NAME,
+		});
+	} catch (error: unknown) {
+		// The reason, never the message: a node fs or net error carries the failing path, which the log
+		// must not (AGENTS.md). `EADDRINUSE`, `EACCES` and the like are enough to say what went wrong.
+		const reason = error && typeof error === "object" && "code" in error ? String(error.code) : "unknown";
+		void logger.write("error", `native host setup failed: ${reason}`);
+	}
 }
 
 const execFileAsync = promisify(execFile);
@@ -370,7 +488,11 @@ const browserIcons = new Map<string, Promise<string | undefined>>();
 function browserIcon(browser: string) {
 	const cached = browserIcons.get(browser);
 	if (cached) return cached;
-	const bundleId = BROWSER_BUNDLE_IDS[browser];
+	// Spotlight is the whole lookup, so this is macOS and nothing else. Windows would want the browser's
+	// registered executable out of the registry and Linux its `.desktop` entry and icon theme, two more
+	// lookups for one 32px image; a row with no icon still names its account and still links it. This also
+	// stops spawning a missing `/usr/bin/mdfind` once per browser on every `auth:browsers` call.
+	const bundleId = process.platform === "darwin" ? BROWSER_BUNDLE_IDS[browser] : undefined;
 	const icon = bundleId
 		? execFileAsync("/usr/bin/mdfind", [`kMDItemCFBundleIdentifier == '${bundleId}'`])
 				.then(({ stdout }) => stdout.split("\n")[0]?.trim())
@@ -454,6 +576,8 @@ function registerIpc() {
 		return Promise.all(accounts.map(async (account) => ({ ...account, icon: await browserIcon(account.browser) })));
 	});
 	handle("auth:import-browser", (_event, account) => importFromBrowser(account));
+	handle("auth:extension-sources", () => nativeHost.connections());
+	handle("auth:link-extension", (_event, installId, pairingSecret) => importFromExtension(installId, pairingSecret));
 	handle("auth:sign-out", async () => {
 		await session.fromPartition(authPartition).clearStorageData();
 		await rm(linkPath(), { force: true });
@@ -519,9 +643,12 @@ function registerIpc() {
 	handle("player:notify-refused", () => notificationsRefused);
 
 	handle("local:load", () => stateStore.snapshot);
-	handle("local:save", (_event, value) => {
+	handle("local:save", async (_event, value) => {
 		validateState(value);
-		return stateStore.save(value);
+		await stateStore.save(value);
+		// The stored theme decides the overlay's colours, and it is written through here, so this is where
+		// the window controls follow a theme change. A no-op on macOS.
+		syncTitleBarOverlay();
 	});
 	handle("local:clear", async (_event, selection) => {
 		if (!["session", "all"].includes(String(selection))) throw new TypeError("Invalid clear selection");
@@ -587,7 +714,10 @@ function registerAppProtocol() {
 		const pathname = url.pathname === "/" ? "index.html" : decodeURIComponent(url.pathname.slice(1));
 		const filePath = resolve(root, pathname);
 		const relativePath = relative(root, filePath);
-		if (!relativePath || relativePath.startsWith(`..${sep}`) || relativePath === "..") {
+		// `isAbsolute` is the Windows half of this test: `relative` returns the target itself when the two
+		// paths sit on different drives, so `nixie://app/C:/Windows/win.ini` produced a relative path that
+		// started with neither `..` nor the root and was served. Inert on macOS and Linux.
+		if (!relativePath || relativePath.startsWith(`..${sep}`) || relativePath === ".." || isAbsolute(relativePath)) {
 			return new Response("Bad request", { status: 400 });
 		}
 		const response = await net.fetch(pathToFileURL(filePath).toString());
@@ -600,6 +730,12 @@ function registerAppProtocol() {
 function installMenu() {
 	const send = (type: "play" | "pause" | "next" | "previous") =>
 		mainWindow?.webContents.send("player:media-command", { type });
+	// Off macOS every role in this template is either inert (hide, unhide) or already delivered by
+	// Chromium without a menu at all (copy, paste, select all), and what is left would be drawn as a
+	// menu bar inside a window whose whole point is that it has no chrome. The two playback accelerators
+	// move into the renderer (`app-shell.tsx`), which is also the only place that can tell a text field
+	// from the transport.
+	if (process.platform !== "darwin") return Menu.setApplicationMenu(null);
 	Menu.setApplicationMenu(
 		Menu.buildFromTemplate([
 			{
@@ -644,13 +780,34 @@ async function verifyRestrictedEvaluator() {
 	}
 }
 
+// Off macOS the window controls are drawn back into the page by the overlay, which Chromium paints
+// rather than the renderer, so it cannot read a CSS variable. `height` is the header row (`3.5rem` in
+// `app-shell.tsx`), and the two colour pairs are `--background`/`--foreground` from `src/styles.css`:
+// change one and change the other.
+const TITLE_BAR = {
+	height: 56,
+	dark: { color: "#0f0f0f", symbolColor: "#f1f1f1" },
+	light: { color: "#ffffff", symbolColor: "#0f0f0f" },
+};
+
+function darkAppearance() {
+	const theme = stateStore.snapshot.settings.theme;
+	return theme === "system" ? nativeTheme.shouldUseDarkColors : theme === "dark";
+}
+
+// Windows and Linux only: macOS draws its own traffic lights and has no overlay to restyle.
+function syncTitleBarOverlay() {
+	if (process.platform === "darwin" || !mainWindow || mainWindow.isDestroyed()) return;
+	const palette = darkAppearance() ? TITLE_BAR.dark : TITLE_BAR.light;
+	mainWindow.setTitleBarOverlay({ ...palette, height: TITLE_BAR.height });
+}
+
 async function createWindow() {
 	const saved = stateStore.snapshot.windowBounds;
 	// What the window is painted with until the renderer's first frame lands. It is the stored theme's
 	// own `--background` from `src/styles.css`, so a light window never opens on a dark rectangle: a
 	// colour fixed at one appearance is the flash the renderer's synchronous paint cannot reach.
-	const theme = stateStore.snapshot.settings.theme;
-	const dark = theme === "system" ? nativeTheme.shouldUseDarkColors : theme === "dark";
+	const dark = darkAppearance();
 	mainWindow = new BrowserWindow({
 		width: saved?.width ?? 1440,
 		height: saved?.height ?? 900,
@@ -659,7 +816,21 @@ async function createWindow() {
 		minWidth: 1040,
 		minHeight: 680,
 		show: false,
-		titleBarStyle: "hiddenInset",
+		// "hiddenInset" insets the traffic lights that the top bar's leading padding clears. Off macOS the
+		// title bar is hidden and the controls are drawn back into the page by the overlay, which keeps the
+		// native frame: `frame: false` would lose the resize borders, the maximize geometry and the snap
+		// layouts, and have to reimplement all three.
+		titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "hidden",
+		...(process.platform === "darwin"
+			? {}
+			: { titleBarOverlay: { ...(dark ? TITLE_BAR.dark : TITLE_BAR.light), height: TITLE_BAR.height } }),
+		// The window and taskbar icon. A packaged build carries it in the executable itself, and macOS
+		// draws its dock icon through `app.dock.setIcon`, so this is the development window on Windows and
+		// Linux, which would otherwise wear the stock Electron mark. `scripts/dev-app-name.mjs` is the
+		// macOS counterpart and is a no-op off it.
+		...(process.env.VITE_DEV_SERVER_URL && process.platform !== "darwin"
+			? { icon: join(app.getAppPath(), "build", "icon-dev.png") }
+			: {}),
 		backgroundColor: dark ? "#0f0f0f" : "#ffffff",
 		webPreferences: {
 			preload: join(import.meta.dirname, "../preload/preload.mjs"),
@@ -733,9 +904,13 @@ void app
 		youtube = createAdapter();
 		registerAppProtocol();
 		await verifyRestrictedEvaluator();
+		await setupNativeHost();
 		registerIpc();
 		installMenu();
 		await createWindow();
+		nativeHost.onChange((sources) => {
+			if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send("auth:extension-sources", sources);
+		});
 		// After the window, so the first state reaches a renderer that exists, and not awaited: a
 		// GitHub that cannot be reached must not hold up the app it is checking.
 		configureUpdater();
@@ -744,6 +919,9 @@ void app
 			if (mainWindow && !mainWindow.isDestroyed()) mainWindow.show();
 			else void createWindow();
 		});
+		// Only while the stored theme is `system`: the OS appearance changing then flips the overlay's
+		// colours, which nothing else in the app is listening for. A no-op on macOS.
+		nativeTheme.on("updated", syncTitleBarOverlay);
 	})
 	.catch((error: unknown) => {
 		void logger?.write("error", error instanceof Error ? error.message : "Application startup failed");
@@ -755,11 +933,24 @@ app.on("window-all-closed", () => {
 	if (process.platform !== "darwin") app.quit();
 });
 
+// A second launch on Windows or Linux hands its lock to the instance that holds it rather than opening
+// a second window on the same data path. macOS never reaches here, since LaunchServices refuses the
+// second copy before it starts.
+app.on("second-instance", () => {
+	if (!mainWindow || mainWindow.isDestroyed()) return;
+	if (mainWindow.isMinimized()) mainWindow.restore();
+	mainWindow.show();
+	mainWindow.focus();
+});
+
 let stateSavedBeforeQuit = false;
 app.on("before-quit", (event) => {
 	// Set before the early return, since the second pass through here is the one that reaches the
 	// window's `close` handler, which refuses to be destroyed until this says a quit is under way.
 	quitting = true;
+	// Removes the unix socket file so the next launch does not have to reclaim a stale one. Idempotent,
+	// so the second pass through here is harmless.
+	if (nativeHost) void nativeHost.close().catch(() => undefined);
 	if (stateSavedBeforeQuit || !stateStore) return;
 	event.preventDefault();
 	void stateStore.save(stateStore.snapshot).finally(() => {

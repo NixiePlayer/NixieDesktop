@@ -1,0 +1,21 @@
+# Line endings are LF everywhere, checked out and stored. Without this a Windows checkout converts
+# text to CRLF, and oxfmt is LF-only, so `pnpm fmt --check` fails on every file, on a Windows
+# contributor's machine and on the Windows CI leg alike. The macOS release and the Linux runner were
+# never exposed to it, which is why this was missing while the app was macOS only.
+* text=auto eol=lf
+
+# Binaries git must never touch. The icons, the fonts and the rendered docs carry bytes that a line
+# ending rewrite would corrupt.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.icns binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
+*.pdf binary
+*.zip binary

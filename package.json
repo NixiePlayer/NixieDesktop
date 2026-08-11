@@ -11,6 +11,7 @@
 	"private": true,
 	"type": "module",
 	"main": "dist-electron/main/index.js",
+	"desktopName": "Nixie.desktop",
 	"packageManager": "pnpm@11.16.0",
 	"engines": {
 		"node": "26",
@@ -25,14 +26,16 @@
 		"generate-routes": "tsr generate",
 		"licenses:write": "node scripts/licenses.mjs",
 		"build": "pnpm licenses:write && vite build",
-		"package": "pnpm build && electron-builder --mac --dir -c.mac.identity=- --publish never",
+		"package:mac": "pnpm build && electron-builder --mac --dir -c.mac.identity=- --publish never",
+		"package:win": "pnpm build && electron-builder --win --x64 --publish never",
+		"package:linux": "pnpm build && electron-builder --linux --x64 --publish never",
 		"dist": "pnpm release:gate && pnpm build && electron-builder --mac -c.mac.notarize=true --publish never",
 		"release:gate": "node --env-file-if-exists=electron-builder.env scripts/release-gates.mjs",
 		"release:patch": "pnpm version patch -m \"chore(release): v%s\"",
 		"release:minor": "pnpm version minor -m \"chore(release): v%s\"",
 		"release:major": "pnpm version major -m \"chore(release): v%s\"",
 		"release:notes": "pnpm dlx git-cliff@2.13.1 --latest --strip all",
-		"release:retag": "V=$(node -p \"require('./package.json').version\") && git tag -f -m \"chore(release): v$V\" \"v$V\"",
+		"release:retag": "node scripts/retag.mjs",
 		"release:push": "git push --follow-tags",
 		"preversion": "pnpm check",
 		"preview": "vite preview",
@@ -51,7 +54,7 @@
 		"class-variance-authority": "0.7.1",
 		"clsx": "2.1.1",
 		"cmdk": "1.1.1",
-		"electron-updater": "^6.8.9",
+		"electron-updater": "6.8.9",
 		"lucide-react": "1.27.0",
 		"react": "19.2.8",
 		"react-dom": "19.2.8",
@@ -101,6 +104,15 @@
 			"THIRD_PARTY_LICENSES.txt",
 			"THIRD_PARTY_NOTICES.md"
 		],
+		"extraResources": [
+			{
+				"from": "electron/native-host",
+				"to": "native-host",
+				"filter": [
+					"host.cjs"
+				]
+			}
+		],
 		"mac": {
 			"category": "public.app-category.music",
 			"icon": "build/icon.icns",
@@ -127,6 +139,49 @@
 		"dmg": {
 			"sign": true,
 			"writeUpdateInfo": false
+		},
+		"win": {
+			"icon": "build/icon.png",
+			"target": [
+				{
+					"target": "nsis",
+					"arch": [
+						"x64"
+					]
+				}
+			]
+		},
+		"nsis": {
+			"artifactName": "${productName}-${version}-setup.${ext}",
+			"oneClick": true,
+			"perMachine": false,
+			"createDesktopShortcut": true,
+			"shortcutName": "Nixie",
+			"include": "build/installer.nsh"
+		},
+		"linux": {
+			"icon": "build/icon.png",
+			"category": "AudioVideo",
+			"syncDesktopName": true,
+			"desktop": {
+				"entry": {
+					"Categories": "AudioVideo;Audio;Player;"
+				}
+			},
+			"target": [
+				{
+					"target": "AppImage",
+					"arch": [
+						"x64"
+					]
+				}
+			]
+		},
+		"appImage": {
+			"artifactName": "${productName}-${version}-x64.${ext}"
+		},
+		"toolsets": {
+			"appimage": "1.0.3"
 		},
 		"afterSign": "scripts/staple.mjs",
 		"afterAllArtifactBuild": "scripts/finish-dmgs.mjs"
