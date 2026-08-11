@@ -168,6 +168,27 @@ function albumIdFrom(node: UnknownRecord): string | undefined {
 }
 
 /**
+ * The id that addresses a row of a playlist rather than the song sitting in it, which is what both
+ * removing and reordering name: the same song appears in a playlist more than once, and a position is
+ * the only thing that tells the two copies apart.
+ *
+ * Upstream states it on the row as `playlistSetVideoId`, and `MusicResponsiveListItem` reads that
+ * field into a local it then assigns nowhere, so the parsed row does not carry it at all. The row's
+ * own menu does: "Remove from playlist" is the very `playlistEditEndpoint` this app sends, with the
+ * set video id already in its actions. A row that states none is a row in a playlist this account
+ * cannot edit, and it is left as a plain song rather than given an id that addresses nothing.
+ */
+function playlistItemIdFrom(node: UnknownRecord): string | undefined {
+	const items = record(node.menu) && Array.isArray(node.menu.items) ? node.menu.items : [];
+	for (const item of items.filter(record)) {
+		const payload = endpointPayload(item);
+		const actions = payload && Array.isArray(payload.actions) ? payload.actions : [];
+		const id = actions.filter(record).find((action) => firstString(action, "setVideoId"));
+		if (id) return firstString(id, "setVideoId");
+	}
+}
+
+/**
  * Who made a playlist. A responsive row is parsed with an `author` of its own, a grid tile is not:
  * upstream states the name as one of that tile's subtitle runs, beside "21 songs" and a separator,
  * and the only thing telling it apart from those is that a name links to the channel behind it.
@@ -544,24 +565,38 @@ export class YouTubeAdapter {
 				if (request.privacy) {
 					actions.push({ action: "ACTION_SET_PLAYLIST_PRIVACY", playlistPrivacy: request.privacy.toUpperCase() });
 				}
-				await client.actions.execute("/browse/edit_playlist", {
-					// A playlist is addressed by its browse id everywhere in this app, and this endpoint wants
-					// the playlist's own id, which is the same string without the `VL` a browse id carries.
-					playlistId: request.playlistId.replace(/^VL/, ""),
-					actions,
-					client: "YTMUSIC",
-				});
+				await this.#editPlaylist(client, request.playlistId, actions);
 				break;
 			}
+			// The three item edits below are the same endpoint as `playlist-update` and go the same way,
+			// for the same reason: `playlist.addVideos`, `removeVideos` and `moveVideo` all send their
+			// `playlistEditEndpoint` on the WEB client, which answers a YouTube Music playlist with a 400,
+			// so nothing any of them asked for ever landed. `moveVideo` was doubly wrong here, since it
+			// reads its two arguments as video ids and looks up the set video ids itself, where a playlist
+			// item is already addressed by its set video id everywhere in this app.
 			case "playlist-add":
-				await client.playlist.addVideos(request.playlistId, request.trackIds);
+				await this.#editPlaylist(
+					client,
+					request.playlistId,
+					request.trackIds.map((id) => ({ action: "ACTION_ADD_VIDEO", addedVideoId: id }))
+				);
 				break;
 			case "playlist-remove":
-				await client.playlist.removeVideos(request.playlistId, request.itemIds, true);
+				await this.#editPlaylist(
+					client,
+					request.playlistId,
+					request.itemIds.map((itemId) => ({ action: "ACTION_REMOVE_VIDEO", setVideoId: itemId }))
+				);
 				break;
 			case "playlist-reorder":
 				if (!request.beforeItemId) throw new Error("A destination item is required");
-				await client.playlist.moveVideo(request.playlistId, request.itemId, request.beforeItemId);
+				await this.#editPlaylist(client, request.playlistId, [
+					{
+						action: "ACTION_MOVE_VIDEO_BEFORE",
+						setVideoId: request.itemId,
+						movedSetVideoIdSuccessor: request.beforeItemId,
+					},
+				]);
 				break;
 			case "playlist-delete": {
 				const result = await client.playlist.delete(request.playlistId.replace(/^VL/, ""));
@@ -764,6 +799,21 @@ export class YouTubeAdapter {
 		});
 		if (!response.contents) return;
 		return { contents: unwrapParsed(response.contents), header: unwrapParsed(response.header) };
+	}
+
+	/**
+	 * Every edit to a playlist, its title and privacy as much as the songs in it. One request carries a
+	 * list of actions, and it is sent raw for two reasons youtubei.js gets wrong in every wrapper over
+	 * this endpoint: it goes out on the WEB client, which answers a YouTube Music playlist with a 400,
+	 * and it is addressed by the playlist's own id, which is the browse id this app holds without the
+	 * `VL` that prefixes it.
+	 */
+	async #editPlaylist(client: Innertube, playlistId: string, actions: Record<string, string>[]) {
+		await client.actions.execute("/browse/edit_playlist", {
+			playlistId: playlistId.replace(/^VL/, ""),
+			actions,
+			client: "YTMUSIC",
+		});
 	}
 
 	/**
@@ -1170,9 +1220,6 @@ export function extractEntities(
 					items.push(channel);
 					return;
 				}
-				// ponytail: upstream drops playlistSetVideoId when it parses an item, so a track inside a
-				// playlist arrives without the id that addresses its row. Read it out of the item's own
-				// menu when removing and reordering have to name a row rather than a video.
 				const album = albumFrom(node, artwork);
 				const track: Track = {
 					id,
@@ -1188,7 +1235,10 @@ export function extractEntities(
 					plays: playsFrom(node),
 					rank: rankFrom(node),
 				};
-				items.push(track);
+				// A row of an editable playlist is wrapped in the id that addresses it there, which is the
+				// only thing `/playlist` can remove or move. Everywhere else a song is just a song.
+				const itemId = playlistItemIdFrom(node);
+				items.push(itemId ? { itemId, track } : track);
 				return;
 			}
 			case "album": {
