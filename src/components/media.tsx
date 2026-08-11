@@ -850,9 +850,16 @@ export function TrackRow({
 						marked && "bg-accent scroll-mb-24"
 					)}
 					style={trackColumns(columns)}
-					// The row plays, like every mixed row in the app. The artist links and the menu inside it
-					// stop the click, and the play button in the index column is the keyboard path.
-					onClick={() => void engine.play(track, queue, context)}
+					// The row plays, like every mixed row in the app: the artist links stop the click, and the
+					// play button in the index column is the keyboard path. The containment test is what keeps
+					// the row's own menu off this handler. A React portal (the menu popup, its submenus, the
+					// "New playlist" dialog) leaves the row's DOM and stays its child in the React tree, and a
+					// synthetic event travels that tree, so without this every menu item ran its command and
+					// then played this row on top of it.
+					onClick={(event) => {
+						if (!row.current?.contains(event.target as Node)) return;
+						void engine.play(track, queue, context);
+					}}
 				/>
 			}
 		>
