@@ -1,69 +1,57 @@
 name: Release
 
-# `pnpm release:patch` (or `:minor`, `:major`) writes the bump commit, the tag and the push, and
-# this is what the tag arriving here starts.
 on:
   push:
     tags: ["v[0-9]+.[0-9]+.[0-9]+"]
 
-# The draft is created and published, and the artifacts are uploaded, all of which write to this
-# repository. Nothing else here needs a token, so it is set once at the workflow level.
 permissions:
-  contents: write
+  contents: read
 
-env:
-  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  # Everything that decides whether this release happens at all, in one place and on the cheapest
-  # runner. The three build jobs assume it passed and only build. The draft is created here, once,
-  # before any builder runs: the v0.1.1 incident was concurrent creators (electron-builder runs a
-  # publisher per architecture and a draft is not keyed to its tag), not concurrent uploaders, and
-  # three jobs uploading into a draft that already exists races over nothing. `gh release view`
-  # guards the create so re-running the workflow after a failed leg does not fail on the release it
-  # made the first time.
   prepare:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: pnpm/action-setup@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
         with:
           version: 11.16.0
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: 26
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Verify tag and package version
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          node -e 'const version = require("./package.json").version; if (version !== process.argv[1]) throw new Error(`package ${version} does not match tag ${process.argv[1]}`)' "$VERSION"
+      - run: pnpm audit --audit-level low
       - run: pnpm check
       - run: pnpm release:gate
         env:
           NIXIE_RELEASE_GATES_ACCEPTED: ${{ secrets.NIXIE_RELEASE_GATES_ACCEPTED }}
-      - run: gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --draft --title "$GITHUB_REF_NAME" --notes ""
 
   macos:
     needs: prepare
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v7
-      - uses: pnpm/action-setup@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
         with:
           version: 11.16.0
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: 26
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
-      # Both architectures in one run, so one `latest-mac.yml` names both. Two jobs publishing that
-      # file would leave whichever finished last as the update feed every installed copy reads, and
-      # the other architecture would be offered a build it cannot run.
-      #
-      # `--publish never` is also what lets `scripts/finish-dmgs.mjs` rename the DMGs: publishing
-      # from inside the build uploads each artifact as it lands, which is before the hook that
-      # renames them has run. The feed is written either way, since electron-builder generates it
-      # from the artifacts rather than from the upload. That same hook notarizes and staples both
-      # images and runs before this step returns, so the upload below can only ever attach signed
-      # and ticketed ones.
       - run: pnpm exec electron-builder --mac --x64 --arm64 -c.mac.notarize=true --publish never
         env:
           CSC_LINK: ${{ secrets.CSC_LINK }}
@@ -71,78 +59,126 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-      # Named one glob at a time rather than as `release/*`, which also holds the unpacked bundles
-      # and electron-builder's scratch files. A glob that matches nothing is passed through as itself
-      # and fails the upload, which is the loud half of the same choice. `--clobber` lets a re-run of
-      # this one job replace its own files instead of colliding with them.
-      - run: gh release upload --clobber "$GITHUB_REF_NAME" release/latest-mac.yml release/*.dmg release/*.zip release/*.blockmap
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: macos
+          if-no-files-found: error
+          retention-days: 3
+          path: |
+            release/latest-mac.yml
+            release/*.dmg
+            release/*.zip
+            release/*.blockmap
 
   windows:
     needs: prepare
     runs-on: windows-latest
-    # bash rather than the runner's default pwsh: PowerShell hands `release/*.exe` to `gh` as the
-    # literal string, so the upload globs would neither expand nor fail in any readable way.
     defaults:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v7
-      - uses: pnpm/action-setup@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
         with:
           version: 11.16.0
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: 26
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
-      # Unsigned deliberately: there is no Windows certificate, and no CSC_LINK is set here on
-      # purpose, since the mac certificate in that secret would be picked up and fail the build.
-      # electron-updater skips signature verification when the build carries no publisherName, so the
-      # unsigned update path works; SmartScreen warns on the first download until reputation accrues,
-      # which the README documents. One installer carries every architecture NSIS is given, the
-      # Windows half of the same one-run-one-feed rule the mac job follows.
+      # Windows signing stays deferred until a certificate is available.
       - run: pnpm exec electron-builder --win --x64 --publish never
-      - run: gh release upload --clobber "$GITHUB_REF_NAME" release/latest.yml release/*.exe release/*.blockmap
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: windows
+          if-no-files-found: error
+          retention-days: 3
+          path: |
+            release/latest.yml
+            release/*.exe
+            release/*.blockmap
 
   linux:
     needs: prepare
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: pnpm/action-setup@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
         with:
           version: 11.16.0
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: 26
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - run: pnpm exec electron-builder --linux --x64 --publish never
-      # Two files, not three: an AppImage carries its blockmap inside the binary rather than beside
-      # it, and `latest-linux.yml` names its size instead of a second file. A `release/*.blockmap`
-      # glob here would match nothing and fail this job on every run.
-      - run: gh release upload --clobber "$GITHUB_REF_NAME" release/latest-linux.yml release/*.AppImage
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: linux
+          if-no-files-found: error
+          retention-days: 3
+          path: |
+            release/latest-linux.yml
+            release/*.AppImage
 
-  # The draft is what makes this order work: nothing can update to a release that is still a draft,
-  # so the notes are written onto it and it is published in one move, with every artifact from all
-  # three platforms already attached. A failed build leaves the release a draft, which no installed
-  # copy can see, and the fix is to re-run the failed job and then this one.
   publish:
     needs: [macos, windows, linux]
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          # git-cliff reads every commit between this tag and the one before it.
           fetch-depth: 0
-      - uses: pnpm/action-setup@v6
+          persist-credentials: false
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
         with:
           version: 11.16.0
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: 26
-          cache: pnpm
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          path: release
+          merge-multiple: true
+      - name: Verify the complete release
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          cat > expected-assets.txt <<ASSETS
+          Nixie-${VERSION}-applesilicon.dmg
+          Nixie-${VERSION}-arm64-mac.zip
+          Nixie-${VERSION}-arm64-mac.zip.blockmap
+          Nixie-${VERSION}-intel.dmg
+          Nixie-${VERSION}-mac.zip
+          Nixie-${VERSION}-mac.zip.blockmap
+          Nixie-${VERSION}-setup.exe
+          Nixie-${VERSION}-setup.exe.blockmap
+          Nixie-${VERSION}-x64.AppImage
+          latest-linux.yml
+          latest-mac.yml
+          latest.yml
+          ASSETS
+          find release -maxdepth 1 -type f -exec basename {} \; | sort > actual-assets.txt
+          sort -o expected-assets.txt expected-assets.txt
+          diff -u expected-assets.txt actual-assets.txt
       - run: pnpm dlx git-cliff@2.13.1 --latest --strip all --output NOTES.md
-      - run: gh release edit "$GITHUB_REF_NAME" --notes-file NOTES.md --draft=false --latest
+      - name: Publish the immutable release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            test "$(gh release view "$GITHUB_REF_NAME" --json isDraft --jq .isDraft)" = true || {
+              echo "Refusing to change an existing published release" >&2
+              exit 1
+            }
+          else
+            gh release create "$GITHUB_REF_NAME" --draft --title "$GITHUB_REF_NAME" --notes ""
+          fi
+          gh release upload --clobber "$GITHUB_REF_NAME" release/*
+          gh release edit "$GITHUB_REF_NAME" --notes-file NOTES.md --draft=false --latest
