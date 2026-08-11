@@ -145,16 +145,19 @@ function ExtensionBlock({
 			) : (
 				<div className="border-border flex flex-col gap-2 rounded-xl border border-dashed p-4">
 					<p className="text-muted-foreground text-sm">
-						Install the{" "}
+						{platform === "win32"
+							? "Windows protects these browsers' cookies so that only the browser can read them. Nixie Link asks the browser for your YouTube session instead. "
+							: "If Nixie cannot find this browser profile, use Nixie Link instead. "}
+						The extension is not in browser marketplaces. Follow the{" "}
 						<a
-							href="https://github.com/NixiePlayer/nixie-link-extension"
+							href="https://github.com/NixiePlayer/nixie-link-extension#install"
 							target="_blank"
 							rel="noreferrer"
 							className="text-foreground underline underline-offset-4"
 						>
-							Nixie browser extension
+							manual installation guide
 						</a>
-						, open it once in your browser, and the profile appears here on its own. Nothing needs a refresh.
+						, then open Nixie Link once. Your profile appears here automatically.
 					</p>
 				</div>
 			)}
