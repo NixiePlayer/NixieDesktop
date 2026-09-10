@@ -17,8 +17,8 @@ Small and obvious fixes need no ceremony. Send them.
 
 ## Setup
 
-See [Development](README.md#development) in the README. Short version: Node 26, pnpm
-11.16.0, then `pnpm install && pnpm dev`.
+See [Development](README.md#development) in the README. Short version: Node 24, pnpm
+12.3.4, then `pnpm install && pnpm dev`.
 
 macOS, Windows and Linux all work for development. On macOS you also want the Xcode command
 line tools, since `scripts/dev-app-name.mjs` uses `plutil`, `sips` and `codesign` to rename

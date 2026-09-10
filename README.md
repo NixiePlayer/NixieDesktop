@@ -255,7 +255,7 @@ feature, no priority and no entitlement to anything on YouTube.
 
 ### What you need
 
-- **Node 26** and **pnpm 11.16.0**, both exactly. `engines` is strict and `.node-version`
+- **Node 24** and **pnpm 12.3.4**, both exactly. `engines` is strict and `.node-version`
   is there for anyone using a version manager.
 - **macOS, Windows or Linux.** All three work, and `pnpm check` runs on Ubuntu and Windows
   in CI. On macOS you also want the Xcode command line tools (`xcode-select --install`),
