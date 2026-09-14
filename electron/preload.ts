@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type {
 	AudioQuality,
+	AuthState,
 	BrowserAccount,
 	BundledDocument,
 	ExtensionSource,
@@ -64,6 +65,11 @@ const bridge: NixieBridge = {
 			const handler = (_event: unknown, sources: ExtensionSource[]) => listener(sources);
 			ipcRenderer.on("auth:extension-sources", handler);
 			return () => ipcRenderer.off("auth:extension-sources", handler);
+		},
+		onAuthState: (listener: (state: AuthState) => void) => {
+			const handler = (_event: unknown, state: AuthState) => listener(state);
+			ipcRenderer.on("auth:state", handler);
+			return () => ipcRenderer.off("auth:state", handler);
 		},
 	},
 	music: {

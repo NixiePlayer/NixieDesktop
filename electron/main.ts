@@ -23,7 +23,14 @@ import {
 // Destructured from the default export rather than imported by name: electron-updater is CommonJS,
 // and a named import of it from an ES module resolves to nothing at runtime.
 import electronUpdater from "electron-updater";
-import type { AudioQuality, AuthState, PersistedState, Track, UpdateState } from "../src/shared/contracts";
+import type {
+	AudioQuality,
+	AuthState,
+	ExtensionSource,
+	PersistedState,
+	Track,
+	UpdateState,
+} from "../src/shared/contracts";
 import type { LinkedAccount } from "../src/shared/contracts";
 import { artistNames } from "../src/shared/entities";
 import {
@@ -251,6 +258,14 @@ async function notifyTrackChange(track: Track) {
 
 let refreshedAt = 0;
 let refreshInFlight: Promise<void> | undefined;
+// Bumped by every `clearSession`. A refresh captures it when it starts and writes nothing once it has
+// moved: its cookies belong to a session that was signed out or replaced while it was on the wire.
+let sessionEpoch = 0;
+// A linked extension is not gone the moment it is not connected: at a cold start it reconnects on its
+// own alarm, a minute or more later. Unseen for this long it is treated as removed, and the copied
+// session is cleared as PRIVACY.md promises rather than kept for as long as the app runs.
+const EXTENSION_GRACE_MS = 5 * 60_000;
+let lastExtensionSeenAt = Date.now();
 
 async function writeCookies(cookies: ImportedCookie[]) {
 	const authSession = session.fromPartition(authPartition);
@@ -271,6 +286,21 @@ async function writeCookies(cookies: ImportedCookie[]) {
 			// One cookie the store will not take is not worth failing the import: authState decides.
 			.catch(() => undefined);
 	}
+}
+
+/**
+ * Empties the auth partition and drops the link, after any refresh in flight: one that was already
+ * past its read would otherwise write the old cookies back into the partition just cleared. The stamp
+ * keeps the next minute's `cookieHeader` calls off a link file that is no longer there.
+ */
+async function clearSession() {
+	// Bumped on the way in, so the refresh in flight skips its write, and again on the way out, so one
+	// started while the partition was being cleared (a link read before it was removed) skips it too.
+	sessionEpoch += 1;
+	await refreshInFlight?.catch(() => undefined);
+	await session.fromPartition(authPartition).clearStorageData();
+	await rm(linkPath(), { force: true });
+	sessionEpoch += 1;
 	refreshedAt = Date.now();
 }
 
@@ -283,24 +313,54 @@ async function writeCookies(cookies: ImportedCookie[]) {
  * partition's own session.
  */
 async function refreshLinkedCookies() {
-	if (Date.now() - refreshedAt < 60_000) return;
+	// The in-flight check first: the partition is empty between the clear and the rewrite, and a caller
+	// answered off the stamp alone reads that as signed out.
 	if (refreshInFlight) return refreshInFlight;
+	if (Date.now() - refreshedAt < 60_000) return;
 	refreshInFlight = (async () => {
+		// Stamped before the read, not after a write that lands: a disk read the platform refuses (a
+		// Keychain deny, a locked keyring, a database a running browser holds) would otherwise run again
+		// on every request, which on macOS is one Keychain prompt per InnerTube call.
+		refreshedAt = Date.now();
+		const epoch = sessionEpoch;
+		const write = async (cookies: ImportedCookie[]) => {
+			if (epoch !== sessionEpoch) throw new Error("Session replaced");
+			await writeCookies(cookies);
+		};
 		let link: unknown;
 		try {
 			link = JSON.parse(await readFile(linkPath(), "utf8"));
 			validateLinkedAccount(link);
 		} catch (error) {
-			await writeCookies([]);
+			await write([]);
 			throw error;
 		}
-		if (link.source !== "extension") return writeCookies(await readYouTubeCookies(link));
+		if (link.source !== "extension") return write(await readYouTubeCookies(link));
+		const connected = nativeHost.connections().some((connection) => connection.installId === link.installId);
+		const gone = !connected && Date.now() - lastExtensionSeenAt > EXTENSION_GRACE_MS;
 		try {
+			if (!connected) throw new Error(gone ? "Extension unseen past grace period" : "Extension not connected");
 			const secret = safeStorage.decryptString(Buffer.from(link.pairingKey, "base64"));
-			await writeCookies(await nativeHost.pull(link.installId, secret));
+			const cookies = await nativeHost.pull(link.installId, secret);
+			lastExtensionSeenAt = Date.now();
+			await write(cookies);
 		} catch (error) {
-			// A missing, signed-out or replaced extension must not leave an old browser session active.
-			await writeCookies([]);
+			// Every message on this branch is a fixed string from the host server or safeStorage: no path,
+			// no cookie, no token.
+			void logger.write(
+				"warn",
+				`extension cookie refresh failed: ${error instanceof Error ? error.message : "unknown"}`
+			);
+			// A browser that has not reconnected yet is not a refusal: at a cold start the extension comes
+			// back on its own alarm, and the partition keeps what the last pull wrote until it does. Every
+			// other failure (a timeout, a bad proof, a disconnect mid-pull, a payload that will not decrypt)
+			// is a session that must not stay active, and so is an install unseen past the grace period.
+			if (connected || gone) await write([]);
+			// The shell's one `auth.state()` answered long ago, so it is told. `write` has already refused
+			// an epoch that moved, so nothing here can push over a session that replaced this one.
+			if (gone && mainWindow && !mainWindow.isDestroyed()) {
+				mainWindow.webContents.send("auth:state", { status: "signed-out" } satisfies AuthState);
+			}
 			throw error;
 		}
 	})().finally(() => {
@@ -363,8 +423,7 @@ async function authState(): Promise<AuthState> {
  */
 async function linkSession(cookies: ImportedCookie[], link: LinkedAccount) {
 	const authSession = session.fromPartition(authPartition);
-	await authSession.clearStorageData();
-	await rm(linkPath(), { force: true });
+	await clearSession();
 	await writeCookies(cookies);
 	try {
 		youtube = createAdapter();
@@ -401,13 +460,45 @@ async function importFromExtension(installId: unknown, pairingSecret: unknown) {
 	validatePairingSecret(pairingSecret);
 	const source = nativeHost.connections().find((connection) => connection.installId === installId);
 	if (!source) throw new Error("That browser is no longer connected");
+	// Before the pull: a platform that cannot hold the secret refuses here, without asking the browser
+	// for cookies that would only be thrown away.
+	const pairingKey = protectPairingSecret(pairingSecret);
 	const cookies = await nativeHost.pull(installId, pairingSecret);
-	return linkSession(cookies, {
-		source: "extension",
-		installId,
-		browser: source.browser,
-		pairingKey: protectPairingSecret(pairingSecret),
-	});
+	return linkSession(cookies, { source: "extension", installId, browser: source.browser, pairingKey });
+}
+
+/**
+ * The extension holding the linked session reconnects on its own alarm, a minute or more after a
+ * cold start, and until then the partition is what the last pull left. So the moment that install is
+ * seen the cookies are pulled again and the renderer is told what that made of the session, since its
+ * one `auth.state()` on mount has long since answered. Once per event that changes the linked row and
+ * never for another browser's: a second install connecting is not this session changing.
+ */
+let lastLinkedSource: string | undefined;
+
+async function resumeExtensionSession(sources: ExtensionSource[]) {
+	let link: unknown;
+	try {
+		link = JSON.parse(await readFile(linkPath(), "utf8"));
+		validateLinkedAccount(link);
+	} catch {
+		return;
+	}
+	if (link.source !== "extension") return;
+	const source = sources.find((candidate) => candidate.installId === link.installId);
+	if (source) lastExtensionSeenAt = Date.now();
+	const key = source && JSON.stringify(source);
+	if (key === lastLinkedSource) return;
+	lastLinkedSource = key;
+	if (!source) return;
+	const epoch = sessionEpoch;
+	refreshedAt = 0;
+	await refreshLinkedCookies().catch(() => undefined);
+	const state = await authState();
+	// A sign-out that overlapped the lookup has an empty partition, and this state describes the link
+	// it removed.
+	if (epoch !== sessionEpoch) return;
+	if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send("auth:state", state);
 }
 
 function createAdapter() {
@@ -429,37 +520,54 @@ function createAdapter() {
 	return adapter;
 }
 
+// The reason, never the message: a node fs or net error carries the failing path, which the log must
+// not (AGENTS.md). `EADDRINUSE`, `EACCES` and the like are enough to say what went wrong.
+function logHostFailure(step: string, error: unknown) {
+	const reason = error && typeof error === "object" && "code" in error ? String(error.code) : "unknown";
+	void logger.write("error", `native host ${step} failed: ${reason}`);
+}
+
 /**
- * The pipe server the browser extension reaches through the native host, and the per-browser
- * registration that points the host at it. Both are non-fatal: a session that came from a disk read
- * needs neither, and the extension path simply stays unavailable if either fails. The server is
- * assigned before the try so `connections()` and `pull()` answer even when the listen did not.
+ * The pipe server the browser extension reaches through the native host. Non-fatal: a session that
+ * came from a disk read needs none of it, and the extension path simply stays unavailable if the
+ * listen fails. The server is assigned before the try so `connections()` and `pull()` answer even
+ * when the listen did not, and it has to exist before the adapter's first warm-up, whose cookie
+ * refresh asks it whether the linked browser is connected.
  */
-async function setupNativeHost() {
+async function listenNativeHost() {
 	nativeHost = new NativeHostServer();
 	try {
 		await nativeHost.listen(app.getPath("userData"), [`chrome-extension://${EXTENSION_ID}/`]);
-		await registerNativeHost({
-			platform: process.platform,
-			userDataPath: app.getPath("userData"),
-			// Inside an AppImage `process.execPath` is a per-run mount path that dies with the process, so
-			// the wrapper written from it would be stale by the next launch. APPIMAGE is the stable path to
-			// the image itself, and is set only there.
-			executable: process.env.APPIMAGE ?? process.execPath,
-			// Shipped outside the asar through `build.extraResources`, so the path is a real file the
-			// Electron binary can run as Node. In development it is the repository copy.
-			hostScript: app.isPackaged
-				? join(process.resourcesPath, "native-host", "host.cjs")
-				: join(app.getAppPath(), "electron", "native-host", "host.cjs"),
-			extensionId: EXTENSION_ID,
-			hostName: NATIVE_HOST_NAME,
-		});
 	} catch (error: unknown) {
-		// The reason, never the message: a node fs or net error carries the failing path, which the log
-		// must not (AGENTS.md). `EADDRINUSE`, `EACCES` and the like are enough to say what went wrong.
-		const reason = error && typeof error === "object" && "code" in error ? String(error.code) : "unknown";
-		void logger.write("error", `native host setup failed: ${reason}`);
+		logHostFailure("listen", error);
 	}
+}
+
+/**
+ * The per-browser registration that points the host at the server. On Windows it is five sequential
+ * `reg.exe` spawns, so it runs after the window and is not awaited. Both channels register the same
+ * host name with different wrappers and tokens, so the last one started owns the browser's host and
+ * the other's pulls fail: a development run therefore registers only when asked for (`NIXIE_LINK_DEV`)
+ * and the packaged app always does, which is also the recovery, launching the packaged Nixie
+ * re-registers it. The listen still happens in development, so connections can be observed.
+ */
+function registerHost() {
+	if (process.env.VITE_DEV_SERVER_URL && !process.env.NIXIE_LINK_DEV) return;
+	void registerNativeHost({
+		platform: process.platform,
+		userDataPath: app.getPath("userData"),
+		// Inside an AppImage `process.execPath` is a per-run mount path that dies with the process, so
+		// the wrapper written from it would be stale by the next launch. APPIMAGE is the stable path to
+		// the image itself, and is set only there.
+		executable: process.env.APPIMAGE ?? process.execPath,
+		// Shipped outside the asar through `build.extraResources`, so the path is a real file the
+		// Electron binary can run as Node. In development it is the repository copy.
+		hostScript: app.isPackaged
+			? join(process.resourcesPath, "native-host", "host.cjs")
+			: join(app.getAppPath(), "electron", "native-host", "host.cjs"),
+		extensionId: EXTENSION_ID,
+		hostName: NATIVE_HOST_NAME,
+	}).catch((error: unknown) => logHostFailure("registration", error));
 }
 
 const execFileAsync = promisify(execFile);
@@ -579,8 +687,7 @@ function registerIpc() {
 	handle("auth:extension-sources", () => nativeHost.connections());
 	handle("auth:link-extension", (_event, installId, pairingSecret) => importFromExtension(installId, pairingSecret));
 	handle("auth:sign-out", async () => {
-		await session.fromPartition(authPartition).clearStorageData();
-		await rm(linkPath(), { force: true });
+		await clearSession();
 		await youtube.reset();
 		youtube = createAdapter();
 		return authState();
@@ -653,8 +760,7 @@ function registerIpc() {
 	handle("local:clear", async (_event, selection) => {
 		if (!["session", "all"].includes(String(selection))) throw new TypeError("Invalid clear selection");
 		if (selection === "all") {
-			void session.fromPartition(authPartition).clearStorageData();
-			void rm(linkPath(), { force: true });
+			void clearSession();
 			void youtube.reset();
 		}
 		return stateStore.clear(selection as "session" | "all");
@@ -901,16 +1007,21 @@ void app
 		logger = new LocalLogger(app.getPath("userData"));
 		await stateStore.load();
 		configureRestrictedEvaluator();
+		// Before the adapter: its warm-up refreshes the cookies, and the refresh asks the host server.
+		await listenNativeHost();
 		youtube = createAdapter();
+		// Before the window too, so a browser connecting while the page loads is not missed: the push
+		// below is guarded and the renderer's own `auth.state()` on mount reads what the refresh left.
+		nativeHost.onChange((sources) => {
+			if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send("auth:extension-sources", sources);
+			void resumeExtensionSession(sources);
+		});
 		registerAppProtocol();
 		await verifyRestrictedEvaluator();
-		await setupNativeHost();
 		registerIpc();
 		installMenu();
 		await createWindow();
-		nativeHost.onChange((sources) => {
-			if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send("auth:extension-sources", sources);
-		});
+		registerHost();
 		// After the window, so the first state reaches a renderer that exists, and not awaited: a
 		// GitHub that cannot be reached must not hold up the app it is checking.
 		configureUpdater();

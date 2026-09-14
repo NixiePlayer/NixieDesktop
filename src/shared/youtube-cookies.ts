@@ -47,7 +47,9 @@ export const YOUTUBE_COOKIE_NAMES = new Set([
 	"__Secure-ROLLOUT_TOKEN",
 ]);
 
-const MAX_COOKIES = 32;
+// One entry per domain and path tuple, not per name: YouTube sets some of the names above on more than
+// one, so the 22 names can run past 32 entries. The value length below is what bounds the bytes.
+const MAX_COOKIES = 64;
 const MAX_VALUE_LENGTH = 4096;
 // RFC 6265 cookie-octet: printable ASCII without space, and without the four characters that would let
 // a value carry structure into the store (`"`, `,`, `;`, `\`). The value goes into Chromium's own

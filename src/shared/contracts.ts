@@ -408,6 +408,11 @@ export interface NixieBridge {
 		 * appeared on a poll would be a spinner nobody trusts. Pushed the way `update.onState` is.
 		 */
 		onExtensionSources(listener: (sources: ExtensionSource[]) => void): () => void;
+		/**
+		 * The session an extension holds is re-read when that browser reconnects, which at a cold start
+		 * is a minute after `state()` answered. Main pushes what the re-read made of it, the same way.
+		 */
+		onAuthState(listener: (state: AuthState) => void): () => void;
 	};
 	music: {
 		query(request: MusicQuery): Promise<Page<MusicEntity>>;

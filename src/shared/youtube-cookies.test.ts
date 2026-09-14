@@ -31,7 +31,7 @@ describe("sanitizeCookies", () => {
 	});
 
 	it("refuses more than the cap", () => {
-		expect(sanitizeCookies(Array.from({ length: 33 }, () => cookie()))).toBeUndefined();
+		expect(sanitizeCookies(Array.from({ length: 65 }, () => cookie()))).toBeUndefined();
 	});
 
 	it("refuses the whole payload over one unknown name", () => {
