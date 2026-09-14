@@ -72,10 +72,16 @@ itself only works when it is run as the AppImage, which is the ordinary way to r
 Sign-in reads browsers installed the traditional way, under `~/.config` (or
 `$XDG_CONFIG_HOME`) and `~/.mozilla`. A browser installed as a snap or a flatpak keeps its
 profile elsewhere and is not found yet, so on a stock Ubuntu, whose Firefox and Chromium are
-snaps, install a browser from its own repository or use the extension.
+snaps, install a browser from its own repository or use the extension. Reading a Chromium
+browser whose cookies sit under the desktop keyring needs `libsecret-tools` installed and
+the keyring unlocked; Firefox needs neither. One more thing worth knowing: on a system that
+restricts unprivileged user namespaces (Ubuntu 24.04 does, through AppArmor) the AppImage
+launcher starts the app with Chromium's sandbox off, because the alternative is an app that
+does not start. That is the launcher's doing, not the app's, and a system that allows them
+runs the same file sandboxed.
 
-Windows Chrome and Edge need one extra step to sign in, because of how they encrypt their
-cookies. [docs/extension.md](docs/extension.md) covers it, and
+On Windows, a Chromium browser that has moved to app-bound cookie encryption (Chrome 127 and
+later today) needs one extra step to sign in. [docs/extension.md](docs/extension.md) covers it, and
 [How signing in works](#how-signing-in-works) below says why.
 
 ## Screenshots
@@ -201,11 +207,14 @@ Which browsers it can read from depends on how each one stores its cookies:
 | Browser | macOS | Linux | Windows |
 | --- | --- | --- | --- |
 | Firefox | Yes | Yes | Yes |
-| Chrome | Yes | Yes | Extension |
-| Edge, Brave, Vivaldi, Chromium | Yes | Yes | Usually the extension |
+| Chrome | Yes | Yes | Extension (127 and later) |
+| Edge, Brave, Vivaldi, Chromium | Yes | Yes | Yes, until they adopt app-bound encryption |
 
-Chrome 127 and later on Windows wrap the cookie key so that only the browser's own signed
-binary can unwrap it. Getting at it means pretending to be Chrome, which this project will
+What decides the Windows column is not the browser's name but how its cookie store is
+encrypted, which Nixie reads off the store itself. A profile still under the older DPAPI
+scheme is read from disk like any other; Chrome 127 and later wrap the cookie key so that
+only the browser's own signed binary can unwrap it, and the other Chromium browsers will
+land there too when they take that change. Getting at it means pretending to be Chrome, which this project will
 not do, so those profiles are not offered at all rather than offered and then failing. The
 [Nixie browser extension](https://github.com/NixiePlayer/nixie-link-extension) is the
 way in there: it reads its own cookies through the API the browser gives every extension,

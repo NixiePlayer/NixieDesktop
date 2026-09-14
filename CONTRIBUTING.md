@@ -38,6 +38,10 @@ pnpm package:linux  # AppImage
 The Windows and Linux builds print a "skipping afterSign hook as no signing occurred"
 warning. That is expected: the hooks are the macOS notarization steps.
 
+A development run does not register the Nixie Link native host with the browser unless
+`NIXIE_LINK_DEV=1` is set, since the packaged app and a development run register the same
+host name and the last one to start takes it from the other; `AGENTS.md` has the reasoning.
+
 ## The rules
 
 None of these are new. They are the rules the codebase already follows, collected here so
@@ -54,7 +58,7 @@ a commit that does not follow the format is dropped from them silently.
 
 **Exact dependency versions.** `.npmrc` sets `save-exact=true`. Ranges are not allowed. And
 before adding a dependency at all, check whether a few lines of code do the job. This
-project has ten runtime dependencies and would like to keep it that way.
+project has twelve runtime dependencies and would like to keep it that way.
 
 **Do not weaken the security model.** The sandbox, context isolation, the content security
 policy, IPC sender validation and `webSecurity` stay on. If an upstream failure seems to
@@ -114,8 +118,9 @@ it is the best thing you can attach to it.
 | `scripts/` | Dev setup and release hooks |
 | `build/` | Icons electron-builder packages, plus the NSIS installer script |
 
-The browser extension that carries the Windows Chrome and Edge sign-in path is not in this
-repository. It lives at
+The browser extension that carries the sign-in path for a Windows Chromium profile whose
+cookie rows use app-bound encryption (the `v20` scheme, Chrome 127 and later today) is not
+in this repository. It lives at
 [NixiePlayer/nixie-link-extension](https://github.com/NixiePlayer/nixie-link-extension),
 and what is here is the app's half: the native messaging host under `electron/native-host/`
 and the registration and pipe server beside it. The two use a fixed extension id for routing

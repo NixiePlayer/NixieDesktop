@@ -1,8 +1,11 @@
 # Signing in through Nixie Link
 
-Nixie signs in by adopting the YouTube session from a browser on the same computer. Current Chromium
-browsers on Windows use App-Bound Encryption, so Nixie cannot read those browser cookie databases
-without impersonating the browser. Nixie refuses that workaround. The Nixie Link extension asks the
+Nixie signs in by adopting the YouTube session from a browser on the same computer. A Chromium
+browser on Windows that has moved to App-Bound Encryption (Chrome 127 and later today, and any other
+Chromium browser once it takes the same change) keeps its cookie database readable only by the browser
+itself, so Nixie cannot read it without impersonating the browser. Nixie refuses that workaround.
+Firefox everywhere, every browser on macOS and Linux, and a Windows Chromium browser still on the
+older scheme are read from disk and need no extension. The Nixie Link extension asks the
 browser for the same cookies through its normal extension API instead.
 
 ## Install

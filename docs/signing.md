@@ -182,14 +182,16 @@ its own.
    of a bad release is the next one.
 
 No token has to be created for the publish itself. `GH_TOKEN` is the `secrets.GITHUB_TOKEN` Actions
-mints for the run, set once at the workflow level, and `permissions: contents: write` beside it is
-what lets the run write a release. The Windows and Linux jobs need none of the secrets above, and
-the Windows one is deliberately not given `CSC_LINK`. Every build step runs `--publish never` and a
-`gh release upload` step attaches its own artifacts afterwards, into the draft the `prepare` job
-created: electron-builder must not do the publishing, since it runs a publisher per architecture and
-a draft is not keyed to its tag, which is what produced two drafts for one tag in v0.1.1. The
-release stays a draft, invisible to every installed copy, until the final job attaches the generated
-notes and publishes it in one move.
+mints for the run, and it reaches one job alone: the workflow-level permission is `contents: read`,
+and only the `publish` job raises it to `contents: write` and sets `GH_TOKEN`, so the three platform
+builds run with a token that cannot write a release. The Windows and Linux jobs need none of the
+secrets above, and the Windows one is deliberately not given `CSC_LINK`. Every build step runs
+`--publish never` and uploads workflow artifacts instead: electron-builder must not do the
+publishing, since it runs a publisher per architecture and a draft is not keyed to its tag, which is
+what produced two drafts for one tag in v0.1.1. `publish` downloads every artifact, verifies the
+exact twelve-file list, and only then creates the draft (or reuses one that is still a draft, and
+refuses a published one), uploads into it, and attaches the generated notes and publishes it in one
+edit. The release stays a draft, invisible to every installed copy, until that last edit.
 
 ## Certificate maintenance
 
