@@ -44,6 +44,11 @@ export default async function finishDmgs({ artifactPaths, configuration }) {
 			return named;
 		});
 
+	// This hook fires once per electron-builder run, so the Windows and Linux jobs reach it too, with
+	// an .exe or an .AppImage and no .dmg. Neither builds a disk image and neither has an `xcrun` to
+	// reach, so this says so rather than letting the notarize check run dry.
+	if (!dmgs.length) return [];
+
 	// `mac.notarize` is false by default, so an ordinary build signs the image and stops there,
 	// exactly as `scripts/staple.mjs` leaves the app alone. `pnpm dist` and the release workflow
 	// are what turn it on.

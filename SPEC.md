@@ -172,7 +172,7 @@ It requires a YouTube Music Premium subscription, and refuses an account that ho
 
 ## Technical constraints
 
-- Use Node 26 and pnpm 11.16.0 with exact dependency versions.
+- Use Node 24 and pnpm 12.3.4 with exact dependency versions.
 - Build the desktop application with Electron, React, TypeScript, Vite, TanStack Router, Tailwind CSS, and shadcn/Base UI.
 - Keep privileged integrations in `electron/`, serializable cross-process contracts and pure logic in `src/shared/`, and file routes in `src/routes/`.
 - Use `youtubei.js` 17.2.0 for private InnerTube access.

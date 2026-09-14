@@ -1,5 +1,5 @@
 import { createRootRoute, rootRouteId, useRouter } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { AppShell } from "#/components/app-shell";
 import { PremiumRequiredView, SignInView } from "#/components/sign-in";
 import { Button } from "#/components/ui/button";
@@ -30,20 +30,23 @@ function RootComponent() {
 
 	// Loaders already ran against the signed-out bridge and cached empty pages, so every auth
 	// change has to drop that data or the shell renders an empty feed until staleTime expires.
-	const changeAuth = (next: AuthState) => {
-		setAuth(next);
-		// Another account holds other playlists and other releases, and that store outlives the shell.
-		resetLibrary();
-		// So do the feeds and mixes held outside the router's cache, which invalidating does not reach.
-		dropHeldPages();
-		// `forcePending`, not a plain invalidate: the loaders already ran against the signed-out bridge
-		// and cached the empty pages they answered with, and a revalidation renders that data while it
-		// refetches. So the first thing a reader saw after signing in was "your home feed has nothing to
-		// show yet", sitting there for the length of the first browse. Forcing the matches back to
-		// pending draws each route's own skeleton instead. The root is left alone: it holds the gate
-		// being rendered, and it has no loader to rerun anyway.
-		void router.invalidate({ forcePending: true, filter: (match) => match.routeId !== rootRouteId });
-	};
+	const changeAuth = useCallback(
+		(next: AuthState) => {
+			setAuth(next);
+			// Another account holds other playlists and other releases, and that store outlives the shell.
+			resetLibrary();
+			// So do the feeds and mixes held outside the router's cache, which invalidating does not reach.
+			dropHeldPages();
+			// `forcePending`, not a plain invalidate: the loaders already ran against the signed-out bridge
+			// and cached the empty pages they answered with, and a revalidation renders that data while it
+			// refetches. So the first thing a reader saw after signing in was "your home feed has nothing to
+			// show yet", sitting there for the length of the first browse. Forcing the matches back to
+			// pending draws each route's own skeleton instead. The root is left alone: it holds the gate
+			// being rendered, and it has no loader to rerun anyway.
+			void router.invalidate({ forcePending: true, filter: (match) => match.routeId !== rootRouteId });
+		},
+		[router]
+	);
 
 	useEffect(() => {
 		const bridge = window.nixie;
@@ -51,6 +54,19 @@ function RootComponent() {
 		void bridge.auth.state().then(setAuth);
 		void bridge.local.load().then((state) => applyTheme(state.settings.theme));
 	}, []);
+
+	// The extension holding the session reconnects after that first answer, and main pushes what it
+	// made of the re-read. A change of status or of account is a change of session: a session confirmed
+	// as the one already on screen must not send every page back to its skeleton, while a browser that
+	// switched Google accounts while disconnected is another account's library wearing the same status.
+	// A new avatar alone is neither.
+	const status = auth?.status;
+	const accountName = auth?.accountName;
+	useEffect(() => {
+		return window.nixie?.auth.onAuthState((next) =>
+			next.status === status && next.accountName === accountName ? setAuth(next) : changeAuth(next)
+		);
+	}, [status, accountName, changeAuth]);
 
 	return (
 		<PlayerProvider>

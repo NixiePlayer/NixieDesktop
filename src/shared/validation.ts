@@ -2,6 +2,7 @@ import type {
 	AccountSettingKey,
 	BrowserAccount,
 	BundledDocument,
+	LinkedAccount,
 	MusicCommand,
 	MusicQuery,
 	PersistedState,
@@ -260,6 +261,48 @@ export function validateBrowserAccount(value: unknown): asserts value is Browser
 	if (!record(value) || typeof value.browser !== "string" || typeof value.profile !== "string") {
 		throw new TypeError("Invalid browser account");
 	}
+}
+
+const installIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+const pairingSecretPattern = /^[A-Za-z0-9_-]{43}$/;
+const protectedPairingKeyPattern = /^[A-Za-z0-9+/]{16,8192}={0,2}$/;
+
+export function validateInstallId(value: unknown): asserts value is string {
+	if (typeof value !== "string" || !installIdPattern.test(value)) throw new TypeError("Invalid extension install id");
+}
+
+export function validatePairingSecret(value: unknown): asserts value is string {
+	if (typeof value !== "string" || !pairingSecretPattern.test(value)) {
+		throw new TypeError("Invalid extension pairing code");
+	}
+}
+
+/**
+ * The link file names where the session came from. A file predating the extension has no `source`, so
+ * a missing one reads as `browser`, the shape it always was. This is what `refreshLinkedCookies`
+ * branches on, so a bad file must throw rather than default to a path that reads the wrong store.
+ */
+export function validateLinkedAccount(value: unknown): asserts value is LinkedAccount {
+	if (!record(value)) throw new TypeError("Invalid linked account");
+	const source = value.source === undefined ? "browser" : value.source;
+	if (source === "browser") {
+		if (typeof value.browser !== "string" || typeof value.profile !== "string") {
+			throw new TypeError("Invalid linked account");
+		}
+		return;
+	}
+	if (source === "extension") {
+		if (
+			typeof value.browser !== "string" ||
+			typeof value.pairingKey !== "string" ||
+			!protectedPairingKeyPattern.test(value.pairingKey)
+		) {
+			throw new TypeError("Invalid linked account");
+		}
+		validateInstallId(value.installId);
+		return;
+	}
+	throw new TypeError("Invalid linked account");
 }
 
 export function validateState(value: unknown): asserts value is PersistedState {

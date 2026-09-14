@@ -17,8 +17,30 @@ Small and obvious fixes need no ceremony. Send them.
 
 ## Setup
 
-See [Development](README.md#development) in the README. Short version: Node 26, pnpm
-11.16.0, macOS with the Xcode command line tools, then `pnpm install && pnpm dev`.
+See [Development](README.md#development) in the README. Short version: Node 24, pnpm
+12.3.4, then `pnpm install && pnpm dev`.
+
+macOS, Windows and Linux all work for development. On macOS you also want the Xcode command
+line tools, since `scripts/dev-app-name.mjs` uses `plutil`, `sips` and `codesign` to rename
+and re-sign the development Electron bundle; off macOS that script is a no-op and there is
+nothing extra to install. Line endings are LF everywhere, which `.gitattributes` enforces on
+checkout: oxfmt is LF-only, so a CRLF working copy fails `pnpm fmt` on every file at once.
+
+Building an installable app is one command per platform, and each has to run on the platform
+it names:
+
+```sh
+pnpm package:mac    # app directory, ad-hoc signed
+pnpm package:win    # NSIS installer, unsigned
+pnpm package:linux  # AppImage
+```
+
+The Windows and Linux builds print a "skipping afterSign hook as no signing occurred"
+warning. That is expected: the hooks are the macOS notarization steps.
+
+A development run does not register the Nixie Link native host with the browser unless
+`NIXIE_LINK_DEV=1` is set, since the packaged app and a development run register the same
+host name and the last one to start takes it from the other; `AGENTS.md` has the reasoning.
 
 ## The rules
 
@@ -36,7 +58,7 @@ a commit that does not follow the format is dropped from them silently.
 
 **Exact dependency versions.** `.npmrc` sets `save-exact=true`. Ranges are not allowed. And
 before adding a dependency at all, check whether a few lines of code do the job. This
-project has ten runtime dependencies and would like to keep it that way.
+project has twelve runtime dependencies and would like to keep it that way.
 
 **Do not weaken the security model.** The sandbox, context isolation, the content security
 policy, IPC sender validation and `webSecurity` stay on. If an upstream failure seems to
@@ -57,7 +79,10 @@ pnpm check
 
 This is the gate. It runs formatting, linting, type checking, unit tests, route generation
 and a production build, in that order, and CI runs exactly the same command on every pull
-request. Run it before you push and there are no surprises.
+request, on `ubuntu-latest` and on `windows-latest`. Run it before you push and there are no
+surprises. If you work on one platform and the other leg fails, it is usually a path
+assumption or a shelled-out command: pnpm is a `.cmd` on Windows, so `execFile` needs a shell
+there, and `path.relative` does not contain a path across drive letters.
 
 While you are working:
 
@@ -91,6 +116,16 @@ it is the best thing you can attach to it.
 | `src/lib/` | Renderer logic, including the framework-free audio engine |
 | `src/shared/` | Everything used on both sides of the process boundary |
 | `scripts/` | Dev setup and release hooks |
+| `build/` | Icons electron-builder packages, plus the NSIS installer script |
+
+The browser extension that carries the sign-in path for a Windows Chromium profile whose
+cookie rows use app-bound encryption (the `v20` scheme, Chrome 127 and later today) is not
+in this repository. It lives at
+[NixiePlayer/nixie-link-extension](https://github.com/NixiePlayer/nixie-link-extension),
+and what is here is the app's half: the native messaging host under `electron/native-host/`
+and the registration and pipe server beside it. The two use a fixed extension id for routing
+and a private pairing protocol for authentication, so a protocol change to one is usually a
+change to both.
 
 One rule about `src/shared/` worth stating on its own: anything in there crosses an IPC
 boundary, so it has to be serializable and pure. No Electron imports, no DOM, no upstream
@@ -117,6 +152,6 @@ privately goes to edoardo@ranghieri.com.
 ## Releases
 
 Releases are cut by the maintainer. The version bump, the tag and the push are one
-deliberate sequence documented in [AGENTS.md](AGENTS.md), and pushing the tag is what
-publishes a build that installed copies will update themselves to. Please do not open a
-pull request that bumps the version.
+deliberate sequence documented in [AGENTS.md](AGENTS.md), and pushing the tag is what builds
+macOS, Windows and Linux and publishes a release that installed copies on all three will
+update themselves to. Please do not open a pull request that bumps the version.
