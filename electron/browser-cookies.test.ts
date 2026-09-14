@@ -1,11 +1,16 @@
 import { createCipheriv, createHash, randomBytes } from "node:crypto";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+	type ChromiumRow,
 	cookieExpiry,
 	decryptCbc,
+	decryptChromiumRows,
 	decryptGcm,
+	firefoxRoot,
 	isAppBound,
 	linuxStorageKey,
+	linuxStorageKeys,
 	profileIdentity,
 	storageKeyFromPassword,
 	stripDomainHash,
@@ -113,6 +118,66 @@ describe("stripDomainHash", () => {
 	it("keeps a prefix belonging to another domain", () => {
 		const plain = body("secret-value", ".google.com");
 		expect(stripDomainHash(plain, ".youtube.com")).toBe(plain.toString("utf8"));
+	});
+});
+
+describe("linuxStorageKeys", () => {
+	const peanuts = linuxStorageKey("peanuts");
+	const keyring = linuxStorageKey("keyring-password");
+	const row = (name: string, encrypted_value: Buffer): ChromiumRow => ({
+		host_key: ".youtube.com",
+		name,
+		value: "",
+		encrypted_value,
+		path: "/",
+		is_secure: 1,
+		is_httponly: 0,
+		expires_seconds: 0,
+	});
+	const v10 = row("SID", encrypt("fallback-value", ".youtube.com", "v10", peanuts));
+	const v11 = row("SAPISID", encrypt("keyring-value", ".youtube.com", "v11", keyring));
+
+	it("reads a v10 row under the fallback password when no keyring answered", () => {
+		expect(decryptChromiumRows([v10], linuxStorageKeys({ installed: false }))).toMatchObject([
+			{ name: "SID", value: "fallback-value" },
+		]);
+	});
+
+	it("refuses a v11 row with no keyring rather than skipping it, and says what to install", () => {
+		expect(() => decryptChromiumRows([v10, v11], linuxStorageKeys({ installed: false }))).toThrow(/libsecret-tools/);
+	});
+
+	it("says to unlock the keyring when secret-tool ran and nothing answered", () => {
+		expect(() => decryptChromiumRows([v11], linuxStorageKeys({ installed: true }))).toThrow(/unlock the keyring/i);
+	});
+
+	it("reads a mixed store, each row under the key its prefix names", () => {
+		const held = linuxStorageKeys({ installed: true, password: "keyring-password" });
+		expect(decryptChromiumRows([v10, v11], held)).toMatchObject([
+			{ name: "SID", value: "fallback-value" },
+			{ name: "SAPISID", value: "keyring-value" },
+		]);
+		expect(held.transient).toBe(false);
+	});
+
+	it("is held only once a keyring answered", () => {
+		expect(linuxStorageKeys({ installed: false }).transient).toBe(true);
+		expect(linuxStorageKeys({ installed: true }).transient).toBe(true);
+	});
+});
+
+describe("firefoxRoot", () => {
+	const env = { APPDATA: join("C:", "Users", "ada", "AppData", "Roaming") };
+
+	it("is the profiles directory itself on Linux, which has no Profiles level", () => {
+		expect(firefoxRoot("linux", env, "/home/ada")).toBe(join("/home/ada", ".mozilla", "firefox"));
+	});
+
+	it("descends into Profiles on macOS and Windows", () => {
+		expect(firefoxRoot("darwin", env, "/Users/ada")).toBe(
+			join("/Users/ada", "Library", "Application Support", "Firefox", "Profiles")
+		);
+		expect(firefoxRoot("win32", env, "/Users/ada")).toBe(join(env.APPDATA, "Mozilla", "Firefox", "Profiles"));
 	});
 });
 

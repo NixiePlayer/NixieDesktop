@@ -103,7 +103,7 @@ interface ProfileLocation extends BrowserAccount {
 // `writeCookies` takes it, so it lives once in `src/shared` rather than being restated per producer.
 export type ImportedCookie = SessionCookie;
 
-interface ChromiumRow {
+export interface ChromiumRow {
 	host_key: string;
 	name: string;
 	value: string;
@@ -139,10 +139,16 @@ function chromiumRoot(browser: ChromiumBrowser) {
 	return join(process.env.XDG_CONFIG_HOME || join(homedir(), ".config"), ...browser.linux.split("/"));
 }
 
-function firefoxRoot() {
-	if (process.platform === "darwin") return join(homedir(), "Library", "Application Support", "Firefox");
-	if (process.platform === "win32") return join(process.env.APPDATA ?? homedir(), "Mozilla", "Firefox");
-	return join(homedir(), ".mozilla", "firefox");
+/**
+ * The directory holding Firefox's profile directories. macOS and Windows keep them one level down
+ * in `Profiles`, and Linux keeps them directly under `~/.mozilla/firefox`, so the platform decides
+ * the whole path rather than a root with a fixed suffix. The parameters exist for the unit test:
+ * production calls it bare.
+ */
+export function firefoxRoot(platform = process.platform, env = process.env, home = homedir()) {
+	if (platform === "darwin") return join(home, "Library", "Application Support", "Firefox", "Profiles");
+	if (platform === "win32") return join(env.APPDATA ?? home, "Mozilla", "Firefox", "Profiles");
+	return join(home, ".mozilla", "firefox");
 }
 
 interface ChromiumProfileInfo {
@@ -212,7 +218,7 @@ async function locateProfiles(): Promise<ProfileLocation[]> {
 		}
 	}
 
-	const profiles = join(firefoxRoot(), "Profiles");
+	const profiles = firefoxRoot();
 	for (const profile of (await readdir(profiles).catch(() => [])).sort((first, second) =>
 		first.localeCompare(second)
 	)) {
@@ -276,9 +282,14 @@ export function stripDomainHash(plain: Buffer, hostKey: string) {
  */
 const CBC_SCHEMES = new Set(["v10", "v11"]);
 
+/** The three-byte prefix a Chromium value opens with. */
+export function schemeOf(encrypted: Uint8Array) {
+	return Buffer.from(encrypted.subarray(0, 3)).toString("utf8");
+}
+
 export function decryptCbc(encrypted: Uint8Array, key: Buffer, hostKey: string) {
 	const buffer = Buffer.from(encrypted);
-	if (!CBC_SCHEMES.has(buffer.subarray(0, 3).toString("utf8"))) throw new Error("Unsupported cookie encryption");
+	if (!CBC_SCHEMES.has(schemeOf(buffer))) throw new Error("Unsupported cookie encryption");
 	const decipher = createDecipheriv("aes-128-cbc", key, Buffer.alloc(16, " "));
 	const plain = Buffer.concat([decipher.update(buffer.subarray(3)), decipher.final()]);
 	return stripDomainHash(plain, hostKey);
@@ -292,7 +303,7 @@ export const APP_BOUND_SCHEME = "v20";
 
 export function decryptGcm(encrypted: Uint8Array, key: Buffer, hostKey: string) {
 	const buffer = Buffer.from(encrypted);
-	const scheme = buffer.subarray(0, 3).toString("utf8");
+	const scheme = schemeOf(buffer);
 	// App-bound is a refusal rather than a gap: the elevation service behind it validates the calling
 	// executable's own signature, so nothing Nixie can do reaches that key, and a profile written under
 	// it has to be listed as unreadable rather than attempted. The message is what says which it was.
@@ -344,17 +355,49 @@ async function keychainPassword(keychain: string) {
 	return stdout.trim();
 }
 
+interface KeyringLookup {
+	/** False when `secret-tool` itself is not installed, which is the stock Ubuntu case. */
+	installed: boolean;
+	/** The password the keyring answered with, or nothing when it is missing, locked or empty. */
+	password?: string;
+}
+
 /**
- * `secret-tool` ships with libsecret and is the only way to the Secret Service that costs no
- * dependency, but it is not installed everywhere and no keyring may be running at all. Both are the
- * same answer as an empty lookup, since Chromium falls back to a hard-coded password in exactly
- * those cases and a store written under that fallback stays readable with it.
+ * `secret-tool` ships with libsecret-tools and is the only way to the Secret Service that costs no
+ * dependency, but stock Ubuntu does not install it and no keyring may be running at all. The two are
+ * told apart so the error can say which to fix, and neither is an answer: only a password is.
  */
-async function secretToolPassword(secret: string) {
-	const { stdout } = await execFileAsync("secret-tool", ["lookup", "application", secret]).catch(() => ({
-		stdout: "",
-	}));
-	return stdout.trim() || undefined;
+async function secretToolPassword(secret: string): Promise<KeyringLookup> {
+	try {
+		const { stdout } = await execFileAsync("secret-tool", ["lookup", "application", secret]);
+		return { installed: true, password: stdout.trim() || undefined };
+	} catch (error) {
+		return { installed: (error as NodeJS.ErrnoException).code !== "ENOENT" };
+	}
+}
+
+/**
+ * Chromium on Linux writes `v10` over the hard-coded "peanuts" password and `v11` over the one the
+ * keyring holds, and a profile that gained a keyring after its first run carries both at once, so
+ * one key for the whole store loses one half of it. A `v11` row with no keyring to answer for it is
+ * the store being unreadable rather than one row to skip, which is why this throws instead.
+ */
+export function linuxStorageKeys({ installed, password }: KeyringLookup): StorageKey {
+	const fallback = linuxStorageKey("peanuts");
+	const keyring = password === undefined ? undefined : linuxStorageKey(password);
+	return {
+		scheme: "cbc",
+		transient: keyring === undefined,
+		keyFor(prefix) {
+			if (prefix !== "v11") return fallback;
+			if (keyring) return keyring;
+			throw new Error(
+				installed
+					? "Nixie could not read the system keyring. Unlock the keyring and try again."
+					: "Nixie could not read the system keyring. Install libsecret-tools and try again."
+			);
+		},
+	};
 }
 
 /**
@@ -379,13 +422,12 @@ function windowsSystem32(exe: string) {
 }
 
 async function dpapiUnprotect(wrapped: Buffer) {
-	const { stdout } = await execFileAsync(windowsSystem32("WindowsPowerShell\\v1.0\\powershell.exe"), [
-		"-NoProfile",
-		"-NonInteractive",
-		"-Command",
-		DPAPI_SCRIPT,
-		wrapped.toString("base64"),
-	]);
+	// windowsHide, or a console window flashes over the sign-in screen for every unwrap.
+	const { stdout } = await execFileAsync(
+		windowsSystem32("WindowsPowerShell\\v1.0\\powershell.exe"),
+		["-NoProfile", "-NonInteractive", "-Command", DPAPI_SCRIPT, wrapped.toString("base64")],
+		{ windowsHide: true }
+	);
 	const key = Buffer.from(stdout.trim(), "base64");
 	// A refusal comes back as an empty stdout rather than a non-zero exit, so the length is the check.
 	// Constrained Language Mode (WDAC, AppLocker) blocks Add-Type, which is one way this arrives empty.
@@ -393,17 +435,21 @@ async function dpapiUnprotect(wrapped: Buffer) {
 	return key;
 }
 
-interface StorageKey {
-	key: Buffer;
+export interface StorageKey {
 	scheme: "cbc" | "gcm";
+	/** The key a row was written under, chosen by its three-byte prefix. Linux is the only platform where that varies. */
+	keyFor(prefix: string): Buffer;
+	/** Set when the answer was incomplete and is worth asking for again on the next read. */
+	transient?: boolean;
 }
 
 /**
  * One browser's key, held for as long as the app runs. `cookieHeader` re-reads the linked profile
  * every minute, and each read would otherwise be a Keychain dialog, a keyring lookup or a PowerShell
  * process. It is keyed by root rather than by profile, since a fork encrypts every profile it holds
- * with the same key. A rejection is dropped rather than held: a keyring that was locked when it was
- * asked answers once it is unlocked, and the next minute is the next chance.
+ * with the same key. A rejection is dropped rather than held, and so is a Linux answer no keyring
+ * took part in: a keyring that was locked when it was asked answers once it is unlocked, and the
+ * next minute is the next chance.
  */
 const storageKeys = new Map<string, Promise<StorageKey>>();
 
@@ -412,20 +458,60 @@ function storageKey(browser: ChromiumBrowser, root: string) {
 	if (held) return held;
 	const pending = resolveStorageKey(browser, root);
 	storageKeys.set(root, pending);
-	void pending.catch(() => storageKeys.delete(root));
+	void pending.then(
+		(resolved) => resolved.transient && storageKeys.delete(root),
+		() => storageKeys.delete(root)
+	);
 	return pending;
 }
 
 async function resolveStorageKey(browser: ChromiumBrowser, root: string): Promise<StorageKey> {
 	if (process.platform === "darwin") {
-		return { key: storageKeyFromPassword(await keychainPassword(browser.keychain)), scheme: "cbc" };
+		const key = storageKeyFromPassword(await keychainPassword(browser.keychain));
+		return { scheme: "cbc", keyFor: () => key };
 	}
 	if (process.platform === "win32") {
 		const localState: unknown = JSON.parse(await readFile(join(root, "Local State"), "utf8"));
-		return { key: await dpapiUnprotect(windowsWrappedKey(localState)), scheme: "gcm" };
+		const key = await dpapiUnprotect(windowsWrappedKey(localState));
+		return { scheme: "gcm", keyFor: () => key };
 	}
-	// "peanuts" is upstream's own literal, used whenever no Secret Service answered for this browser.
-	return { key: linuxStorageKey((await secretToolPassword(browser.secret)) ?? "peanuts"), scheme: "cbc" };
+	// ponytail: a v10-only store with no keyring re-runs secret-tool once a minute, which is one short
+	// process; hold the fallback too if that ever shows up.
+	return linuxStorageKeys(await secretToolPassword(browser.secret));
+}
+
+/** The rows of a Chromium store as session cookies, the encrypted ones decrypted under the held key. */
+export function decryptChromiumRows(rows: ChromiumRow[], { scheme, keyFor }: StorageKey) {
+	const cookies: ImportedCookie[] = [];
+	const decrypt = scheme === "gcm" ? decryptGcm : decryptCbc;
+	for (const row of rows) {
+		let value = row.value;
+		if (!value) {
+			// Outside the try on purpose: a key that cannot be had is the whole import failing, and the
+			// error says what to do about it.
+			const key = keyFor(schemeOf(row.encrypted_value));
+			try {
+				// Older rows are stored in the clear, everything current is encrypted.
+				value = decrypt(row.encrypted_value, key, row.host_key);
+			} catch {
+				// One cookie the store will not give up is not worth failing the import over. A profile
+				// caught mid-migration to app-bound keys carries both schemes at once, and what the
+				// session needs is SAPISID and its neighbours rather than every row in the store.
+				continue;
+			}
+		}
+		if (!value) continue;
+		cookies.push({
+			name: row.name,
+			value,
+			domain: row.host_key,
+			path: row.path,
+			secure: Boolean(row.is_secure),
+			httpOnly: Boolean(row.is_httponly),
+			expirationDate: cookieExpiry(row.expires_seconds),
+		});
+	}
+	return cookies;
 }
 
 const SIGNED_IN = {
@@ -536,7 +622,7 @@ export async function readYouTubeCookies(account: BrowserAccount): Promise<Impor
 			}));
 	}
 
-	const { key, scheme } = await storageKey(location.chromium, location.root);
+	const held = await storageKey(location.chromium, location.root);
 	const rows = await withCookieDatabase(location.cookiePath, (database) =>
 		database
 			.prepare(
@@ -544,32 +630,5 @@ export async function readYouTubeCookies(account: BrowserAccount): Promise<Impor
 			)
 			.all()
 	);
-
-	const cookies: ImportedCookie[] = [];
-	const decrypt = scheme === "gcm" ? decryptGcm : decryptCbc;
-	for (const row of rows as unknown as ChromiumRow[]) {
-		let value = row.value;
-		if (!value) {
-			try {
-				// Older rows are stored in the clear, everything current is encrypted.
-				value = decrypt(row.encrypted_value, key, row.host_key);
-			} catch {
-				// One cookie the store will not give up is not worth failing the import over. A profile
-				// caught mid-migration to app-bound keys carries both schemes at once, and what the
-				// session needs is SAPISID and its neighbours rather than every row in the store.
-				continue;
-			}
-		}
-		if (!value) continue;
-		cookies.push({
-			name: row.name,
-			value,
-			domain: row.host_key,
-			path: row.path,
-			secure: Boolean(row.is_secure),
-			httpOnly: Boolean(row.is_httponly),
-			expirationDate: cookieExpiry(row.expires_seconds),
-		});
-	}
-	return cookies;
+	return decryptChromiumRows(rows as unknown as ChromiumRow[], held);
 }
