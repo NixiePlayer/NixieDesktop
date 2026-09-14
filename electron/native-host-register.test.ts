@@ -38,6 +38,58 @@ describe("wrapperScript", () => {
 		expect(script).toContain("\r\n");
 	});
 
+	it("disables delayed expansion before any path is read, so a `!NAME!` in one survives", () => {
+		const script = wrapperScript("win32", "C:\\Users\\!x!\\Nixie.exe", "C:\\res\\host.cjs", "C:\\data\\config.json");
+		const lines = script.split("\r\n");
+		expect(lines.indexOf("setlocal DisableDelayedExpansion")).toBe(1);
+		expect(lines.indexOf("set ELECTRON_RUN_AS_NODE=1")).toBe(2);
+		expect(script).toContain(`"C:\\Users\\!x!\\Nixie.exe"`);
+	});
+
+	const ROOTS = {
+		LOCALAPPDATA: "C:\\Users\\Jörg\\AppData\\Local",
+		APPDATA: "C:\\Users\\Jörg\\AppData\\Roaming",
+		USERPROFILE: "C:\\Users\\Jörg",
+	};
+
+	it.each([
+		{
+			name: "leaves an ASCII path outside every root literal",
+			path: "C:\\Nixie\\Nixie.exe",
+			expected: "C:\\Nixie\\Nixie.exe",
+		},
+		{
+			name: "rewrites a path under LOCALAPPDATA to the variable, whatever the case",
+			path: "c:\\users\\JÖRG\\appdata\\local\\Programs\\Nixie\\Nixie.exe",
+			expected: "%LOCALAPPDATA%\\Programs\\Nixie\\Nixie.exe",
+		},
+		{
+			name: "prefers the longest root over USERPROFILE and doubles a percent in the remainder",
+			path: "C:\\Users\\Jörg\\AppData\\Roaming\\Nixie\\100%\\config.json",
+			expected: "%APPDATA%\\Nixie\\100%%\\config.json",
+		},
+		{
+			name: "leaves a non-ASCII path outside every root literal",
+			path: "D:\\Jörg\\Nixie.exe",
+			expected: "D:\\Jörg\\Nixie.exe",
+		},
+	])("$name", ({ path, expected }) => {
+		const script = wrapperScript("win32", path, "C:\\res\\host.cjs", "C:\\data\\config.json", ROOTS);
+		expect(script).toContain(`"${expected}" "C:\\res\\host.cjs"`);
+	});
+
+	it("writes a launcher under the per-user roots with no non-ASCII byte in it", () => {
+		const script = wrapperScript(
+			"win32",
+			`${ROOTS.LOCALAPPDATA}\\Programs\\Nixie\\Nixie.exe`,
+			`${ROOTS.LOCALAPPDATA}\\Programs\\Nixie\\resources\\native-host\\host.cjs`,
+			`${ROOTS.APPDATA}\\Nixie\\native-host\\config.json`,
+			ROOTS
+		);
+		expect(Buffer.byteLength(script)).toBe(script.length);
+		expect(script).toContain(`"--config=%APPDATA%\\Nixie\\native-host\\config.json" %*`);
+	});
+
 	it("execs with the environment variable inline on a POSIX shell", () => {
 		const script = wrapperScript("linux", "/opt/nixie/nixie", "/opt/nixie/host.cjs", "/home/x/config.json");
 		expect(script.startsWith("#!/bin/sh")).toBe(true);

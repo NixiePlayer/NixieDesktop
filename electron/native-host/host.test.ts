@@ -1,11 +1,20 @@
+import { EventEmitter } from "node:events";
 import { createRequire } from "node:module";
+import { PassThrough } from "node:stream";
 import { describe, expect, it, vi } from "vitest";
 
 // host.cjs runs under Electron as Node and exports only its pure framing helpers. Required rather than
 // imported so the CommonJS module's exports are reached without an interop wrapper.
-const { frame, reader } = createRequire(import.meta.url)("./host.cjs") as {
+const { frame, reader, relay } = createRequire(import.meta.url)("./host.cjs") as {
 	frame: (message: unknown) => Buffer;
 	reader: (onMessage: (message: unknown) => void, onFatal: (reason: string) => void) => (chunk: Buffer) => void;
+	relay: (options: {
+		socket: EventEmitter & { write: (line: string) => unknown };
+		stdin: NodeJS.ReadableStream;
+		stdout: { write: (chunk: Buffer) => unknown };
+		handshake: unknown;
+		exit: (code: number) => void;
+	}) => void;
 };
 
 describe("frame", () => {
@@ -61,5 +70,22 @@ describe("reader", () => {
 		header.writeUInt32LE(body.length, 0);
 		feed(Buffer.concat([header, body]));
 		expect(onFatal).toHaveBeenCalledWith("unparseable frame");
+	});
+});
+
+describe("relay", () => {
+	it("writes the handshake ahead of a hello the browser sent before the pipe was up", async () => {
+		const writes: string[] = [];
+		const socket = Object.assign(new EventEmitter(), { write: (line: string) => writes.push(line) });
+		const stdin = new PassThrough();
+		// The early hello: already on stdin before the socket exists, as it is when Chrome launches the
+		// host and speaks first.
+		stdin.write(frame({ type: "hello", installId: "x" }));
+		relay({ socket, stdin, stdout: new PassThrough(), handshake: { v: 1, token: "t", origin: "o" }, exit: vi.fn() });
+		await new Promise((resolve) => setImmediate(resolve));
+		expect(writes).toEqual([
+			`${JSON.stringify({ v: 1, token: "t", origin: "o" })}\n`,
+			`${JSON.stringify({ type: "hello", installId: "x" })}\n`,
+		]);
 	});
 });

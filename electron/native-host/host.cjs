@@ -7,8 +7,8 @@
 // and never a cookie value, which is what keeps this a relay rather than a place a secret rests.
 //
 // CommonJS with no dependency beyond node built-ins on purpose: it runs under the packaged Electron
-// binary with ELECTRON_RUN_AS_NODE set, and `frame`/`reader` are exported so the framing is unit
-// tested without spawning anything.
+// binary with ELECTRON_RUN_AS_NODE set, and `frame`, `reader` and `relay` are exported so the framing
+// and the write order are unit tested without spawning anything.
 
 const net = require("node:net");
 const { readFileSync } = require("node:fs");
@@ -48,6 +48,47 @@ function reader(onMessage, onFatal) {
 	};
 }
 
+/**
+ * Wires the two directions of the relay. The handshake is written first and stdin is listened to only
+ * afterwards: node queues writes made ahead of `connect` in order, so a hello the browser sent before
+ * the pipe was up follows the handshake rather than overtaking it, which the server answered by
+ * dropping the socket as an invalid handshake. Exported so that order is unit tested without spawning.
+ */
+function relay({ socket, stdin, stdout, handshake, exit }) {
+	socket.write(`${JSON.stringify(handshake)}\n`);
+
+	// App to browser: pull requests, and nothing carrying a cookie. Each becomes one framed message
+	// on stdout, which is the extension's stdin.
+	let pending = "";
+	socket.on("data", (text) => {
+		pending += text;
+		if (pending.length > MAX_FRAME) return exit(1);
+		let index;
+		while ((index = pending.indexOf("\n")) !== -1) {
+			const line = pending.slice(0, index);
+			pending = pending.slice(index + 1);
+			if (line.length > MAX_FRAME) return exit(1);
+			let message;
+			try {
+				message = JSON.parse(line);
+			} catch {
+				return exit(1);
+			}
+			stdout.write(frame(message));
+		}
+	});
+
+	// Browser to app: a verbatim relay, one line of JSON per frame. The host parses nothing about the
+	// contents and holds nothing.
+	stdin.on(
+		"data",
+		reader(
+			(message) => socket.write(`${JSON.stringify(message)}\n`),
+			() => exit(1)
+		)
+	);
+}
+
 function main() {
 	const configArg = process.argv.find((arg) => arg.startsWith("--config="));
 	if (!configArg) process.exit(1);
@@ -68,47 +109,21 @@ function main() {
 	// The browser is gone: an EPIPE on the write back is a clean exit rather than an uncaught throw.
 	process.stdout.on("error", () => process.exit(0));
 
-	socket.on("connect", () => {
-		socket.write(`${JSON.stringify({ v: 1, token: config.token, origin })}\n`);
-	});
-
-	// App to browser: pull requests, and nothing carrying a cookie. Each becomes one framed message
-	// on stdout, which is the extension's stdin.
-	let pending = "";
-	socket.on("data", (text) => {
-		pending += text;
-		if (pending.length > MAX_FRAME) process.exit(1);
-		let index;
-		while ((index = pending.indexOf("\n")) !== -1) {
-			const line = pending.slice(0, index);
-			pending = pending.slice(index + 1);
-			if (line.length > MAX_FRAME) process.exit(1);
-			let message;
-			try {
-				message = JSON.parse(line);
-			} catch {
-				process.exit(1);
-			}
-			process.stdout.write(frame(message));
-		}
+	relay({
+		socket,
+		stdin: process.stdin,
+		stdout: process.stdout,
+		handshake: { v: 1, token: config.token, origin },
+		exit: (code) => process.exit(code),
 	});
 
 	const beat = setInterval(() => process.stdout.write(frame({ type: "ping" })), HEARTBEAT_MS);
 	beat.unref();
 
-	// Browser to app: a verbatim relay, one line of JSON per frame. The host parses nothing about the
-	// contents and holds nothing.
-	process.stdin.on(
-		"data",
-		reader(
-			(message) => socket.write(`${JSON.stringify(message)}\n`),
-			() => process.exit(1)
-		)
-	);
 	process.stdin.on("end", () => process.exit(0));
 }
 
-module.exports = { frame, reader };
+module.exports = { frame, reader, relay };
 
 // A missing, truncated (the app mid-write) or older-schema config throws in the synchronous setup, and
 // a stack trace on stderr carries the config path into Chrome's own log. Exit quietly instead.

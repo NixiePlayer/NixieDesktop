@@ -6,6 +6,29 @@ import { promisify } from "node:util";
 const execFileAsync = promisify(execFile);
 
 const cmdLiteral = (value: string) => value.replaceAll("%", "%%");
+
+/** The per-user roots cmd can expand itself; `wrapperScript` takes them as a value so it stays pure. */
+export type CmdRoots = Partial<Record<"LOCALAPPDATA" | "APPDATA" | "USERPROFILE", string>>;
+
+// cmd reads a batch file in the OEM code page, never as UTF-8, so a non-ASCII user name in the install
+// path ("C:\\Users\\Jörg\\...") is mis-decoded and the host never starts. A path under one of the
+// per-user roots is written back as `%LOCALAPPDATA%\\...` instead, which cmd expands in Unicode itself.
+// Longest root first, since USERPROFILE is a prefix of the other two. Only the remainder needs its
+// `%` doubled: the variable reference is the one percent that has to be expanded.
+function cmdPath(value: string, roots: CmdRoots) {
+	const candidates = Object.entries(roots)
+		.filter((entry): entry is [string, string] => typeof entry[1] === "string" && entry[1].length > 0)
+		.map(([name, root]) => [name, root.replace(/[\\/]+$/, "")] as const)
+		.sort((a, b) => b[1].length - a[1].length);
+	for (const [name, root] of candidates) {
+		const head = value.slice(0, root.length);
+		const next = value[root.length];
+		if (head.toLowerCase() === root.toLowerCase() && (next === "\\" || next === "/")) {
+			return `%${name}%${cmdLiteral(value.slice(root.length))}`;
+		}
+	}
+	return cmdLiteral(value);
+}
 const shellLiteral = (value: string) => `'${value.replaceAll("'", `'"'"'`)}'`;
 
 // The reverse-DNS name the browser looks the host up by, and the extension id the pinned key derives.
@@ -71,16 +94,21 @@ export function wrapperScript(
 	platform: NodeJS.Platform,
 	executable: string,
 	hostScript: string,
-	configPath: string
+	configPath: string,
+	roots: CmdRoots = {}
 ): string {
 	if (platform === "win32") {
 		// cmd expands %VAR% even inside double quotes, so a `%` in an account name or install path (both
 		// legal on NTFS) would corrupt the argument. Doubling it is how a literal percent survives; `%*`,
-		// which forwards Chrome's own origin argument, is left alone.
+		// which forwards Chrome's own origin argument, is left alone. Delayed expansion is off by default
+		// but can be turned on machine-wide (HKCU\Software\Microsoft\Command Processor\DelayedExpansion),
+		// and then `!NAME!` in a legal path, or in what %USERPROFILE% expands into, is expanded a second
+		// time, quotes or not. The script turns it off for itself, so the path is read as written.
 		return [
 			"@echo off",
+			"setlocal DisableDelayedExpansion",
 			"set ELECTRON_RUN_AS_NODE=1",
-			`"${cmdLiteral(executable)}" "${cmdLiteral(hostScript)}" "--config=${cmdLiteral(configPath)}" %*`,
+			`"${cmdPath(executable, roots)}" "${cmdPath(hostScript, roots)}" "--config=${cmdPath(configPath, roots)}" %*`,
 			"",
 		].join("\r\n");
 	}
@@ -116,9 +144,13 @@ export async function registerNativeHost(options: RegisterOptions) {
 
 	const wrapper = join(dir, options.platform === "win32" ? "nixie-host.bat" : "nixie-host.sh");
 	const configPath = join(dir, "config.json");
-	await writeFile(wrapper, wrapperScript(options.platform, options.executable, options.hostScript, configPath), {
-		mode: 0o700,
+	const { LOCALAPPDATA, APPDATA, USERPROFILE } = process.env;
+	const script = wrapperScript(options.platform, options.executable, options.hostScript, configPath, {
+		LOCALAPPDATA,
+		APPDATA,
+		USERPROFILE,
 	});
+	await writeFile(wrapper, script, { mode: 0o700 });
 
 	const manifest = JSON.stringify({
 		name: options.hostName,
@@ -143,9 +175,10 @@ export async function registerNativeHost(options: RegisterOptions) {
 			if (!target.registryKey) continue;
 			// HKCU needs no elevation, and no registry API in node is worth a dependency. A browser that is
 			// not installed still gets its key, which is harmless and idempotent (the key is inert without it).
-			await execFileAsync(regExe, ["add", target.registryKey, "/ve", "/t", "REG_SZ", "/d", manifestPath, "/f"]).catch(
-				() => undefined
-			);
+			// `windowsHide`, or every reg.exe flashes a console window over the app on each start.
+			await execFileAsync(regExe, ["add", target.registryKey, "/ve", "/t", "REG_SZ", "/d", manifestPath, "/f"], {
+				windowsHide: true,
+			}).catch(() => undefined);
 		}
 		return;
 	}

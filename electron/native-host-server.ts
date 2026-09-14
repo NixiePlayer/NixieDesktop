@@ -59,7 +59,8 @@ function pullProof(id: number, nonce: string, installId: string, secret: Buffer)
 /**
  * The one inbound surface this app has. A browser extension reads its own YouTube cookies and hands
  * them here through the native host, which connects to a per-user pipe. On macOS and Linux the socket
- * sits inside a `0o700` userData directory and the token is belt and braces; on Windows a named pipe
+ * sits inside userData's `0o700` `native-host` subdirectory and the token is belt and braces; on
+ * Windows a named pipe
  * carries a default DACL that lets any local process connect and node exposes no way to set one, so
  * the pipe name is randomised per install and the first line has to carry a token only this user can
  * read (the config file is `0o600` inside their own profile). The pipe gate is separate from cookie
@@ -91,7 +92,6 @@ export class NativeHostServer {
 				: join(userDataPath, "native-host", "nixie-host.sock");
 		const dir = join(userDataPath, "native-host");
 		await mkdir(dir, { recursive: true, mode: 0o700 });
-		await writeFile(join(dir, "config.json"), JSON.stringify(this.config), { mode: 0o600 });
 		await this.#reclaim();
 
 		await new Promise<void>((resolve, reject) => {
@@ -99,6 +99,9 @@ export class NativeHostServer {
 			this.#server.on("error", reject);
 			this.#server.listen(this.#pipe, resolve);
 		});
+		// Only once something answers on the pipe: written before, a failed listen left a config naming a
+		// token nothing serves, and overwrote the one a live instance on the same path was serving.
+		await writeFile(join(dir, "config.json"), JSON.stringify(this.config), { mode: 0o600 });
 	}
 
 	/**
