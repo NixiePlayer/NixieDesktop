@@ -28,7 +28,7 @@ jobs:
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           node -e 'const version = require("./package.json").version; if (version !== process.argv[1]) throw new Error(`package ${version} does not match tag ${process.argv[1]}`)' "$VERSION"
-      - run: pnpm audit --audit-level low
+      - run: pnpm audit --audit-level high
       - run: pnpm check
       - run: pnpm release:gate
         env:
