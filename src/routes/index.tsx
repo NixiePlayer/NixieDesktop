@@ -20,6 +20,7 @@ import type { FeedFilter, MusicEntity, Page, QueueContext, Track } from "#/share
 import {
 	appendPage,
 	entityArtwork,
+	entityKey,
 	entityKind,
 	entitySubtitle,
 	entityTitle,
@@ -353,12 +354,7 @@ function HomePage() {
 					</header>
 					<div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
 						{promoted.map((item, index) => (
-							<QuickTile
-								key={`${"track" in item ? item.itemId : item.id}-${index}`}
-								item={item}
-								queue={firstQueue}
-								context={firstContext}
-							/>
+							<QuickTile key={`${entityKey(item)}-${index}`} item={item} queue={firstQueue} context={firstContext} />
 						))}
 					</div>
 				</section>

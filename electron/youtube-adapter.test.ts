@@ -900,6 +900,44 @@ describe("entity extraction", () => {
 		expect(rows[1]).toMatchObject({ album: undefined, albumId: "MPREb_jnYA50rlu4H" });
 	});
 
+	it("wraps a row of an editable playlist in the id that addresses it there", () => {
+		const rows = extractEntities(
+			{
+				contents: [
+					// A playlist row. Upstream states `playlistSetVideoId` on it and the parse drops the field
+					// entirely, so the only copy left is inside the row's own "Remove from playlist" item.
+					{
+						id: "zvC6jsZnicY",
+						item_type: "song",
+						title: "Vengo Dalla Luna",
+						menu: {
+							type: "Menu",
+							items: [
+								{ type: "MenuNavigationItem", endpoint: { payload: { browseId: "MPREb_2OsyiPiMOco" } } },
+								{
+									type: "MenuServiceItem",
+									endpoint: {
+										payload: {
+											playlistId: "PL0PpBFf",
+											actions: [{ action: "ACTION_REMOVE_VIDEO", setVideoId: "AAA111BBB222" }],
+										},
+									},
+								},
+							],
+						},
+					},
+					// The same row in a playlist this account cannot edit: no such item, so no such id, and a
+					// song rather than a row. An id that addresses nothing is what the endpoint refuses.
+					{ id: "aaaaaaaaaaa", item_type: "song", title: "Una Chiave" },
+				],
+			},
+			identity
+		);
+		expect(rows[0]).toEqual({ itemId: "AAA111BBB222", track: expect.objectContaining({ id: "zvC6jsZnicY" }) });
+		expect(rows[1]).toMatchObject({ id: "aaaaaaaaaaa", title: "Una Chiave" });
+		expect(rows[1]).not.toHaveProperty("itemId");
+	});
+
 	it("reads the play count off the column upstream only parses for videos", () => {
 		const column = (...runs: string[]) => ({
 			type: "MusicResponsiveListItemFlexColumn",

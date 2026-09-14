@@ -34,7 +34,14 @@ This file is generated from the dependency tree on every build. Do not edit it b
 const LICENSE_FILE = /^(licen[cs]e|copying|notice)/i;
 
 const grouped = JSON.parse(
-	execFileSync("pnpm", ["licenses", "list", "--json", "--prod"], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 })
+	// pnpm is `pnpm.cmd` on Windows, and Node refuses to spawn a `.cmd` without a shell since the fix
+	// for CVE-2024-27980, so the shell is what runs this there at all. Every argument is a literal
+	// word, so the shell has nothing to reinterpret.
+	execFileSync("pnpm", ["licenses", "list", "--json", "--prod"], {
+		encoding: "utf8",
+		maxBuffer: 64 * 1024 * 1024,
+		shell: process.platform === "win32",
+	})
 );
 
 const packages = Object.values(grouped)

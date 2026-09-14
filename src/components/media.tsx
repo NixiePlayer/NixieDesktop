@@ -8,6 +8,7 @@ import { usePlayback, usePlayer } from "#/player";
 import type { Album, Artist, BrowseTarget, MusicEntity, Playlist, QueueContext, Track } from "#/shared/contracts";
 import {
 	entityArtwork,
+	entityKey,
 	entityKind,
 	entityRank,
 	entitySubtitle,
@@ -495,7 +496,7 @@ export function MediaShelf({
 				{items.map((item, index) =>
 					asRows ? (
 						<MediaRow
-							key={`${"track" in item ? item.itemId : item.id}-${index}`}
+							key={`${entityKey(item)}-${index}`}
 							item={item}
 							queue={tracks}
 							context={context}
@@ -505,7 +506,7 @@ export function MediaShelf({
 						/>
 					) : (
 						<MediaCard
-							key={`${"track" in item ? item.itemId : item.id}-${index}`}
+							key={`${entityKey(item)}-${index}`}
 							item={item}
 							queue={tracks}
 							context={context}
@@ -641,7 +642,7 @@ export function MediaList({
 		<div className="flex flex-col">
 			{items.map((item, index) => (
 				<MediaRow
-					key={"track" in item ? item.itemId : item.id}
+					key={entityKey(item)}
 					item={item}
 					queue={tracks}
 					context={context}
@@ -660,7 +661,7 @@ export function MediaGrid({ items, context }: { items: MusicEntity[]; context?: 
 	return (
 		<div className="grid grid-cols-[repeat(auto-fill,minmax(9.5rem,1fr))] gap-x-4 gap-y-6">
 			{items.map((item) => (
-				<MediaCard key={"track" in item ? item.itemId : item.id} item={item} queue={tracks} context={context} />
+				<MediaCard key={entityKey(item)} item={item} queue={tracks} context={context} />
 			))}
 		</div>
 	);
@@ -850,9 +851,18 @@ export function TrackRow({
 						marked && "bg-accent scroll-mb-24"
 					)}
 					style={trackColumns(columns)}
-					// The row plays, like every mixed row in the app. The artist links and the menu inside it
-					// stop the click, and the play button in the index column is the keyboard path.
-					onClick={() => void engine.play(track, queue, context)}
+					// The row plays, like every mixed row in the app: the artist links stop the click, and the
+					// play button in the index column is the keyboard path. The containment test is what keeps
+					// the row's own menu off this handler. A React portal (the menu popup, its submenus, the
+					// "New playlist" dialog) leaves the row's DOM and stays its child in the React tree, and a
+					// synthetic event travels that tree, so without this every menu item ran its command and
+					// then played this row on top of it.
+					// `target` is an `EventTarget`, and `instanceof` is what narrows it rather than a cast
+					// asserting what the type does not know.
+					onClick={(event) => {
+						if (!(event.target instanceof Node) || !row.current?.contains(event.target)) return;
+						void engine.play(track, queue, context);
+					}}
 				/>
 			}
 		>

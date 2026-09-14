@@ -7,6 +7,10 @@ import { execFileSync } from "node:child_process";
 // DMG and the ZIP are built around it.
 
 export default function staple(context) {
+	// electron-builder only emits afterSign when signing occurred, so the unsigned Windows build and
+	// every Linux build never reach here. This guard makes that explicit rather than incidental, and
+	// stays correct if Windows signing is ever added.
+	if (context.electronPlatformName !== "darwin") return;
 	// `mac.notarize` is false by default here, so an unnotarized local build has no ticket to
 	// attach. `pnpm dist` is what turns it on, and stapling then fails loudly rather than shipping
 	// an artifact that only looks notarized.

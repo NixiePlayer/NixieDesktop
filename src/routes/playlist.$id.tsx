@@ -33,7 +33,9 @@ function PlaylistPage() {
 		() =>
 			page.flatMap((item) => {
 				if (isPlaylistItem(item)) return [item];
-				if (isTrack(item)) return [{ itemId: item.id, track: item }];
+				// No row id, and none can be invented: the video id addresses the song and the endpoint
+				// refuses it, so such a row lists and plays and offers neither reordering nor removal.
+				if (isTrack(item)) return [{ track: item }];
 				return [];
 			}),
 		[page]
@@ -88,7 +90,7 @@ function PlaylistPage() {
 		if (!items[target]) return;
 		const next = [...items];
 		const [item] = next.splice(index, 1);
-		if (!item) return;
+		if (!item?.itemId) return;
 		next.splice(target, 0, item);
 		const before = next[target + 1]?.itemId;
 		if (!before) return;
@@ -208,6 +210,12 @@ function PlaylistPage() {
 				renderAction={(visibleIndex) => {
 					const visibleTrack = visibleTracks[visibleIndex];
 					const index = items.findIndex((item) => item.track === visibleTrack);
+					const item = items[index];
+					// All three commands address the row rather than the song in it, and upstream states a
+					// row's own id only for a playlist this account can edit. Without one there is nothing
+					// to offer here: the video id names the song, and this endpoint refuses it.
+					if (!item?.itemId) return null;
+					const itemId = item.itemId;
 					return (
 						<>
 							<DropdownMenuItem disabled={index <= 0} onClick={() => move(index, -1)}>
@@ -220,14 +228,16 @@ function PlaylistPage() {
 							</DropdownMenuItem>
 							<DropdownMenuItem
 								variant="destructive"
-								onClick={() => {
-									const item = items[index];
-									if (!item) return;
+								onClick={() =>
 									void mutate(
-										items.filter((candidate) => candidate.itemId !== item.itemId),
-										{ type: "playlist-remove", playlistId: id, itemIds: [item.itemId] }
-									);
-								}}
+										items.filter((candidate) => candidate.itemId !== itemId),
+										{
+											type: "playlist-remove",
+											playlistId: id,
+											itemIds: [itemId],
+										}
+									)
+								}
 							>
 								<Trash2 />
 								Remove from playlist

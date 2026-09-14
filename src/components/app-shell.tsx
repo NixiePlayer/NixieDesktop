@@ -16,6 +16,7 @@ import {
 import { useEffect, useRef, useState } from "react";
 import { queryMusic, rememberSearch } from "#/lib/api";
 import { usePlaylists } from "#/lib/library";
+import { isMac } from "#/lib/platform";
 import { useUpdateState } from "#/lib/updates";
 import { cn } from "#/lib/utils";
 import { usePlayback, usePlayer, useSystemIntegration } from "#/player";
@@ -23,6 +24,7 @@ import type { AuthState, MusicEntity, Track } from "#/shared/contracts";
 import {
 	autoPlaylist,
 	entityArtwork,
+	entityKey,
 	entityKind,
 	entitySubtitle,
 	entityTitle,
@@ -85,17 +87,34 @@ export function AppShell({ auth, onAuthChange }: { auth: AuthState; onAuthChange
 	const [panel, setPanel] = useState<PanelTab | undefined>();
 	const searchRef = useRef<HTMLInputElement>(null);
 	const wide = useRailLabels();
+	const engine = usePlayer();
 	useSystemIntegration();
 
 	useEffect(() => {
 		const onKeyDown = (event: KeyboardEvent) => {
-			if (event.metaKey && event.key.toLowerCase() === "k") {
+			// The search accelerator is the platform's own and never both: Cmd is not a modifier a Windows
+			// or Linux user reaches for, and Ctrl+K deletes to end of line in a macOS text field.
+			const accelerator = isMac ? event.metaKey : event.ctrlKey;
+			if (accelerator && event.key.toLowerCase() === "k") {
 				event.preventDefault();
 				searchRef.current?.focus();
 				searchRef.current?.select();
 				return;
 			}
 			const target = event.target as HTMLElement | null;
+
+			// Next and previous are menu accelerators on macOS, and there is no menu off it, so the page
+			// owns them there. A text field keeps Ctrl+Arrow, which is word navigation in one. The player
+			// bar is in front of whoever pressed the key, so neither announces (the unwatched flag stays
+			// false), exactly like the next and previous buttons.
+			if (!isMac && event.ctrlKey && (event.key === "ArrowRight" || event.key === "ArrowLeft")) {
+				const typing = target?.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target?.tagName ?? "");
+				if (typing) return;
+				event.preventDefault();
+				if (event.key === "ArrowRight") engine.next();
+				else engine.previous();
+				return;
+			}
 
 			// Tab walking the chrome is not how a music app reads, so focus only moves inside a
 			// dialog, where the form fields still need it and the focus trap owns the key.
@@ -106,7 +125,7 @@ export function AppShell({ auth, onAuthChange }: { auth: AuthState; onAuthChange
 		};
 		window.addEventListener("keydown", onKeyDown, true);
 		return () => window.removeEventListener("keydown", onKeyDown, true);
-	}, []);
+	}, [engine]);
 
 	return (
 		<div className="bg-background grid h-full grid-cols-[auto_minmax(0,1fr)_auto] grid-rows-[3.5rem_minmax(0,1fr)_4.5rem]">
@@ -142,9 +161,11 @@ function TopBar({
 	const router = useRouter();
 
 	return (
-		<header className="drag-region border-border col-span-3 flex items-center gap-2 border-b px-3">
-			{/* pl-20 clears the macOS traffic lights, which overlay the hiddenInset title bar. */}
-			<div className="flex flex-1 items-center gap-1 pl-20">
+		<header className="drag-region window-controls-inset border-border col-span-3 flex items-center gap-2 border-b">
+			{/* macOS overlays its traffic lights on the hiddenInset title bar, outside the page, so they
+			    cannot be measured from here and the padding is fixed. Windows and Linux draw the controls
+			    into the page, and window-controls-inset clears them from whichever edge they sit on. */}
+			<div className="mac:pl-20 flex flex-1 items-center gap-1">
 				<Button variant="ghost" size="icon-sm" aria-label="Toggle navigation" onClick={onToggleNav}>
 					<PanelLeft />
 				</Button>
@@ -388,8 +409,8 @@ function SearchField({ inputRef }: { inputRef: React.RefObject<HTMLInputElement 
 										const track = isPlaylistItem(item) ? item.track : isTrack(item) ? item : undefined;
 										return (
 											<CommandItem
-												key={"track" in item ? item.itemId : item.id}
-												value={`r:${"track" in item ? item.itemId : item.id}`}
+												key={entityKey(item)}
+												value={`r:${entityKey(item)}`}
 												onSelect={() => openEntity(item)}
 											>
 												<div className="relative shrink-0">

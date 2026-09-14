@@ -48,6 +48,17 @@ export function entityRank(item: MusicEntity): number | undefined {
 	return isTrack(subject) || isArtist(subject) ? subject.rank : undefined;
 }
 
+/**
+ * What a list keys a row on. A playlist row is addressed by its own position where upstream states
+ * one, since the same song sits in a playlist twice and both copies carry one id; everything else is
+ * its entity id. Callers pair it with the index anyway, because neither is unique on a page that
+ * repeats a recommendation across shelves.
+ */
+export function entityKey(item: MusicEntity): string {
+	if (isPlaylistItem(item)) return item.itemId ?? item.track.id;
+	return item.id;
+}
+
 /** Flattens a mixed page down to the tracks that can actually be queued. */
 export function toTracks(items: MusicEntity[]): Track[] {
 	return items.map((item) => (isPlaylistItem(item) ? item.track : item)).filter(isTrack);
