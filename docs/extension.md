@@ -8,6 +8,11 @@ Firefox everywhere, every browser on macOS and Linux, and a Windows Chromium bro
 older scheme are read from disk and need no extension. The Nixie Link extension asks the
 browser for the same cookies through its normal extension API instead.
 
+Nixie Link is a Chromium extension. It works in Chrome, Edge, Brave, Vivaldi and Chromium on Windows,
+macOS and Linux. Firefox has no extension and needs none. On Linux it reaches only a browser installed
+the traditional way: a snap or flatpak browser cannot launch the native host outside its confinement,
+so neither sign-in path reaches it.
+
 ## Install
 
 Nixie Link is not published to a browser marketplace. Install it only from its GitHub repository:
@@ -51,7 +56,8 @@ The extension is unpacked, and the Windows app is currently unsigned.
 | Access to the specified native messaging host is forbidden | The extension ID is not the fixed ID that Nixie allows. Use the official repository copy. |
 | Native host has exited | Nixie is not running, or its per-run local token is stale. Restart Nixie and reload the extension. |
 | Extension pull timed out | The pairing code is wrong, was reset, or the browser closed. Copy the current code again. |
-| Unlock a system keyring before pairing | Linux has no secure keyring backend available. Start or unlock the desktop keyring and retry. |
+| Unlock a system keyring before pairing the extension | Linux has no secure keyring backend available. Start or unlock the desktop keyring and retry. |
+| Not signed in to music.youtube.com | That browser profile holds no YouTube session. Sign in there, and the row offers the pairing field by itself. |
 
 A running Chromium browser can lock its cookie database on Windows, which can hide it from Nixie's
 disk list. Nixie Link reads through the browser API and does not have that file-lock problem.

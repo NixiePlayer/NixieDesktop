@@ -71,14 +71,16 @@ carries a static runtime, so it needs no `libfuse2` on Ubuntu 24.04 and later. U
 itself only works when it is run as the AppImage, which is the ordinary way to run it.
 Sign-in reads browsers installed the traditional way, under `~/.config` (or
 `$XDG_CONFIG_HOME`) and `~/.mozilla`. A browser installed as a snap or a flatpak keeps its
-profile elsewhere and is not found yet, so on a stock Ubuntu, whose Firefox and Chromium are
-snaps, install a browser from its own repository or use the extension. Reading a Chromium
-browser whose cookies sit under the desktop keyring needs `libsecret-tools` installed and
-the keyring unlocked; Firefox needs neither. One more thing worth knowing: on a system that
-restricts unprivileged user namespaces (Ubuntu 24.04 does, through AppArmor) the AppImage
-launcher starts the app with Chromium's sandbox off, because the alternative is an app that
-does not start. That is the launcher's doing, not the app's, and a system that allows them
-runs the same file sandboxed.
+profile elsewhere, so Nixie does not find it, and its confinement also stops it launching
+the Nixie Link native host, so the extension does not reach it either. On a stock Ubuntu,
+whose Firefox and Chromium are snaps, install a browser from its vendor's own repository
+instead: Firefox from Mozilla's apt repository, or Chrome, Edge, Brave or Vivaldi from
+theirs. Reading a Chromium browser whose cookies sit under the desktop keyring needs
+`libsecret-tools` installed and the keyring unlocked; Firefox needs neither. One more thing
+worth knowing: on a system that restricts unprivileged user namespaces (Ubuntu 24.04 does,
+through AppArmor) the AppImage launcher starts the app with Chromium's sandbox off, because
+the alternative is an app that does not start. That is the launcher's doing, not the app's,
+and a system that allows them runs the same file sandboxed.
 
 On Windows, a Chromium browser that has moved to app-bound cookie encryption (Chrome 127 and
 later today) needs one extra step to sign in. [docs/extension.md](docs/extension.md) covers it, and
@@ -220,8 +222,11 @@ not do, so those profiles are not offered at all rather than offered and then fa
 way in there: it reads its own cookies through the API the browser gives every extension,
 authenticates Nixie's request with a private pairing code, and encrypts the cookie payload
 before native messaging carries it. Nothing is worked around, and no cookie is pasted.
-[docs/extension.md](docs/extension.md) is the walkthrough. The extension is optional
-everywhere else, where reading the profile from disk already works.
+[docs/extension.md](docs/extension.md) is the walkthrough. It is a Chromium extension, for
+Chrome, Edge, Brave, Vivaldi and Chromium: Firefox has no extension and needs none, since its
+profile is read from disk on every platform. The extension is optional everywhere else, where
+reading the profile from disk already works, and it does not reach a snap or flatpak browser
+on Linux (see [Install](#install)).
 
 Two smaller things worth knowing. On Windows, a browser that is running holds its cookie
 file locked, so a profile can be missing from the list until you quit that browser (the
