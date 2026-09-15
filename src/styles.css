@@ -248,10 +248,14 @@ textarea:focus-visible {
    short window is exactly that: the row menu's "Save to playlist" submenu runs the height of the
    viewport, opens at y=5 with "New playlist" at the top of it, and that one item sat under the bar and
    did nothing until the window was maximised, which is the only size where the submenu opens lower down.
-   A popup is never a handle for moving the window, so each one opts out on its own. */
+   A popup is never a handle for moving the window, so each one opts out on its own. The backdrop
+   under a modal popup is in the same position: it is where a click lands to dismiss the popup, and
+   over the bar that click moved the window and left the popup open. */
 [role="menu"],
 [role="listbox"],
-[role="dialog"] {
+[role="dialog"],
+[data-slot="dialog-overlay"],
+[data-base-ui-inert] {
 	-webkit-app-region: no-drag;
 }
 
