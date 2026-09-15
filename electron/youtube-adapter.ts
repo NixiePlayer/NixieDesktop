@@ -38,6 +38,19 @@ type Continuable = { has_continuation?: boolean; getContinuation?: () => Promise
  */
 const COLLABORATION_PARAMS = "KAE%3D";
 
+/**
+ * youtubei.js reports every node it could not place by printing that node whole, tracking params,
+ * titles and all, which is an upstream parser object in the log. It is also mostly noise here: an
+ * episode `MusicMultiRowListItem` inside a `MusicShelf` is refused on every show page and on "New
+ * episodes", and both read those rows raw instead (`multiRowNodes`), so that one refusal is expected
+ * and says nothing. Anything else is still worth a line, naming the class and never its data.
+ */
+export function onParserError(error: Parser.ParserError) {
+	if (error.error_type === "typecheck" && error.classname === "MusicMultiRowListItem") return;
+	console.warn(`[YOUTUBEJS][Parser]: ${error.error_type} ${error.classname}`);
+}
+Parser.setParserErrorHandler(onParserError);
+
 function record(value: unknown): value is UnknownRecord {
 	return typeof value === "object" && value !== null;
 }

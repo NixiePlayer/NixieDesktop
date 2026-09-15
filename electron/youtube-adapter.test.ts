@@ -19,6 +19,7 @@ import {
 	libraryTarget,
 	pruneCache,
 	monthlyListeners,
+	onParserError,
 	topSongsPlaylist,
 	withAlbumHeader,
 	withArtistHeader,
@@ -30,7 +31,7 @@ import {
 
 vi.mock("youtubei.js", () => ({
 	Innertube: { create: vi.fn(() => Promise.resolve({})) },
-	Parser: { parseArray: vi.fn(() => []), parseResponse: vi.fn(() => ({})) },
+	Parser: { parseArray: vi.fn(() => []), parseResponse: vi.fn(() => ({})), setParserErrorHandler: vi.fn() },
 	UniversalCache: vi.fn(),
 	YTNodes: { MusicMultiRowListItem: class {} },
 }));
@@ -1198,6 +1199,18 @@ describe("playlist header", () => {
 
 	it("leaves the page alone when upstream sent no header", () => {
 		expect(withPlaylistHeader("VLPLcool", {}, [], (url) => url)).toEqual([]);
+	});
+});
+
+describe("parser errors", () => {
+	it("drops the episode rows read raw and names any other refusal without its data", () => {
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		const classdata = { trackingParams: "secret" };
+		onParserError({ error_type: "typecheck", classname: "MusicMultiRowListItem", classdata, expected: "x" });
+		expect(warn).not.toHaveBeenCalled();
+		onParserError({ error_type: "typecheck", classname: "Grid", classdata, expected: "x" });
+		expect(warn).toHaveBeenCalledExactlyOnceWith("[YOUTUBEJS][Parser]: typecheck Grid");
+		warn.mockRestore();
 	});
 });
 
