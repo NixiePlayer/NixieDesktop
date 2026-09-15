@@ -9,7 +9,8 @@ import { DropdownMenuItem } from "#/components/ui/dropdown-menu";
 import { Input } from "#/components/ui/input";
 import { toast } from "#/components/ui/toast";
 import { queryMusic } from "#/lib/api";
-import { formatTotalDuration, plural } from "#/lib/format";
+import { formatTotalDuration } from "#/lib/format";
+import { useMessages } from "#/lib/i18n";
 import { invalidatePages } from "#/lib/invalidate";
 import { updatePlaylist } from "#/lib/library";
 import { usePlayer } from "#/player";
@@ -28,6 +29,7 @@ function PlaylistPage() {
 	const { find } = Route.useSearch();
 	const { items: page } = Route.useLoaderData();
 	const engine = usePlayer();
+	const m = useMessages();
 	const [filter, setFilter] = useState("");
 
 	// Rows may arrive either already wrapped as playlist items or as bare tracks.
@@ -53,12 +55,16 @@ function PlaylistPage() {
 	}
 	// By id, never "the first playlist on the page": the shelves under a playlist carry related ones.
 	const header = page.find((item): item is Playlist => isPlaylist(item) && item.id === id);
-	const [title, setTitle] = useState(header?.title ?? "Playlist");
+	const [title, setTitle] = useState(header?.title ?? m.common.playlist);
 	const [description, setDescription] = useState(header?.description ?? "");
 	// Undefined for a playlist the account does not own, which is also the one it cannot edit.
 	const [privacy, setPrivacy] = useState(header?.privacy);
 	// Liked music and episodes for later: upstream draws no cover for either and names nobody behind them.
-	const auto = autoPlaylist(id);
+	const auto = autoPlaylist(id, m);
+	// Nobody edits an auto playlist, so its words are the dictionary's rather than the English ones the
+	// adapter stamped into the header, and they follow the language.
+	const shownTitle = auto?.title ?? title;
+	const shownDescription = auto ? (auto.description ?? "") : description;
 	// A podcast show opens here too, since it lists and plays exactly like a playlist.
 	const show = id.startsWith("MPSP");
 
@@ -72,7 +78,7 @@ function PlaylistPage() {
 						.includes(filter.toLowerCase())
 				)
 			: tracks;
-	const context = { type: "playlist" as const, id, title };
+	const context = { type: "playlist" as const, id, title: shownTitle };
 	const totalSeconds = tracks.reduce((total, track) => total + track.durationSeconds, 0);
 	// The playlist as everyone else reaches it. A browse id carries a `VL` (or a show's `MPSP`) the
 	// public URL does not.
@@ -94,13 +100,13 @@ function PlaylistPage() {
 		setItems(next);
 		try {
 			await window.nixie?.music.command(command);
-			toast.add({ title: "Playlist updated", description: "Your change is now on YouTube Music.", type: "success" });
+			toast.add({ title: m.menu.playlistUpdated, description: m.menu.changeLanded, type: "success" });
 			// Outside the try would also run after a rollback.
 			edited.current = true;
 			void invalidatePages({ routeId: "/library" });
 		} catch {
 			setItems(previous);
-			toast.add({ title: "Change rolled back", description: "YouTube Music rejected the update.", type: "error" });
+			toast.add({ title: m.menu.changeRolledBack, description: m.menu.updateRejected, type: "error" });
 		}
 	};
 
@@ -121,8 +127,8 @@ function PlaylistPage() {
 	return (
 		<div>
 			<DetailHeader
-				kind={show ? "Podcast" : "Playlist"}
-				title={title}
+				kind={show ? m.common.podcast : m.common.playlist}
+				title={shownTitle}
 				meta={
 					<span className="flex items-center gap-2">
 						{/* Only a playlist the account owns states one, and it is the whole answer to who else
@@ -130,13 +136,12 @@ function PlaylistPage() {
 						{privacy && <PrivacyLabel privacy={privacy} />}
 						<span>
 							{[
-								header?.author ?? auto?.author,
-								description,
-								plural(
-									items.length,
-									show || (tracks.length && tracks.every((track) => track.episode)) ? "episode" : "track"
-								),
-								totalSeconds > 0 && formatTotalDuration(totalSeconds),
+								auto?.author ?? header?.author,
+								shownDescription,
+								show || (tracks.length && tracks.every((track) => track.episode))
+									? m.common.episodeCount(items.length)
+									: m.common.trackCount(items.length),
+								totalSeconds > 0 && formatTotalDuration(totalSeconds, m),
 							]
 								.filter(Boolean)
 								.join(" · ")}
@@ -148,7 +153,7 @@ function PlaylistPage() {
 					<>
 						<Button disabled={!tracks[0]} onClick={() => tracks[0] && void engine.play(tracks[0], tracks, context)}>
 							<Play data-icon="inline-start" fill="currentColor" />
-							Play
+							{m.common.play}
 						</Button>
 						{/* A private playlist opens for nobody else, and upstream offers no share for one either. */}
 						{privacy !== "private" && (
@@ -157,12 +162,12 @@ function PlaylistPage() {
 								onClick={() =>
 									void navigator.clipboard
 										.writeText(shareUrl)
-										.then(() => toast.add({ title: "Link copied", description: shareUrl, type: "success" }))
-										.catch(() => toast.add({ title: "Could not copy the link", type: "error" }))
+										.then(() => toast.add({ title: m.common.linkCopied, description: shareUrl, type: "success" }))
+										.catch(() => toast.add({ title: m.menu.couldNotCopyLink, type: "error" }))
 								}
 							>
 								<Link2 data-icon="inline-start" />
-								Copy link
+								{m.common.copyLink}
 							</Button>
 						)}
 						{/* Editable is exactly what the account owns, and the privacy is how upstream says so:
@@ -201,8 +206,8 @@ function PlaylistPage() {
 												setPrivacy(previous.privacy);
 												updatePlaylist(id, previous);
 												toast.add({
-													title: "Change rolled back",
-													description: "YouTube Music rejected the edit.",
+													title: m.menu.changeRolledBack,
+													description: m.menu.editRejected,
 													type: "error",
 												});
 											}
@@ -210,7 +215,7 @@ function PlaylistPage() {
 								}}
 							/>
 						)}
-						{header && <EntityMenu item={{ ...header, title, description, privacy }} />}
+						{header && <EntityMenu item={{ ...header, title: shownTitle, description: shownDescription, privacy }} />}
 					</>
 				}
 			/>
@@ -220,13 +225,13 @@ function PlaylistPage() {
 						autoFocus
 						value={filter}
 						onChange={(event) => setFilter(event.target.value)}
-						placeholder="Find in playlist"
-						aria-label="Find in playlist"
+						placeholder={m.menu.findInPlaylist}
+						aria-label={m.menu.findInPlaylist}
 					/>
 					<Button
 						variant="ghost"
 						size="icon-sm"
-						aria-label="Close playlist search"
+						aria-label={m.menu.closePlaylistSearch}
 						nativeButton={false}
 						render={<Link to="/playlist/$id" params={{ id }} search={{ find: undefined }} />}
 					>
@@ -252,11 +257,11 @@ function PlaylistPage() {
 						<>
 							<DropdownMenuItem disabled={index <= 0} onClick={() => move(index, -1)}>
 								<MoveUp />
-								Move up
+								{m.menu.moveUp}
 							</DropdownMenuItem>
 							<DropdownMenuItem disabled={index === items.length - 1} onClick={() => move(index, 1)}>
 								<MoveDown />
-								Move down
+								{m.menu.moveDown}
 							</DropdownMenuItem>
 							<DropdownMenuItem
 								variant="destructive"
@@ -272,7 +277,7 @@ function PlaylistPage() {
 								}
 							>
 								<Trash2 />
-								Remove from playlist
+								{m.menu.removeFromPlaylist}
 							</DropdownMenuItem>
 						</>
 					);

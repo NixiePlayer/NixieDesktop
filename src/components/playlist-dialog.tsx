@@ -1,8 +1,10 @@
 import { Globe, Link2, Lock, Pencil, Plus } from "lucide-react";
 import { useState } from "react";
+import { useMessages } from "#/lib/i18n";
 import { invalidatePages } from "#/lib/invalidate";
 import { addPlaylist } from "#/lib/library";
 import type { Playlist, PlaylistPrivacy } from "#/shared/contracts";
+import type { Messages } from "#/shared/i18n";
 import { Button } from "./ui/button";
 import {
 	Dialog,
@@ -21,21 +23,25 @@ import { Switch } from "./ui/switch";
 import { Textarea } from "./ui/textarea";
 import { toast } from "./ui/toast";
 
-// Upstream's own wording for each option, and the icon it draws beside it.
-export const privacies = {
-	public: { label: "Public", hint: "Anyone can search for and view", icon: Globe },
-	unlisted: { label: "Unlisted", hint: "Anyone with the link can view", icon: Link2 },
-	private: { label: "Private", hint: "Only you can view", icon: Lock },
-} satisfies Record<PlaylistPrivacy, { label: string; hint: string; icon: React.ComponentType<{ className?: string }> }>;
+// Upstream's own wording for each option lives in the dictionary; this is the icon it draws beside it.
+const privacyIcons = { public: Globe, unlisted: Link2, private: Lock } satisfies Record<
+	PlaylistPrivacy,
+	React.ComponentType<{ className?: string }>
+>;
+const privacyValues = Object.keys(privacyIcons) as PlaylistPrivacy[];
 
 // `Select` names its value through this map, so the trigger reads "Public" rather than "public".
-const privacyLabels = Object.fromEntries(
-	Object.entries(privacies).map(([value, option]) => [value, option.label])
-) as Record<PlaylistPrivacy, string>;
+const privacyLabels = (m: Messages) =>
+	Object.fromEntries(privacyValues.map((value) => [value, m.menu.privacy[value].label])) as Record<
+		PlaylistPrivacy,
+		string
+	>;
 
 /** Who can reach the playlist, stated the way its own dialog states it. */
 export function PrivacyLabel({ privacy }: { privacy: PlaylistPrivacy }) {
-	const { label, icon: Icon } = privacies[privacy];
+	const m = useMessages();
+	const Icon = privacyIcons[privacy];
+	const { label } = m.menu.privacy[privacy];
 	return (
 		<span className="inline-flex items-center gap-1.5">
 			<Icon className="size-3.5" />
@@ -68,6 +74,7 @@ export function NewPlaylistDialog({
 	onOpenChange?: (open: boolean) => void;
 	onCreated?: (playlist: Playlist) => void;
 }) {
+	const m = useMessages();
 	const [ownOpen, setOwnOpen] = useState(false);
 	const open = controlledOpen ?? ownOpen;
 	const setOpen = (next: boolean) => {
@@ -95,14 +102,14 @@ export function NewPlaylistDialog({
 			}}
 		>
 			{controlledOpen === undefined && (
-				<DialogTrigger render={<Button variant="ghost" size="icon-sm" aria-label="New playlist" />}>
+				<DialogTrigger render={<Button variant="ghost" size="icon-sm" aria-label={m.menu.newPlaylist} />}>
 					<Plus />
 				</DialogTrigger>
 			)}
 			<DialogContent>
 				<DialogHeader>
-					<DialogTitle>New playlist</DialogTitle>
-					<DialogDescription>The playlist is created on your YouTube Music account.</DialogDescription>
+					<DialogTitle>{m.menu.newPlaylist}</DialogTitle>
+					<DialogDescription>{m.menu.newPlaylistDescription}</DialogDescription>
 				</DialogHeader>
 				<form
 					onSubmit={(event) => {
@@ -135,9 +142,9 @@ export function NewPlaylistDialog({
 								void invalidatePages({ routeId: "/library" });
 								onCreated?.(playlist);
 								setOpen(false);
-								toast.add({ title: "Playlist created", description: title, type: "success" });
+								toast.add({ title: m.menu.playlistCreated, description: title, type: "success" });
 							})
-							.catch(() => toast.add({ title: "Could not create playlist", type: "error" }))
+							.catch(() => toast.add({ title: m.menu.couldNotCreatePlaylist, type: "error" }))
 							.finally(() => setBusy(false));
 					}}
 				>
@@ -146,7 +153,7 @@ export function NewPlaylistDialog({
 							{/* Every field names its control through `aria-labelledby` rather than `htmlFor`: a label
 						    bound to a control forwards a click onto it, so a press on the word put the caret in
 						    the field or opened the select. The accessible name is the same either way. */}
-							<FieldLabel id="new-playlist-title-label">Title</FieldLabel>
+							<FieldLabel id="new-playlist-title-label">{m.menu.title}</FieldLabel>
 							<Input
 								aria-labelledby="new-playlist-title-label"
 								name="title"
@@ -156,7 +163,7 @@ export function NewPlaylistDialog({
 							/>
 						</Field>
 						<Field>
-							<FieldLabel id="new-playlist-description-label">Description</FieldLabel>
+							<FieldLabel id="new-playlist-description-label">{m.menu.description}</FieldLabel>
 							<Textarea
 								aria-labelledby="new-playlist-description-label"
 								name="description"
@@ -165,35 +172,41 @@ export function NewPlaylistDialog({
 							/>
 						</Field>
 						<Field>
-							<FieldLabel id="new-playlist-privacy-label">Privacy</FieldLabel>
+							<FieldLabel id="new-playlist-privacy-label">{m.menu.privacyLabel}</FieldLabel>
 							<Select
-								items={privacyLabels}
+								items={privacyLabels(m)}
 								value={privacy}
 								onValueChange={(next) => {
 									setPrivacy(next as PlaylistPrivacy);
 									if (next === "private") setCollaborate(false);
 								}}
 							>
-								<SelectTrigger aria-labelledby="new-playlist-privacy-label">
+								{/* Full width rather than the trigger's own `w-fit`, which sizes it to the value it is
+								    showing: the control was one width for "Private" and another for "Non in elenco",
+								    so it resized as the option changed and again with the language. */}
+								<SelectTrigger className="w-full" aria-labelledby="new-playlist-privacy-label">
 									<SelectValue>
 										<PrivacyLabel privacy={privacy} />
 									</SelectValue>
 								</SelectTrigger>
 								<SelectContent>
 									<SelectGroup>
-										{Object.entries(privacies).map(([value, option]) => (
-											<SelectItem key={value} value={value}>
-												<option.icon className="size-4" />
-												{option.label}
-											</SelectItem>
-										))}
+										{privacyValues.map((value) => {
+											const Icon = privacyIcons[value];
+											return (
+												<SelectItem key={value} value={value}>
+													<Icon className="size-4" />
+													{m.menu.privacy[value].label}
+												</SelectItem>
+											);
+										})}
 									</SelectGroup>
 								</SelectContent>
 							</Select>
-							<FieldDescription>{privacies[privacy].hint}</FieldDescription>
+							<FieldDescription>{m.menu.privacy[privacy].hint}</FieldDescription>
 						</Field>
 						<Field orientation="horizontal">
-							<FieldLabel id="new-playlist-collaborate-label">Collaborate</FieldLabel>
+							<FieldLabel id="new-playlist-collaborate-label">{m.menu.collaborate}</FieldLabel>
 							<Switch
 								aria-labelledby="new-playlist-collaborate-label"
 								checked={shareable && collaborate}
@@ -201,11 +214,17 @@ export function NewPlaylistDialog({
 								onCheckedChange={setCollaborate}
 							/>
 						</Field>
-						{!shareable && <FieldDescription>Change privacy to allow collaboration.</FieldDescription>}
+						{/* Always drawn and hidden when it does not apply, so its line is reserved rather than
+						    inserted: appearing with the privacy made the dialog taller, and a dialog centred on
+						    its own height moves every row above it when it grows. Hidden this way it is out of
+						    the accessibility tree too. */}
+						<FieldDescription className={shareable ? "invisible" : undefined}>
+							{m.menu.collaborationHint}
+						</FieldDescription>
 						<DialogFooter>
-							<DialogClose render={<Button type="button" variant="ghost" />}>Cancel</DialogClose>
+							<DialogClose render={<Button type="button" variant="ghost" />}>{m.common.cancel}</DialogClose>
 							<Button type="submit" disabled={busy}>
-								Create
+								{m.menu.create}
 							</Button>
 						</DialogFooter>
 					</FieldGroup>
@@ -227,6 +246,7 @@ export function EditPlaylistDialog({
 	privacy?: PlaylistPrivacy;
 	onSave: (title: string, description: string, privacy?: PlaylistPrivacy) => void;
 }) {
+	const m = useMessages();
 	const [open, setOpen] = useState(false);
 	const [nextPrivacy, setNextPrivacy] = useState(privacy);
 
@@ -242,12 +262,12 @@ export function EditPlaylistDialog({
 		>
 			<DialogTrigger render={<Button variant="outline" />}>
 				<Pencil data-icon="inline-start" />
-				Edit details
+				{m.menu.editDetails}
 			</DialogTrigger>
 			<DialogContent>
 				<DialogHeader>
-					<DialogTitle>Edit playlist</DialogTitle>
-					<DialogDescription>Changes sync to YouTube Music.</DialogDescription>
+					<DialogTitle>{m.menu.editPlaylist}</DialogTitle>
+					<DialogDescription>{m.menu.editPlaylistDescription}</DialogDescription>
 				</DialogHeader>
 				<form
 					onSubmit={(event) => {
@@ -259,7 +279,7 @@ export function EditPlaylistDialog({
 				>
 					<FieldGroup>
 						<Field>
-							<FieldLabel id="playlist-title-label">Name</FieldLabel>
+							<FieldLabel id="playlist-title-label">{m.menu.name}</FieldLabel>
 							<Input
 								aria-labelledby="playlist-title-label"
 								name="title"
@@ -269,7 +289,7 @@ export function EditPlaylistDialog({
 							/>
 						</Field>
 						<Field>
-							<FieldLabel id="playlist-description-label">Description</FieldLabel>
+							<FieldLabel id="playlist-description-label">{m.menu.description}</FieldLabel>
 							<Textarea
 								aria-labelledby="playlist-description-label"
 								name="description"
@@ -280,32 +300,35 @@ export function EditPlaylistDialog({
 						</Field>
 						{nextPrivacy && (
 							<Field>
-								<FieldLabel id="playlist-privacy-label">Privacy</FieldLabel>
+								<FieldLabel id="playlist-privacy-label">{m.menu.privacyLabel}</FieldLabel>
 								<Select
-									items={privacyLabels}
+									items={privacyLabels(m)}
 									value={nextPrivacy}
 									onValueChange={(value) => setNextPrivacy(value as PlaylistPrivacy)}
 								>
-									<SelectTrigger aria-labelledby="playlist-privacy-label">
+									<SelectTrigger className="w-full" aria-labelledby="playlist-privacy-label">
 										<SelectValue>
 											<PrivacyLabel privacy={nextPrivacy} />
 										</SelectValue>
 									</SelectTrigger>
 									<SelectContent>
 										<SelectGroup>
-											{Object.entries(privacies).map(([value, option]) => (
-												<SelectItem key={value} value={value}>
-													<option.icon className="size-4" />
-													{option.label}
-												</SelectItem>
-											))}
+											{privacyValues.map((value) => {
+												const Icon = privacyIcons[value];
+												return (
+													<SelectItem key={value} value={value}>
+														<Icon className="size-4" />
+														{m.menu.privacy[value].label}
+													</SelectItem>
+												);
+											})}
 										</SelectGroup>
 									</SelectContent>
 								</Select>
-								<FieldDescription>{privacies[nextPrivacy].hint}</FieldDescription>
+								<FieldDescription>{m.menu.privacy[nextPrivacy].hint}</FieldDescription>
 							</Field>
 						)}
-						<Button type="submit">Save changes</Button>
+						<Button type="submit">{m.menu.saveChanges}</Button>
 					</FieldGroup>
 				</form>
 			</DialogContent>

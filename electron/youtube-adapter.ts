@@ -26,9 +26,12 @@ import type {
 	WatchTarget,
 } from "../src/shared/contracts";
 import { autoPlaylist, isTrack } from "../src/shared/entities";
+import { messagesFor, type Language, type Messages } from "../src/shared/i18n";
 import type { SecureResourceRegistry } from "./media-protocol";
 
 type UnknownRecord = Record<string, unknown>;
+/** What a session is built for besides its cookies. The language is the one upstream answers in. */
+type SessionOptions = { region?: string; restricted?: boolean; language?: Language };
 type Continuable = { has_continuation?: boolean; getContinuation?: () => Promise<unknown> };
 
 /**
@@ -298,6 +301,19 @@ function episodeFrom(node: UnknownRecord): Pick<Track, "episode" | "show"> {
 	return { episode: true, show };
 }
 
+/** Whether a row's watch endpoint plays an audio track, which is what upstream calls a song. */
+function audioTrack(node: UnknownRecord): boolean {
+	let found = false;
+	walk(node.endpoint, (child) => {
+		if (child.musicVideoType === "MUSIC_VIDEO_TYPE_ATV") found = true;
+	});
+	return found;
+}
+
+function subtitleRuns(node: UnknownRecord): UnknownRecord[] {
+	return record(node.subtitle) && Array.isArray(node.subtitle.runs) ? node.subtitle.runs.filter(record) : [];
+}
+
 /** The "28:29" a row states in its first fixed column, or zero when it states none there. */
 function fixedDuration(node: UnknownRecord): number {
 	const column = Array.isArray(node.fixed_columns) ? node.fixed_columns[0] : undefined;
@@ -307,8 +323,9 @@ function fixedDuration(node: UnknownRecord): number {
 
 /**
  * An episode's length as a raw multi-row item states it, which the parse drops: only in the playback
- * progress beside the row, and only as words ("1 hr 30 min"). The session sets no language, so
- * upstream answers in English and the words are fixed. A text that does not match states no length.
+ * progress beside the row, and only as words ("1 hr 30 min", "1 h e 30 min"). The session follows
+ * the app language, so both unit spellings are read, the hour as a whole word so the "h" inside
+ * another word is never taken for one. A text that does not match states no length.
  */
 export function episodeLengths(rows: UnknownRecord[]): Map<string, Partial<Track>> {
 	const lengths = new Map<string, Partial<Track>>();
@@ -319,8 +336,8 @@ export function episodeLengths(rows: UnknownRecord[]): Map<string, Partial<Track
 			if (!id && typeof node.videoId === "string") id = node.videoId;
 			if (!words && record(node.durationText)) words = text(node.durationText);
 		});
-		const hours = Number(/(\d+)\s*hr/.exec(words ?? "")?.[1] ?? 0);
-		const minutes = Number(/(\d+)\s*min/.exec(words ?? "")?.[1] ?? 0);
+		const hours = Number(/(\d+)\s*hr?\b/.exec(words ?? "")?.[1] ?? 0);
+		const minutes = Number(/(\d+)\s*min\b/.exec(words ?? "")?.[1] ?? 0);
 		if (id && (hours || minutes)) lengths.set(id, { durationSeconds: (hours * 60 + minutes) * 60 });
 	}
 	return lengths;
@@ -433,14 +450,14 @@ export class YouTubeAdapter {
 	readonly #resources: SecureResourceRegistry;
 	readonly #cachePath: string;
 	readonly #getCookieHeader: () => Promise<string>;
-	readonly #getSessionOptions: () => Promise<{ region?: string; restricted?: boolean }>;
+	readonly #getSessionOptions: () => Promise<SessionOptions>;
 	#sessionKey?: string;
 
 	constructor(
 		resources: SecureResourceRegistry,
 		cachePath: string,
 		getCookieHeader: () => Promise<string>,
-		getSessionOptions: () => Promise<{ region?: string; restricted?: boolean }> = async () => ({})
+		getSessionOptions: () => Promise<SessionOptions> = async () => ({})
 	) {
 		this.#resources = resources;
 		this.#cachePath = cachePath;
@@ -489,7 +506,8 @@ export class YouTubeAdapter {
 					browsed?.contents,
 					(url) => this.#resources.registerArtwork(url),
 					landing,
-					browsed?.header
+					browsed?.header,
+					messagesFor((await this.#getSessionOptions()).language ?? "en")
 				);
 				return {
 					...this.#page(browsed?.contents, true),
@@ -1055,11 +1073,12 @@ export class YouTubeAdapter {
 	 */
 	async #getClient() {
 		const cookie = await this.#getCookieHeader();
-		// Region and Restricted Mode are fixed when the session is built, exactly as the cookies are,
-		// so changing either has to build a new session rather than reuse one still carrying the old
-		// value. Compared as one string so a single check covers all three.
+		// Region, Restricted Mode and language are fixed when the session is built, exactly as the cookies
+		// are, so changing any of them has to build a new session rather than reuse one still carrying the
+		// old value. Compared as one string so a single check covers all of them.
 		const session = await this.#getSessionOptions();
-		const key = `${session.region ?? ""}|${session.restricted ? "1" : ""}`;
+		const language = session.language ?? "en";
+		const key = `${session.region ?? ""}|${session.restricted ? "1" : ""}|${language}`;
 		if ((!this.#client && !this.#building) || cookie !== this.#cookie || key !== this.#sessionKey) {
 			this.#cookie = cookie;
 			this.#sessionKey = key;
@@ -1069,6 +1088,9 @@ export class YouTubeAdapter {
 					cache: new UniversalCache(true, this.#cachePath),
 					location: session.region,
 					enable_safety_mode: session.restricted,
+					// Always stated, never left unset: a session restored from the cache keeps the `hl` it was
+					// saved with unless `lang` overrides it, so going back to English needs "en" said out loud.
+					lang: language,
 				})
 			);
 			this.#building = build;
@@ -1194,7 +1216,9 @@ export function extractExploreData(
 	value: unknown,
 	registerArtwork: (url: string) => string,
 	landing = false,
-	header?: unknown
+	header?: unknown,
+	// The one label this writes itself, so it is worded in the language the session answers in.
+	m: Messages = messagesFor("en")
 ): ExploreData {
 	const shortcuts: BrowseTarget[] = [];
 	const sections: ExploreSection[] = [];
@@ -1233,11 +1257,12 @@ export function extractExploreData(
 			if (section?.type === "navigation") {
 				// What the section adopts, the grid gives up: the shortcut and the section's own "Browse
 				// all" lead to the same browse, so leaving both draws one destination twice, a tile and a
-				// heading apart. A response whose labels no longer match keeps both, as it always did.
-				const index = shortcuts.findIndex((shortcut) => shortcut.label === section.title);
+				// heading apart. Matched on the unlocalised browse id rather than the label, which follows the
+				// session language. A response naming no such shortcut keeps its grid as it arrived.
+				const index = shortcuts.findIndex((shortcut) => shortcut.browseId === "FEmusic_moods_and_genres");
 				const target = shortcuts[index];
 				if (target) {
-					section.more = { ...target, label: "Browse all", title: section.title };
+					section.more = { ...target, label: m.common.browseAll, title: section.title };
 					shortcuts.splice(index, 1);
 				}
 			}
@@ -1386,13 +1411,19 @@ export function extractEntities(
 		const multiRow = node.type === "MusicMultiRowListItem";
 		const onTap = multiRow ? endpointPayload({ endpoint: node.on_tap }) : undefined;
 		const id = firstString(node, "id") ?? (onTap && firstString(onTap, "videoId"));
+		// youtubei.js types a card as a song only when its subtitle opens with the English word "Song", so
+		// under any other session language every song card arrives as a video. The watch endpoint's
+		// `musicVideoType` says the same thing unlocalised: an audio track is a song.
+		const retyped = node.type === "MusicTwoRowItem" && node.item_type === "video" && audioTrack(node);
 		const kind = id?.startsWith("MPSP")
 			? "podcast_show"
 			: multiRow
 				? "non_music_track"
-				: typeof node.item_type === "string"
-					? node.item_type
-					: undefined;
+				: retyped
+					? "song"
+					: typeof node.item_type === "string"
+						? node.item_type
+						: undefined;
 		const title = firstString(node, "title", "name");
 		if (!id || !kind || !title || ids.has(id)) return;
 		const episode = kind === "song" || kind === "video" || kind === "non_music_track" ? episodeFrom(node) : {};
@@ -1401,11 +1432,17 @@ export function extractEntities(
 		ids.add(id);
 		const artworkUrl = thumbnail(node);
 		const artwork = artworkUrl ? registerArtwork(artworkUrl) : undefined;
-		const artists = Array.isArray(node.artists)
-			? node.artists.filter(record).map(artistFrom)
-			: record(node.author)
-				? [artistFrom(node.author)]
-				: [];
+		// A retyped card was parsed as a video, which keeps only its first linked channel as `author`, so
+		// its artists are read back off the subtitle runs the song parse would have read them from.
+		const artists = retyped
+			? subtitleRuns(node)
+					.filter((run) => firstString(endpointPayload(run) ?? {}, "browseId")?.startsWith("UC"))
+					.map(artistFrom)
+			: Array.isArray(node.artists)
+				? node.artists.filter(record).map(artistFrom)
+				: record(node.author)
+					? [artistFrom(node.author)]
+					: [];
 
 		switch (kind) {
 			case "song":
@@ -1484,7 +1521,7 @@ export function extractEntities(
 				// cover YouTube Music draws for itself is square.
 				const art = largestThumbnail(node);
 				if (art?.width && art.height && art.width !== art.height) return;
-				const auto = autoPlaylist(id);
+				const auto = autoPlaylist(id, messagesFor("en"));
 				const playlist: Playlist = {
 					id,
 					title: auto?.title ?? title,
@@ -1708,7 +1745,7 @@ export function withPlaylistHeader(
 ): MusicEntity[] {
 	if (!record(source) || !record(source.header)) return items;
 	const header = source.header;
-	const auto = autoPlaylist(id);
+	const auto = autoPlaylist(id, messagesFor("en"));
 	const title = auto?.title ?? firstString(header, "title");
 	if (!title) return items;
 	const artworkUrl = thumbnail(header);

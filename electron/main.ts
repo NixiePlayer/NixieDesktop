@@ -33,6 +33,7 @@ import type {
 } from "../src/shared/contracts";
 import type { LinkedAccount } from "../src/shared/contracts";
 import { artistNames } from "../src/shared/entities";
+import { messagesFor, resolveLanguage } from "../src/shared/i18n";
 import {
 	validateBrowserAccount,
 	validateDocumentName,
@@ -554,6 +555,7 @@ function createAdapter() {
 		async () => ({
 			region: stateStore.snapshot.settings.region,
 			restricted: stateStore.snapshot.settings.restricted,
+			language: appLanguage(),
 		})
 	);
 	// Floating on purpose: whatever asked for a new adapter must not wait on YouTube.
@@ -728,9 +730,11 @@ function registerIpc() {
 		const accounts = await listBrowserAccounts(app.getApplicationNameForProtocol("https://"));
 		return Promise.all(accounts.map(async (account) => ({ ...account, icon: await browserIcon(account.browser) })));
 	});
-	handle("auth:import-browser", (_event, account) => importFromBrowser(account));
+	handle("auth:import-browser", (_event, account) => importFromBrowser(account).catch(readableError));
 	handle("auth:extension-sources", () => nativeHost.connections());
-	handle("auth:link-extension", (_event, installId, pairingSecret) => importFromExtension(installId, pairingSecret));
+	handle("auth:link-extension", (_event, installId, pairingSecret) =>
+		importFromExtension(installId, pairingSecret).catch(readableError)
+	);
 	handle("auth:sign-out", async () => {
 		await clearSession();
 		await youtube.reset();
@@ -801,6 +805,8 @@ function registerIpc() {
 		// The stored theme decides the overlay's colours, and it is written through here, so this is where
 		// the window controls follow a theme change. A no-op on macOS.
 		syncTitleBarOverlay();
+		// The language is written through here too, and the menu is built in it.
+		installMenu();
 	});
 	handle("local:clear", async (_event, selection) => {
 		if (!["session", "all"].includes(String(selection))) throw new TypeError("Invalid clear selection");
@@ -891,7 +897,26 @@ function registerAppProtocol() {
 	});
 }
 
+/** The language the app is drawn in, and the one upstream is asked to answer in. */
+function appLanguage() {
+	return resolveLanguage(stateStore.snapshot.settings.language, app.getPreferredSystemLanguages());
+}
+
+/**
+ * A sign-in failure in the reader's language. Every path throws fixed English, which the log writes and
+ * `DATA_ACCESS_REFUSED` is compared by, so it is translated here on the way out to the sign-in view and
+ * nowhere earlier: the English dictionary holds the same strings, which is how a message finds its key.
+ */
+function readableError(error: unknown): never {
+	const english = messagesFor("en").main.errors;
+	const key = (Object.keys(english) as (keyof typeof english)[]).find(
+		(candidate) => error instanceof Error && english[candidate] === error.message
+	);
+	throw key ? new Error(messagesFor(appLanguage()).main.errors[key]) : error;
+}
+
 function installMenu() {
+	const m = messagesFor(appLanguage());
 	const send = (type: "play" | "pause" | "next" | "previous") =>
 		mainWindow?.webContents.send("player:media-command", { type });
 	// Off macOS every role in this template is either inert (hide, unhide) or already delivered by
@@ -907,7 +932,7 @@ function installMenu() {
 				submenu: [
 					{ role: "about" },
 					{ type: "separator" },
-					{ label: "Export diagnostics", click: () => void exportDiagnostics() },
+					{ label: m.main.exportDiagnostics, click: () => void exportDiagnostics() },
 					{ type: "separator" },
 					// Cmd+H, Cmd+Alt+H: macOS only delivers them when the app menu carries these roles, so
 					// without them the standard hide shortcuts silently do nothing.
@@ -922,14 +947,14 @@ function installMenu() {
 			// field in the app loses select-all, copy, paste, and undo.
 			{ role: "editMenu" },
 			{
-				label: "Playback",
+				label: m.main.playback,
 				submenu: [
 					// No Space accelerator: a menu accelerator swallows the key before the page sees it, so
 					// the renderer owns Space and toggles with it instead of forcing a reload-and-play.
-					{ label: "Play", click: () => send("play") },
-					{ label: "Pause", click: () => send("pause") },
-					{ label: "Next", accelerator: "CmdOrCtrl+Right", click: () => send("next") },
-					{ label: "Previous", accelerator: "CmdOrCtrl+Left", click: () => send("previous") },
+					{ label: m.common.play, click: () => send("play") },
+					{ label: m.common.pause, click: () => send("pause") },
+					{ label: m.common.next, accelerator: "CmdOrCtrl+Right", click: () => send("next") },
+					{ label: m.common.previous, accelerator: "CmdOrCtrl+Left", click: () => send("previous") },
 				],
 			},
 			{ role: "windowMenu" },
@@ -1094,7 +1119,11 @@ void app
 	})
 	.catch((error: unknown) => {
 		void logger?.write("error", error instanceof Error ? error.message : "Application startup failed");
-		dialog.showErrorBox("Nixie could not start", error instanceof Error ? error.message : "Unknown startup error");
+		// The store may be what failed to load, so an unread setting falls back to the system's languages.
+		const m = messagesFor(
+			resolveLanguage(stateStore?.snapshot.settings.language, app.getPreferredSystemLanguages())
+		).main;
+		dialog.showErrorBox(m.startupFailed, error instanceof Error ? error.message : m.unknownStartupError);
 		app.quit();
 	});
 

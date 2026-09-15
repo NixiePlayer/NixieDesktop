@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { en } from "../locales/en";
+import { it as italian } from "../locales/it";
 import type { Album, Artist, Playlist, PlaylistItem, Track } from "./contracts";
 import {
 	appendPage,
@@ -34,12 +36,17 @@ describe("entity guards", () => {
 	});
 
 	it("labels a mixed search row by what it is", () => {
-		expect([track, album, artist, playlist].map(entityKind)).toEqual(["Song", "Album", "Artist", "Playlist"]);
-		expect(entityKind({ ...album, kind: "Single" })).toBe("Single");
-		expect(entityKind({ ...track, episode: true })).toBe("Episode");
-		expect(entityKind({ id: "MPSPPLdaily", title: "The Daily" })).toBe("Podcast");
+		expect([track, album, artist, playlist].map((entity) => entityKind(entity, en))).toEqual([
+			"Song",
+			"Album",
+			"Artist",
+			"Playlist",
+		]);
+		expect(entityKind({ ...album, kind: "Single" }, en)).toBe("Single");
+		expect(entityKind({ ...track, episode: true }, en)).toBe("Episode");
+		expect(entityKind({ id: "MPSPPLdaily", title: "The Daily" }, en)).toBe("Podcast");
 		// A search row carries no length, and "0 tracks" would read as an empty playlist.
-		expect(entitySubtitle({ id: "p2", title: "Best of" })).toBe("");
+		expect(entitySubtitle({ id: "p2", title: "Best of" }, en)).toBe("");
 	});
 
 	it("unwraps playlist items when flattening a page to a queue", () => {
@@ -62,30 +69,33 @@ describe("chart position", () => {
 describe("auto-generated playlists", () => {
 	it("covers and labels the two nobody made, with or without the browse prefix", () => {
 		for (const id of ["VLLM", "LM", "VLSE", "SE"]) {
-			expect(autoPlaylist(id)?.artworkUrl).toMatch(/^nixie:\/\/app\/artwork\//);
+			expect(autoPlaylist(id, en)?.artworkUrl).toMatch(/^nixie:\/\/app\/artwork\//);
 		}
-		expect(autoPlaylist("LM")?.artworkUrl).toBe(
+		expect(autoPlaylist("LM", en)?.artworkUrl).toBe(
 			`nixie://app/artwork/${Buffer.from("https://www.gstatic.com/youtube/media/ytm/images/pbg/liked-songs-delhi-1200.png").toString("base64url")}`
 		);
-		expect(autoPlaylist("SE")?.artworkUrl).toBe(
+		expect(autoPlaylist("SE", en)?.artworkUrl).toBe(
 			`nixie://app/artwork/${Buffer.from("https://www.gstatic.com/youtube/media/ytm/images/pbg/podcast-queue-delhi-1200.png").toString("base64url")}`
 		);
-		expect(autoPlaylist("VLLM")).toMatchObject({
+		expect(autoPlaylist("VLLM", en)).toMatchObject({
 			title: "Liked music",
 			description: "Songs you like in YouTube Music appear here.",
 		});
-		expect(autoPlaylist("VLSE")).toMatchObject({ title: "Episodes for later" });
+		expect(autoPlaylist("VLSE", en)).toMatchObject({ title: "Episodes for later" });
 		// Upstream states this one's cover itself, so only its name and author are ours.
-		expect(autoPlaylist("VLRDPN")).toEqual({ title: "New episodes", author: "Auto-generated" });
-		expect(entityTitle({ id: "VLLM", title: "Liked Music" })).toBe("Liked music");
-		expect(entitySubtitle({ id: "VLLM", title: "Liked Music" })).toBe("Auto-generated");
-		expect(entityArtwork({ id: "VLSE", title: "Episodes for Later" })).toBe(autoPlaylist("SE")?.artworkUrl);
+		expect(autoPlaylist("VLRDPN", en)).toEqual({ title: "New episodes", author: "Auto-generated" });
+		expect(entityTitle({ id: "VLLM", title: "Liked Music" }, en)).toBe("Liked music");
+		expect(entitySubtitle({ id: "VLLM", title: "Liked Music" }, en)).toBe("Auto-generated");
+		expect(entityArtwork({ id: "VLSE", title: "Episodes for Later" })).toBe(autoPlaylist("SE", en)?.artworkUrl);
+		// Named in the language the app is drawn in, whatever upstream called it.
+		expect(entityTitle({ id: "VLLM", title: "Liked Music" }, italian)).toBe("Musica che ti piace");
+		expect(entitySubtitle({ id: "VLRDPN", title: "New episodes" }, italian)).toBe("Playlist automatica");
 	});
 
 	it("leaves an ordinary playlist to its own cover and author", () => {
-		expect(autoPlaylist("VLPLcool")).toBeUndefined();
+		expect(autoPlaylist("VLPLcool", en)).toBeUndefined();
 		expect(entityArtwork({ ...playlist, artworkUrl: "nixie://app/artwork/cover" })).toBe("nixie://app/artwork/cover");
-		expect(entitySubtitle({ ...playlist, author: "Edoardo" })).toBe("Edoardo");
+		expect(entitySubtitle({ ...playlist, author: "Edoardo" }, en)).toBe("Edoardo");
 	});
 });
 
@@ -135,13 +145,13 @@ describe("home feed", () => {
 	const shelf = { title: "Listen again", items: [track] };
 
 	it("keeps the shelves upstream sent, and drops the empty ones", () => {
-		expect(homeShelves({ items: [], sections: [shelf, { title: "Empty", items: [] }] }, true)).toEqual([shelf]);
+		expect(homeShelves({ items: [], sections: [shelf, { title: "Empty", items: [] }] }, true, en)).toEqual([shelf]);
 	});
 
 	it("leads with the shelves worth opening on, and leaves the rest where upstream put them", () => {
 		const titles = ["Forgotten favourites", "Listen again", "Albums for you", "New releases", "Quick picks", "Mixed"];
 		const page = { items: [], sections: titles.map((title) => ({ title, items: [track] })) };
-		expect(homeShelves(page, true).map((section) => section.title)).toEqual([
+		expect(homeShelves(page, true, en).map((section) => section.title)).toEqual([
 			"Quick picks",
 			"New releases",
 			"Listen again",
@@ -151,24 +161,39 @@ describe("home feed", () => {
 		]);
 	});
 
+	it("leads an Italian feed the same way", () => {
+		const titles = ["Preferiti che non ascolti da un po'", "Ascolta di nuovo", "Scelte rapide"];
+		const page = { items: [], sections: titles.map((title) => ({ title, items: [track] })) };
+		expect(homeShelves(page, true, italian).map((section) => section.title)).toEqual([
+			"Scelte rapide",
+			"Ascolta di nuovo",
+			"Preferiti che non ascolti da un po'",
+		]);
+	});
+
 	it("synthesises shelves by kind only for a first page", () => {
 		const flat = { items: [track, album, artist, playlist] };
-		expect(homeShelves(flat, true).map((section) => section.title)).toEqual([
+		expect(homeShelves(flat, true, en).map((section) => section.title)).toEqual([
 			"Quick picks",
 			"Albums",
 			"Artists",
 			"Playlists",
 		]);
 		// A later page falling back would file a second "Quick picks" under the first, every scroll.
-		expect(homeShelves(flat, false)).toEqual([]);
+		expect(homeShelves(flat, false, en)).toEqual([]);
 	});
 
 	it("appends a page to the feed it was asked for", () => {
-		const grown = appendPage({ key: "", shelves: [shelf], next: "one" }, "", {
-			items: [],
-			sections: [{ title: "Mixed for you", items: [album] }],
-			continuation: "two",
-		});
+		const grown = appendPage(
+			{ key: "", shelves: [shelf], next: "one" },
+			"",
+			{
+				items: [],
+				sections: [{ title: "Mixed for you", items: [album] }],
+				continuation: "two",
+			},
+			en
+		);
 		expect(grown).toEqual({
 			key: "",
 			shelves: [shelf, { title: "Mixed for you", items: [album] }],
@@ -180,12 +205,12 @@ describe("home feed", () => {
 		const state = { key: "relax", shelves: [shelf], next: "one" };
 		// Identity, not just equality: nothing re-renders off a page belonging to a feed nobody is
 		// looking at any more.
-		expect(appendPage(state, "festa", { items: [], sections: [{ title: "Late", items: [album] }] })).toBe(state);
+		expect(appendPage(state, "festa", { items: [], sections: [{ title: "Late", items: [album] }] }, en)).toBe(state);
 	});
 
 	it("ends the feed on a page that states no continuation, and on one that never arrived", () => {
-		expect(appendPage({ key: "", shelves: [], next: "one" }, "", { items: [] }).next).toBeUndefined();
-		const failed = appendPage({ key: "", shelves: [shelf], next: "one" }, "", undefined);
+		expect(appendPage({ key: "", shelves: [], next: "one" }, "", { items: [] }, en).next).toBeUndefined();
+		const failed = appendPage({ key: "", shelves: [shelf], next: "one" }, "", undefined, en);
 		expect(failed).toEqual({ key: "", shelves: [shelf], next: undefined });
 	});
 });

@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { Play, X } from "lucide-react";
 import { type RefObject, useEffect, useMemo, useRef, useState } from "react";
 import { formatDuration } from "#/lib/format";
+import { useMessages } from "#/lib/i18n";
 import { heldLyrics, loadLyrics } from "#/lib/lyrics";
 import { cn } from "#/lib/utils";
 import { usePlayback, usePlaybackPosition, usePlayer } from "#/player";
@@ -25,6 +26,7 @@ export function NowPanel({
 	onClose: () => void;
 }) {
 	const scrollRef = useRef<HTMLDivElement>(null);
+	const m = useMessages();
 	const [lyricsMounted, setLyricsMounted] = useState(tab === "lyrics");
 
 	useEffect(() => {
@@ -36,11 +38,11 @@ export function NowPanel({
 			<div className="flex h-14 shrink-0 items-center justify-between px-3">
 				<Tabs value={tab ?? "lyrics"} onValueChange={(value) => onTabChange(value as PanelTab)}>
 					<TabsList variant="line">
-						<TabsTrigger value="lyrics">Lyrics</TabsTrigger>
-						<TabsTrigger value="queue">Queue</TabsTrigger>
+						<TabsTrigger value="lyrics">{m.shell.lyrics}</TabsTrigger>
+						<TabsTrigger value="queue">{m.shell.queue}</TabsTrigger>
 					</TabsList>
 				</Tabs>
-				<Button variant="ghost" size="icon-sm" aria-label="Close panel" onClick={onClose}>
+				<Button variant="ghost" size="icon-sm" aria-label={m.shell.closePanel} onClick={onClose}>
 					<X />
 				</Button>
 			</div>
@@ -60,6 +62,7 @@ function LyricsPane({ active, scrollRef }: { active: boolean; scrollRef: RefObje
 	const engine = usePlayer();
 	const { playback } = usePlayback();
 	const position = usePlaybackPosition();
+	const m = useMessages();
 	// undefined while the lookup is in flight, null once it came back empty
 	const [lyrics, setLyrics] = useState<LyricsResult | null>();
 	const activeRef = useRef<HTMLButtonElement>(null);
@@ -90,12 +93,12 @@ function LyricsPane({ active, scrollRef }: { active: boolean; scrollRef: RefObje
 		else activeRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
 	}, [active, activeLine, scrollRef]);
 
-	if (!track) return <Empty title="Nothing playing" body="Start a track to see its synced lyrics." />;
-	if (track.episode) return <Empty title="No lyrics" body="Podcast episodes have no lyrics." />;
+	if (!track) return <Empty title={m.shell.nothingPlaying} body={m.shell.startTrackForLyrics} />;
+	if (track.episode) return <Empty title={m.shell.noLyrics} body={m.shell.episodeHasNoLyrics} />;
 	if (lyrics === undefined) return <LyricsSkeleton />;
-	if (lyrics?.instrumental) return <Empty title="Instrumental" body="This track has no lyrics." />;
+	if (lyrics?.instrumental) return <Empty title={m.shell.instrumental} body={m.shell.trackHasNoLyrics} />;
 	if (!lyrics?.lines.length && !lyrics?.plainLyrics) {
-		return <Empty title="No lyrics" body="None of the sources have this track yet." />;
+		return <Empty title={m.shell.noLyrics} body={m.shell.noSourceHasLyrics} />;
 	}
 
 	return (
@@ -121,7 +124,7 @@ function LyricsPane({ active, scrollRef }: { active: boolean; scrollRef: RefObje
 					{lyrics.plainLyrics}
 				</p>
 			)}
-			<p className="text-muted-foreground pt-4 text-xs">{lyrics.attribution ?? `Lyrics by ${lyrics.source}`}</p>
+			<p className="text-muted-foreground pt-4 text-xs">{lyrics.attribution ?? m.shell.lyricsBy(lyrics.source)}</p>
 		</div>
 	);
 }
@@ -159,14 +162,18 @@ function ContextLink({ context }: { context: QueueContext }) {
 function QueuePane() {
 	const engine = usePlayer();
 	const { playback } = usePlayback();
+	const m = useMessages();
 
-	if (!playback.queue.length) return <Empty title="Queue is empty" body="Play an album or playlist to fill it." />;
+	if (!playback.queue.length) return <Empty title={m.shell.queueEmpty} body={m.shell.queueEmptyBody} />;
 
 	return (
 		<div className="flex flex-col gap-1 py-2">
+			{/* One line, so the list under it starts at the same place whatever the context is called and
+			    whatever the language: "In riproduzione da" is half again the width of "Playing from", and a
+			    wrapped caption pushes the whole queue down a line. */}
 			{playback.context && (
-				<p className="text-muted-foreground px-2 pb-2 text-xs">
-					Playing from <ContextLink context={playback.context} />
+				<p className="text-muted-foreground truncate px-2 pb-2 text-xs">
+					{m.shell.playingFrom} <ContextLink context={playback.context} />
 				</p>
 			)}
 			{playback.queue.map((track, index) => {
@@ -182,7 +189,7 @@ function QueuePane() {
 							<Button
 								variant="ghost"
 								size="icon-lg"
-								aria-label={`Play ${track.title}`}
+								aria-label={m.common.playTitle(track.title)}
 								className="group/play relative p-0"
 								onClick={() => void engine.play(track, playback.queue, playback.context)}
 							>
@@ -199,13 +206,19 @@ function QueuePane() {
 								/>
 								<span className="text-muted-foreground truncate text-xs">{artistNames(track.artists)}</span>
 							</span>
-							{current ? (
-								<PlayingBars paused={playback.status !== "playing"} />
-							) : (
-								<span className="text-muted-foreground text-xs tabular-nums">
-									{formatDuration(track.durationSeconds)}
-								</span>
-							)}
+							{/* Fixed, because the two things that sit here are not the same width: three 2px bars where
+							    the row is playing, a duration where it is not. Sized by its content, the title beside it
+							    gained about 20px the moment the queue advanced onto a row, and re-truncated under the
+							    reader. The width holds an episode's `180:00` as readily as a song's `3:45`. */}
+							<span className="flex w-12 shrink-0 items-center justify-end">
+								{current ? (
+									<PlayingBars paused={playback.status !== "playing"} />
+								) : (
+									<span className="text-muted-foreground text-xs tabular-nums">
+										{formatDuration(track.durationSeconds)}
+									</span>
+								)}
+							</span>
 						</div>
 						<TrackMenu
 							track={track}

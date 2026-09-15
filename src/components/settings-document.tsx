@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "#/components/ui/dialog";
+import { messages, useMessages } from "#/lib/i18n";
 import type { BundledDocument } from "#/shared/contracts";
 
 /**
@@ -22,13 +23,15 @@ export function DocumentRow({
 }) {
 	const [open, setOpen] = useState(false);
 	const [text, setText] = useState<string>();
+	const m = useMessages();
 
 	useEffect(() => {
 		if (!open || text !== undefined) return;
 		void window.nixie?.local
 			.document(name)
 			.then(setText)
-			.catch(() => setText(`Nixie could not read ${name} from this build.`));
+			// Read at the moment it fails, so it is never a dependency that refetches the document.
+			.catch(() => setText(messages().settings.document.unreadable(name)));
 	}, [open, text, name]);
 
 	return (
@@ -48,8 +51,11 @@ export function DocumentRow({
 				<DialogHeader>
 					<DialogTitle>{title}</DialogTitle>
 				</DialogHeader>
-				<pre className="text-muted-foreground max-h-[60vh] overflow-y-auto text-sm leading-relaxed whitespace-pre-wrap">
-					{text ?? "Reading…"}
+				{/* A fixed height, not a maximum: every one of these documents runs past it, so a maximum
+				    only ever described the placeholder, and the dialog opened one line tall and jumped to
+				    full height the moment the text landed. */}
+				<pre className="text-muted-foreground h-[60vh] overflow-y-auto text-sm leading-relaxed whitespace-pre-wrap">
+					{text ?? m.settings.document.reading}
 				</pre>
 			</DialogContent>
 		</Dialog>

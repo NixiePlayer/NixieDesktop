@@ -68,6 +68,13 @@ never log cookies, authorization values, signed URLs, filesystem paths or lyric 
 **`src/components/ui/` is generated.** It is shadcn and Base UI source. Change it through
 the shadcn CLI, not by hand.
 
+**Every word a reader sees is in both dictionaries.** Text on screen goes in
+`src/locales/en/` and `src/locales/it/`, never inline in a component, and a component reads it
+through `useMessages()`. The Italian file is typed against the English one, so `pnpm typecheck`
+fails on a key you forgot to translate. Words Italians already use as they are (album,
+playlist, podcast, play) stay as they are. See AGENTS.md for why a label must never sit in a
+module-level constant.
+
 **Keep AGENTS.md current.** If you change the structure, the commands, a convention or a
 workflow, update the section that describes it in the same commit.
 
@@ -115,6 +122,7 @@ it is the best thing you can attach to it.
 | `src/components/` | Shell, player bar, panels, dialogs. `ui/` is generated |
 | `src/lib/` | Renderer logic, including the framework-free audio engine |
 | `src/shared/` | Everything used on both sides of the process boundary |
+| `src/locales/` | The English and Italian dictionaries, one file per area of the app |
 | `scripts/` | Dev setup and release hooks |
 | `build/` | Icons electron-builder packages, plus the NSIS installer script |
 

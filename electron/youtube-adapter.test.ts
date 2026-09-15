@@ -768,6 +768,49 @@ describe("entity extraction", () => {
 		]);
 	});
 
+	it("keeps a song card youtubei.js typed a video because its subtitle is not in English", () => {
+		const card = (id: string, musicVideoType: string, runs: object[]) => ({
+			type: "MusicTwoRowItem",
+			id,
+			item_type: "video",
+			title: id,
+			subtitle: { text: runs.map((run) => (run as { text: string }).text).join(""), runs },
+			// A video keeps only its first linked channel, which is what a retyped card must not settle for.
+			author: { name: "Fedez", channel_id: "UCfedez" },
+			endpoint: {
+				payload: { videoId: id, watchEndpointMusicSupportedConfigs: { watchEndpointMusicConfig: { musicVideoType } } },
+			},
+		});
+		const channel = (text: string, browseId: string) => ({ text, endpoint: { payload: { browseId } } });
+		const shelf = {
+			contents: [
+				card("songsongson", "MUSIC_VIDEO_TYPE_ATV", [
+					{ text: "Brano" },
+					{ text: " • " },
+					channel("Fedez", "UCfedez"),
+					{ text: " & " },
+					channel("Annalisa", "UCannalisa"),
+				]),
+				card("videovideov", "MUSIC_VIDEO_TYPE_OMV", [{ text: "Video" }, { text: " • " }, channel("Fedez", "UCfedez")]),
+				card("uploadsuplo", "MUSIC_VIDEO_TYPE_UGC", [{ text: "Video" }, { text: " • " }, channel("Fedez", "UCfedez")]),
+			],
+		};
+		expect(extractEntities(shelf, identity, true)).toEqual([
+			expect.objectContaining({
+				id: "songsongson",
+				artists: [
+					{ id: "UCfedez", name: "Fedez" },
+					{ id: "UCannalisa", name: "Annalisa" },
+				],
+			}),
+		]);
+		expect(extractEntities(shelf, identity)).toMatchObject([
+			{ id: "songsongson" },
+			{ id: "videovideov" },
+			{ id: "uploadsuplo" },
+		]);
+	});
+
 	it("reads an episode row, the show it links, and the podcast shapes carrying no item type", () => {
 		const showRun = (text: string) => ({
 			text,
@@ -1329,7 +1372,7 @@ describe("podcast show", () => {
 		]);
 	});
 
-	it("reads an episode's length out of upstream's English words", () => {
+	it("reads an episode's length out of upstream's words in English and Italian", () => {
 		const row = (videoId: string, words: string) => ({
 			musicMultiRowListItemRenderer: {
 				onTap: { watchEndpoint: { videoId } },
@@ -1341,6 +1384,12 @@ describe("podcast show", () => {
 				["a", { durationSeconds: 5400 }],
 				["b", { durationSeconds: 2700 }],
 				["c", { durationSeconds: 7200 }],
+			])
+		);
+		expect(episodeLengths([row("a", "1 h e 49 min rimanenti"), row("b", "2 h"), row("c", "Riprodotto 3 hmm")])).toEqual(
+			new Map([
+				["a", { durationSeconds: 6540 }],
+				["b", { durationSeconds: 7200 }],
 			])
 		);
 	});

@@ -17,6 +17,7 @@ import { Button, buttonVariants } from "#/components/ui/button";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "#/components/ui/select";
 import { Skeleton } from "#/components/ui/skeleton";
 import { heldFeeds, queryMusic } from "#/lib/api";
+import { useMessages } from "#/lib/i18n";
 import { cn } from "#/lib/utils";
 import { usePlayer } from "#/player";
 import type { BrowseTarget, ExploreSection, MusicEntity, MusicSection, Page } from "#/shared/contracts";
@@ -138,6 +139,7 @@ function ExploreFrame({
  */
 function ExplorePending() {
 	const { browseId, params } = Route.useSearch();
+	const m = useMessages();
 	// A region picked on a chart is a browse of its own, so the page it leaves is gone by the time this
 	// draws. The title and the picker it was just used in are held, lit on the region being fetched.
 	const region = lastCharts?.regions.find((item) => item.browseId === browseId && item.params === params);
@@ -176,7 +178,7 @@ function ExplorePending() {
 		</>
 	);
 	// The landing is always called "Explore", so only a destination waits for its name.
-	if (!browseId) return <ExploreFrame title="Explore">{skeleton}</ExploreFrame>;
+	if (!browseId) return <ExploreFrame title={m.pages.explore.title}>{skeleton}</ExploreFrame>;
 	if (lastCharts && region)
 		return (
 			<ExploreFrame
@@ -202,11 +204,15 @@ function ExplorePending() {
 let lastCharts: { title: string; regions: BrowseTarget[] } | undefined;
 
 function Shortcuts({ items }: { items: BrowseTarget[] }) {
+	const m = useMessages();
 	if (!items.length) return null;
 	// Auto-fit rather than a fixed three: the grid holds whatever upstream sends less whatever a section
 	// below already leads to, so its count is not something to hard-code a column track for.
 	return (
-		<nav className="grid gap-2 sm:grid-cols-[repeat(auto-fit,minmax(14rem,1fr))]" aria-label="Explore shortcuts">
+		<nav
+			className="grid gap-2 sm:grid-cols-[repeat(auto-fit,minmax(14rem,1fr))]"
+			aria-label={m.pages.explore.shortcuts}
+		>
 			{items.map((item) => {
 				const Icon = shortcutIcons[item.browseId] ?? Compass;
 				return (
@@ -253,6 +259,7 @@ function genreHue(label: string) {
  */
 function GenreTile({ target, compact = false }: { target: BrowseTarget; compact?: boolean }) {
 	const engine = usePlayer();
+	const m = useMessages();
 
 	return (
 		// The hue is set here rather than on the link because a custom property inherits, and this is
@@ -280,7 +287,7 @@ function GenreTile({ target, compact = false }: { target: BrowseTarget; compact?
 			{target.destination === "playlist" && (
 				<Button
 					size="icon"
-					aria-label={`Play ${target.title}`}
+					aria-label={m.common.playTitle(target.title)}
 					className="absolute right-3 bottom-3 rounded-full opacity-0 shadow-lg transition-opacity group-hover/card:opacity-100 focus-visible:opacity-100"
 					onClick={() => void playCollection(engine, { id: target.browseId, title: target.title })}
 				>
@@ -417,6 +424,7 @@ const regionKey = (region: BrowseTarget) => `${region.browseId}|${region.params 
  */
 function RegionPicker({ regions }: { regions: BrowseTarget[] }) {
 	const navigate = useNavigate();
+	const m = useMessages();
 	// The option the page already answers, which upstream flags. A response that flags none is the
 	// first one, since that is the region it fell back to.
 	const current = regions.find((region) => region.selected) ?? regions[0];
@@ -430,7 +438,8 @@ function RegionPicker({ regions }: { regions: BrowseTarget[] }) {
 				if (next) void navigate({ to: "/explore", search: { browseId: next.browseId, params: next.params } });
 			}}
 		>
-			<SelectTrigger size="sm" aria-label="Chart region">
+			{/* Fixed, since the region names differ in length in every language and this sits on the title row. */}
+			<SelectTrigger size="sm" className="w-44" aria-label={m.pages.explore.chartRegion}>
 				<SelectValue>{current.label}</SelectValue>
 			</SelectTrigger>
 			<SelectContent>
@@ -450,6 +459,7 @@ function ExplorePage() {
 	const { browseId } = Route.useSearch();
 	const { items, explore } = Route.useLoaderData();
 	const router = useRouter();
+	const m = useMessages();
 
 	// The refresh runs on the way out, which is the only time a new landing can arrive without anything
 	// moving on screen. Leaving is told from unmounting for another reason by where the router now is:
@@ -484,7 +494,7 @@ function ExplorePage() {
 	const lead = sections.find((section) => section.type === "media")?.items[0];
 	// A destination names itself in the response's own header. A page that states none falls back to
 	// its lead section, which then goes unheaded rather than printing the same words twice.
-	const title = destination ? (explore.title ?? sections[0]?.title ?? "Explore") : "Explore";
+	const title = destination ? (explore.title ?? sections[0]?.title ?? m.pages.explore.title) : m.pages.explore.title;
 	if (explore.regions?.length) lastCharts = { title, regions: explore.regions };
 
 	return (
@@ -501,23 +511,22 @@ function ExplorePage() {
 					<LandingSection key={`${section.type}-${section.title}-${index}`} section={section} />
 				)
 			)}
-			{!sections.length && (
-				<p className="text-muted-foreground text-sm">YouTube Music has nothing to show here right now.</p>
-			)}
+			{!sections.length && <p className="text-muted-foreground text-sm">{m.pages.explore.empty}</p>}
 		</ExploreFrame>
 	);
 }
 
 /** What is left when the response carried no structure at all: the flat page, sorted by kind. */
 function ExploreFallback({ items, destination }: { items: MusicEntity[]; destination: boolean }) {
+	const m = useMessages();
 	const shelves: MusicSection<MusicEntity>[] = [
-		{ title: "New releases", items: items.filter(isAlbum) },
-		{ title: "Charts", items: items.filter(isTrack) },
-		{ title: "Playlists", items: items.filter(isPlaylist) },
-		{ title: "Artists", items: items.filter(isArtist) },
+		{ title: m.pages.explore.newReleases, items: items.filter(isAlbum) },
+		{ title: m.pages.explore.charts, items: items.filter(isTrack) },
+		{ title: m.common.playlists, items: items.filter(isPlaylist) },
+		{ title: m.common.artists, items: items.filter(isArtist) },
 	];
 	return (
-		<ExploreFrame title="Explore" wash={items[0] && entityArtwork(items[0])}>
+		<ExploreFrame title={m.pages.explore.title} wash={items[0] && entityArtwork(items[0])}>
 			{items.length && !destination ? (
 				shelves.map((shelf) => (
 					<MediaShelf
@@ -528,7 +537,7 @@ function ExploreFallback({ items, destination }: { items: MusicEntity[]; destina
 					/>
 				))
 			) : (
-				<p className="text-muted-foreground text-sm">YouTube Music has nothing to show here right now.</p>
+				<p className="text-muted-foreground text-sm">{m.pages.explore.empty}</p>
 			)}
 		</ExploreFrame>
 	);

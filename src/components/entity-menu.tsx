@@ -39,6 +39,7 @@ import {
 import { toast } from "#/components/ui/toast";
 import { queryMusic } from "#/lib/api";
 import type { AudioEngine } from "#/lib/audio-engine";
+import { messages, useMessages } from "#/lib/i18n";
 import { invalidatePages } from "#/lib/invalidate";
 import { removePlaylist, saveToLibrary, setSubscribed, useHeld, usePlaylists } from "#/lib/library";
 import { rate } from "#/lib/rating";
@@ -65,7 +66,7 @@ const unwrap = (item: MusicEntity): Subject => (isPlaylistItem(item) ? item.trac
 const SAVE_LIMIT = 100;
 
 /** Every command here can fail remotely or on disk, so menu actions share one report path. */
-async function run(failure: string, work: () => Promise<unknown>, description = "YouTube Music would not do that.") {
+async function run(failure: string, work: () => Promise<unknown>, description = messages().menu.refused) {
 	try {
 		await work();
 	} catch {
@@ -115,10 +116,10 @@ let starting: string | undefined;
  * play there already queues, and it is the difference between a button that responds and one that
  * reads as dead.
  */
-export async function playCollection(engine: AudioEngine, item: Subject, title = entityTitle(item)) {
+export async function playCollection(engine: AudioEngine, item: Subject, title = entityTitle(item, messages())) {
 	if (starting === item.id) return;
 	starting = item.id;
-	await run(`Could not play ${title}`, async () => {
+	await run(messages().menu.couldNotPlay(title), async () => {
 		const tracks = await tracksOf(item, 1);
 		await engine.play(tracks[0], tracks, {
 			type: isAlbum(item) ? "album" : isArtist(item) ? "radio" : "playlist",
@@ -139,7 +140,7 @@ export async function playRadio(
 	engine: AudioEngine,
 	query: Extract<MusicQuery, { type: "radio" }>,
 	context: { id?: string; title: string },
-	failure = `Could not play ${context.title}`
+	failure = messages().menu.couldNotPlay(context.title)
 ) {
 	const key = query.playlistId ?? query.id;
 	if (starting === key) return;
@@ -210,9 +211,10 @@ function MenuItems({
 }) {
 	const engine = usePlayer();
 	const router = useRouter();
+	const m = useMessages();
 	// Auto-generated playlists are not places to put a song: upstream fills "Liked music" from the
 	// thumbs and refuses an add to either of them.
-	const playlists = usePlaylists().filter((playlist) => !autoPlaylist(playlist.id));
+	const playlists = usePlaylists().filter((playlist) => !autoPlaylist(playlist.id, m));
 	// What the library holds, so the item names the state it is about to leave rather than always
 	// offering to save something already saved.
 	const held = useHeld(item.id);
@@ -227,35 +229,36 @@ function MenuItems({
 	// Annotated so it is a plain boolean: an aliased type guard, negated, narrows the playlist away entirely.
 	const podcast: boolean = isPodcast(item);
 	const savable = (isAlbum(item) || isPlaylist(item)) && !podcast;
-	const deletable = isPlaylist(item) && !autoPlaylist(item.id) && !podcast;
+	const deletable = isPlaylist(item) && !autoPlaylist(item.id, m) && !podcast;
+	const kind = isPlaylist(item) ? "playlist" : "album";
 
 	const shuffle = () =>
-		run("Could not shuffle this", async () => {
+		run(m.menu.couldNotShuffle, async () => {
 			const tracks = await tracksOf(item);
 			if (!engine.getSnapshot().playback.shuffle) engine.toggleShuffle();
 			const first = tracks[Math.floor(Math.random() * tracks.length)];
 			await engine.play(first, tracks, {
 				type: isPlaylist(item) ? "playlist" : "album",
 				id: item.id,
-				title: entityTitle(item),
+				title: entityTitle(item, m),
 			});
 		});
 
 	const startRadio = () =>
-		run("No radio for this", async () => {
+		run(m.menu.noRadio, async () => {
 			// One page: the seed is the first row, and the rest of the collection is not the queue here.
 			const [seed] = await tracksOf(item, 1);
 			if (!seed) throw new Error("No seed");
-			await playRadio(engine, { type: "radio", id: seed.id }, { title: entityTitle(item) }, "No radio for this");
+			await playRadio(engine, { type: "radio", id: seed.id }, { title: entityTitle(item, m) }, m.menu.noRadio);
 		});
 
 	const enqueue = (position: "next" | "end") =>
-		run("Not queued", async () => engine.enqueue(await tracksOf(item), position));
+		run(m.menu.notQueued, async () => engine.enqueue(await tracksOf(item), position));
 
 	const save = (playlist: Playlist) =>
-		run(`Not added to ${playlist.title}`, async () => {
+		run(m.menu.notAddedTo(playlist.title), async () => {
 			await addToPlaylist(item, playlist);
-			toast.add({ title: "Saved", description: `Added to ${playlist.title}.`, type: "success" });
+			toast.add({ title: m.menu.saved, description: m.menu.addedTo(playlist.title), type: "success" });
 			// The playlist now holds a song its cached page does not list, and the library a count it does not state.
 			void invalidatePages({ routeId: "/playlist/$id", id: playlist.id }, { routeId: "/library" });
 		});
@@ -265,7 +268,10 @@ function MenuItems({
 	// and it is the only page that does: every other page reads the saved state out of the store.
 	const toggleLibrary = async () => {
 		if (await saveToLibrary(item.id, !held)) {
-			toast.add({ title: held ? "Removed from library" : "Saved to library", type: "success" });
+			toast.add({
+				title: held ? m.menu.removedFromLibrary(kind) : m.menu.savedToLibrary(kind),
+				type: "success",
+			});
 			void invalidatePages({ routeId: "/library" });
 		}
 	};
@@ -274,23 +280,23 @@ function MenuItems({
 	// answers changes with it.
 	const toggleSubscription = async () => {
 		if (await setSubscribed(item.id, !held)) {
-			toast.add({ title: held ? "Unsubscribed" : "Subscribed", type: "success" });
+			toast.add({ title: held ? m.menu.unsubscribed : m.menu.subscribed, type: "success" });
 			void invalidatePages({ routeId: "/library" });
 		}
 	};
 
 	const copyLink = () =>
-		run("Could not copy the link", async () => {
+		run(m.menu.couldNotCopyLink, async () => {
 			await navigator.clipboard.writeText(shareUrl(item));
-			toast.add({ title: "Link copied", type: "success" });
+			toast.add({ title: m.common.linkCopied, type: "success" });
 		});
 
 	const deletePlaylist = () => {
-		if (!deletable || !window.confirm(`Delete "${item.title}"? This cannot be undone.`)) return;
-		void run("Playlist not deleted", async () => {
+		if (!deletable || !window.confirm(m.menu.confirmDelete(item.title))) return;
+		void run(m.menu.playlistNotDeleted, async () => {
 			await window.nixie?.music.command({ type: "playlist-delete", playlistId: item.id });
 			removePlaylist(item.id);
-			toast.add({ title: "Playlist deleted", type: "success" });
+			toast.add({ title: m.menu.playlistDeleted, type: "success" });
 			// Deleted from its own page, there is no page left to stand on.
 			if (router.state.location.pathname === `/playlist/${item.id}`) void router.navigate({ to: "/library" });
 			// Its own cached page too, or going back reaches a playlist that no longer exists. The rail is
@@ -300,37 +306,43 @@ function MenuItems({
 	};
 
 	return (
-		<DropdownMenuContent align="start" side="inline-end" alignOffset={0} sideOffset={0} className="w-56">
+		// The width is fixed and sized to the longest wording any language puts in it, never to the
+		// content: a menu measured off its own items is one width for "Add to liked songs" and another
+		// for "Aggiungi a Musica che ti piace", and it changes again with the items that swap wording
+		// with their state ("Save to library" against "Remove from library"). Fixed, nothing moves and
+		// nothing wraps onto a second line, which is what would make this menu taller in one language
+		// than the other and push a menu already clamped to the top of a short window further down it.
+		<DropdownMenuContent align="start" side="inline-end" alignOffset={0} sideOffset={0} className="w-64">
 			<DropdownMenuGroup>
 				{/* A show runs newest first and an episode out of order is the wrong one, so it never shuffles. */}
 				{!track && !isArtist(item) && !podcast && (
 					<DropdownMenuItem onClick={() => void shuffle()}>
 						<Shuffle />
-						Shuffle play
+						{m.menu.shufflePlay}
 					</DropdownMenuItem>
 				)}
 				{isPlaylist(item) && (
 					<DropdownMenuItem render={<Link to="/playlist/$id" params={{ id: item.id }} search={{ find: true }} />}>
 						<Search />
-						Find in playlist
+						{m.menu.findInPlaylist}
 					</DropdownMenuItem>
 				)}
 				<DropdownMenuItem onClick={() => void startRadio()}>
 					<Radio />
-					Start radio
+					{m.menu.startRadio}
 				</DropdownMenuItem>
 				<DropdownMenuItem onClick={() => void enqueue("next")}>
 					<ListStart />
-					Play next
+					{m.menu.playNext}
 				</DropdownMenuItem>
 				<DropdownMenuItem onClick={() => void enqueue("end")}>
 					<ListEnd />
-					Add to queue
+					{m.menu.addToQueue}
 				</DropdownMenuItem>
 				{queueIndex !== undefined && (
 					<DropdownMenuItem onClick={() => engine.dequeue(queueIndex)}>
 						<CircleMinus />
-						Remove from queue
+						{m.menu.removeFromQueue}
 					</DropdownMenuItem>
 				)}
 			</DropdownMenuGroup>
@@ -343,24 +355,24 @@ function MenuItems({
 					<>
 						<DropdownMenuItem onClick={() => void rate(track.id, "like")}>
 							<ThumbsUp />
-							Add to liked songs
+							{m.menu.addToLikedSongs}
 						</DropdownMenuItem>
 						<DropdownMenuItem onClick={() => void rate(track.id, "dislike")}>
 							<ThumbsDown />
-							Dislike
+							{m.menu.dislike}
 						</DropdownMenuItem>
 					</>
 				)}
 				{savable && (
 					<DropdownMenuItem onClick={() => void toggleLibrary()}>
 						{held ? <BookmarkX /> : <Bookmark />}
-						{held ? "Remove from library" : "Save to library"}
+						{held ? m.menu.removeFromLibrary : m.menu.saveToLibrary}
 					</DropdownMenuItem>
 				)}
 				{isArtist(item) && (
 					<DropdownMenuItem onClick={() => void toggleSubscription()}>
 						{held ? <UserMinus /> : <UserPlus />}
-						{held ? "Unsubscribe" : "Subscribe"}
+						{held ? m.menu.unsubscribe : m.menu.subscribe}
 					</DropdownMenuItem>
 				)}
 				{/* An artist is the one thing with no track list of its own worth saving: the page is releases
@@ -369,14 +381,18 @@ function MenuItems({
 					<DropdownMenuSub>
 						<DropdownMenuSubTrigger>
 							<ListPlus />
-							Save to playlist
+							{m.menu.saveToPlaylist}
 						</DropdownMenuSubTrigger>
-						<DropdownMenuSubContent className="max-w-64">
+						{/* Fixed for the same reason, and not the `max-w-64` it was: a maximum still leaves the
+						    width to be decided by the longest playlist title and by "New playlist", so the
+						    submenu was one width per account and another per language. The titles truncate
+						    against it, which is what they already did at the maximum. */}
+						<DropdownMenuSubContent className="w-64">
 							{/* Also the whole submenu for an account holding no playlists yet, which is the one
 							    place where "you have none" and "make one" are the same answer. */}
 							<DropdownMenuItem onClick={onNewPlaylist}>
 								<Plus />
-								New playlist
+								{m.menu.newPlaylist}
 							</DropdownMenuItem>
 							{playlists.length > 0 && <DropdownMenuSeparator />}
 							{playlists.map((playlist) => (
@@ -398,25 +414,25 @@ function MenuItems({
 						render={<Link to="/playlist/$id" params={{ id: track.show.id }} search={{ find: undefined }} />}
 					>
 						<Podcast />
-						Go to podcast
+						{m.menu.goToPodcast}
 					</DropdownMenuItem>
 				)}
 				{albumId && (
 					<DropdownMenuItem render={<Link to="/album/$id" params={{ id: albumId }} search={{ track: track?.id }} />}>
 						<Disc3 />
-						Go to album
+						{m.menu.goToAlbum}
 					</DropdownMenuItem>
 				)}
 				{artist && !isArtist(item) && (
 					<DropdownMenuItem render={<Link to="/artist/$id" params={{ id: artist.id }} />}>
 						<User />
-						Go to artist
+						{m.menu.goToArtist}
 					</DropdownMenuItem>
 				)}
 				{(!isPlaylist(item) || item.privacy !== "private") && (
 					<DropdownMenuItem onClick={() => void copyLink()}>
 						<Link2 />
-						Copy link
+						{m.common.copyLink}
 					</DropdownMenuItem>
 				)}
 			</DropdownMenuGroup>
@@ -426,7 +442,7 @@ function MenuItems({
 					<DropdownMenuGroup>
 						<DropdownMenuItem variant="destructive" onClick={deletePlaylist}>
 							<Trash2 />
-							Delete playlist
+							{m.menu.deletePlaylist}
 						</DropdownMenuItem>
 					</DropdownMenuGroup>
 				</>
@@ -453,7 +469,7 @@ function useNewPlaylist(item: Subject) {
 			open={open}
 			onOpenChange={setOpen}
 			onCreated={(playlist) =>
-				void run(`Not added to ${playlist.title}`, async () => {
+				void run(messages().menu.notAddedTo(playlist.title), async () => {
 					await addToPlaylist(item, playlist);
 					// The dialog says the playlist was created; only a refusal to fill it needs a word here.
 					void invalidatePages({ routeId: "/playlist/$id", id: playlist.id }, { routeId: "/library" });
@@ -496,6 +512,7 @@ export function EntityMenu({
 }) {
 	const entity = unwrap(item);
 	const { dialog, openNew } = useNewPlaylist(entity);
+	const m = useMessages();
 
 	return (
 		<>
@@ -506,7 +523,7 @@ export function EntityMenu({
 							variant="ghost"
 							size="icon-sm"
 							className={className}
-							aria-label={`Options for ${entityTitle(entity)}`}
+							aria-label={m.menu.optionsFor(entityTitle(entity, m))}
 							// The row underneath plays on click, and the menu is not a way of asking for that.
 							onClick={(event) => event.stopPropagation()}
 						/>

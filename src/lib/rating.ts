@@ -1,5 +1,6 @@
 import { useEffect, useSyncExternalStore } from "react";
 import { toast } from "#/components/ui/toast";
+import { messages } from "#/lib/i18n";
 import { invalidatePages } from "#/lib/invalidate";
 import type { TrackRating } from "#/shared/contracts";
 
@@ -39,7 +40,8 @@ export async function rate(trackId: string, rating: TrackRating) {
 		if (previous) ratings.set(trackId, previous);
 		else ratings.delete(trackId);
 		emit();
-		toast.add({ title: "Rating not saved", description: "YouTube Music rejected the change.", type: "error" });
+		const m = messages();
+		toast.add({ title: m.shell.ratingNotSaved, description: m.shell.ratingRejected, type: "error" });
 	}
 }
 

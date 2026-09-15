@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { heldSuggestions, queryMusic, rememberSearch } from "#/lib/api";
+import { useMessages } from "#/lib/i18n";
 import { usePlaylists } from "#/lib/library";
 import { isMac } from "#/lib/platform";
 import { useUpdateState } from "#/lib/updates";
@@ -52,9 +53,9 @@ import {
 
 // Search lives in the top bar, so the rail carries Explore instead, the way YouTube Music does.
 const navigation = [
-	{ to: "/", label: "Home", icon: Home },
-	{ to: "/explore", label: "Explore", icon: Compass },
-	{ to: "/library", label: "Library", icon: Library },
+	{ to: "/", label: "home", icon: Home },
+	{ to: "/explore", label: "explore", icon: Compass },
+	{ to: "/library", label: "library", icon: Library },
 ] as const;
 
 /**
@@ -159,6 +160,7 @@ function TopBar({
 	searchRef: React.RefObject<HTMLInputElement | null>;
 }) {
 	const router = useRouter();
+	const m = useMessages();
 
 	return (
 		<header className="drag-region window-controls-inset border-border col-span-3 flex items-center gap-2 border-b">
@@ -166,13 +168,13 @@ function TopBar({
 			    cannot be measured from here and the padding is fixed. Windows and Linux draw the controls
 			    into the page, and window-controls-inset clears them from whichever edge they sit on. */}
 			<div className="mac:pl-20 flex flex-1 items-center gap-1">
-				<Button variant="ghost" size="icon-sm" aria-label="Toggle navigation" onClick={onToggleNav}>
+				<Button variant="ghost" size="icon-sm" aria-label={m.shell.toggleNavigation} onClick={onToggleNav}>
 					<PanelLeft />
 				</Button>
-				<Button variant="ghost" size="icon-sm" aria-label="Go back" onClick={() => router.history.back()}>
+				<Button variant="ghost" size="icon-sm" aria-label={m.shell.goBack} onClick={() => router.history.back()}>
 					<ChevronLeft />
 				</Button>
-				<Button variant="ghost" size="icon-sm" aria-label="Go forward" onClick={() => router.history.forward()}>
+				<Button variant="ghost" size="icon-sm" aria-label={m.shell.goForward} onClick={() => router.history.forward()}>
 					<ChevronRight />
 				</Button>
 			</div>
@@ -186,12 +188,13 @@ function TopBar({
 
 function AccountMenu({ auth, onAuthChange }: { auth: AuthState; onAuthChange: (auth: AuthState) => void }) {
 	const engine = usePlayer();
-	const name = auth.accountName ?? "Signed in";
+	const m = useMessages();
+	const name = auth.accountName ?? m.shell.signedIn;
 
 	return (
 		<DropdownMenu>
 			<DropdownMenuTrigger
-				render={<Button variant="ghost" size="icon" className="rounded-full" aria-label={`Account: ${name}`} />}
+				render={<Button variant="ghost" size="icon" className="rounded-full" aria-label={m.shell.account(name)} />}
 			>
 				{auth.avatarUrl ? (
 					<img src={auth.avatarUrl} alt="" className="size-7 rounded-full object-cover" />
@@ -202,7 +205,9 @@ function AccountMenu({ auth, onAuthChange }: { auth: AuthState; onAuthChange: (a
 					</span>
 				)}
 			</DropdownMenuTrigger>
-			<DropdownMenuContent align="end">
+			{/* Sized here rather than off the trigger, which is a round avatar: the menu would otherwise be
+			    the width of that button, and every item in it would wrap at its own length. */}
+			<DropdownMenuContent align="end" className="w-56">
 				{/* Base UI requires GroupLabel to sit inside a Group. */}
 				<DropdownMenuGroup>
 					<DropdownMenuLabel>{name}</DropdownMenuLabel>
@@ -215,7 +220,7 @@ function AccountMenu({ auth, onAuthChange }: { auth: AuthState; onAuthChange: (a
 					}}
 				>
 					<LogOut />
-					Sign out
+					{m.shell.signOut}
 				</DropdownMenuItem>
 			</DropdownMenuContent>
 		</DropdownMenu>
@@ -229,6 +234,7 @@ function NavRail({ open }: { open: boolean }) {
 	// The rail is also what starts the renderer's half of the updater, since it outlives every page.
 	const ready = useUpdateState().status === "ready";
 	const { playback } = usePlayback();
+	const m = useMessages();
 
 	const itemClass =
 		"flex h-10 items-center gap-4 rounded-lg px-3 text-sm transition-colors hover:bg-accent data-[status=active]:bg-accent data-[status=active]:font-medium";
@@ -241,16 +247,16 @@ function NavRail({ open }: { open: boolean }) {
 			)}
 		>
 			{navigation.map((item) => (
-				<Link key={item.to} to={item.to} className={itemClass} title={open ? undefined : item.label}>
+				<Link key={item.to} to={item.to} className={itemClass} title={open ? undefined : m.shell[item.label]}>
 					<item.icon className="size-5 shrink-0" />
-					{open && <span className="truncate">{item.label}</span>}
+					{open && <span className="truncate">{m.shell[item.label]}</span>}
 				</Link>
 			))}
 
 			<hr className="border-border my-2" />
 
 			<div className={cn("flex items-center gap-1", !open && "justify-center")}>
-				{open && <span className="text-muted-foreground flex-1 px-3 text-xs font-medium">Playlists</span>}
+				{open && <span className="text-muted-foreground flex-1 px-3 text-xs font-medium">{m.common.playlists}</span>}
 				<NewPlaylistDialog />
 			</div>
 
@@ -270,10 +276,10 @@ function NavRail({ open }: { open: boolean }) {
 					>
 						<Artwork src={entityArtwork(playlist)} className="size-8 rounded-sm" />
 						<span className="flex min-w-0 flex-col">
-							<span className="truncate">{playlist.title}</span>
+							<span className="truncate">{entityTitle(playlist, m)}</span>
 							{/* Whoever made it, or the label for the two nobody did. */}
 							<span className="text-muted-foreground truncate text-xs font-normal">
-								{playlist.author ?? autoPlaylist(playlist.id)?.author}
+								{playlist.author ?? autoPlaylist(playlist.id, m)?.author}
 							</span>
 						</span>
 						{/* Which row the queue came from, which is the queue's own context and not the track on it:
@@ -291,18 +297,18 @@ function NavRail({ open }: { open: boolean }) {
 					</EntityContextMenu>
 				))}
 
-			<Link to="/settings" className={cn(itemClass, "mt-auto")} title={open ? undefined : "Settings"}>
+			<Link to="/settings" className={cn(itemClass, "mt-auto")} title={open ? undefined : m.shell.settings}>
 				<span className="relative shrink-0">
 					<Settings className="size-5" />
 					{ready && (
 						<>
 							{/* What is left once the toast is dismissed: the About row is where the restart is. */}
 							<span className="bg-primary border-sidebar absolute -top-0.5 -right-0.5 size-2.5 rounded-full border-2" />
-							<span className="sr-only">Update ready</span>
+							<span className="sr-only">{m.shell.updateReady}</span>
 						</>
 					)}
 				</span>
-				{open && <span>Settings</span>}
+				{open && <span className="truncate">{m.shell.settings}</span>}
 			</Link>
 		</nav>
 	);
@@ -327,6 +333,7 @@ const SUGGESTION_LIFE_MS = 60_000;
 function SearchField({ inputRef }: { inputRef: React.RefObject<HTMLInputElement | null> }) {
 	const engine = usePlayer();
 	const navigate = useNavigate();
+	const m = useMessages();
 	const [draft, setDraft] = useState("");
 	const [open, setOpen] = useState(false);
 	const [results, setResults] = useState<MusicEntity[]>([]);
@@ -407,7 +414,7 @@ function SearchField({ inputRef }: { inputRef: React.RefObject<HTMLInputElement 
 						setOpen(true);
 					}}
 					onFocus={() => setOpen(true)}
-					placeholder="Search songs, albums, and artists"
+					placeholder={m.shell.searchPlaceholder}
 					className="placeholder:text-muted-foreground flex-1 bg-transparent text-sm outline-hidden"
 				/>
 			</div>
@@ -423,10 +430,13 @@ function SearchField({ inputRef }: { inputRef: React.RefObject<HTMLInputElement 
 						<CommandList>
 							<CommandItem value="see-all" onSelect={() => seeAll(query)}>
 								<Search />
-								See all results for &ldquo;{query}&rdquo;
+								{/* One line whatever the query and whatever the language: the dropdown is the width of the
+								    field above it, so a wrapped row is a row of a different height, and every row under it
+								    moves. Italian states this in half again as many characters as English does. */}
+								<span className="truncate">{m.shell.seeAllResults(query)}</span>
 							</CommandItem>
 							{results.length > 0 && (
-								<CommandGroup heading="Results">
+								<CommandGroup heading={m.shell.results}>
 									{results.map((item) => {
 										const track = isPlaylistItem(item) ? item.track : isTrack(item) ? item : undefined;
 										return (
@@ -440,7 +450,7 @@ function SearchField({ inputRef }: { inputRef: React.RefObject<HTMLInputElement 
 													{track && (
 														<Button
 															size="icon-xs"
-															aria-label={`Play ${track.title}`}
+															aria-label={m.common.playTitle(track.title)}
 															className="absolute inset-0 m-auto rounded-full opacity-0 group-hover/command-item:opacity-100 focus-visible:opacity-100"
 															onClick={(event) => {
 																event.stopPropagation();
@@ -452,12 +462,12 @@ function SearchField({ inputRef }: { inputRef: React.RefObject<HTMLInputElement 
 													)}
 												</div>
 												<span className="flex min-w-0 flex-col">
-													<span className="truncate">{entityTitle(item)}</span>
+													<span className="truncate">{entityTitle(item, m)}</span>
 													<span className="text-muted-foreground truncate text-xs">
-														{entityKind(item)}
-														{entitySubtitle(item) !== entityKind(item) &&
-															entitySubtitle(item) &&
-															` • ${entitySubtitle(item)}`}
+														{entityKind(item, m)}
+														{entitySubtitle(item, m) !== entityKind(item, m) &&
+															entitySubtitle(item, m) &&
+															` • ${entitySubtitle(item, m)}`}
 													</span>
 												</span>
 											</CommandItem>

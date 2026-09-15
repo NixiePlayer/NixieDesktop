@@ -6,6 +6,7 @@ import { BrowseAction, MediaShelf, ShelfSkeleton, TrackList } from "#/components
 import { Button } from "#/components/ui/button";
 import { Skeleton } from "#/components/ui/skeleton";
 import { queryMusic } from "#/lib/api";
+import { useMessages } from "#/lib/i18n";
 import { invalidatePages } from "#/lib/invalidate";
 import { setSubscribed, useHeld } from "#/lib/library";
 import { cn } from "#/lib/utils";
@@ -65,6 +66,7 @@ function ArtistPage() {
 	const { id } = Route.useParams();
 	const { items, sections } = Route.useLoaderData();
 	const engine = usePlayer();
+	const m = useMessages();
 	// The store, not this page's own state: the row menu offers the same subscription, and the two
 	// disagreed about it. It reports a refusal and puts itself back, so there is nothing to catch here.
 	const subscribed = useHeld(id);
@@ -85,7 +87,7 @@ function ArtistPage() {
 	const artist =
 		items.find((item): item is Artist => isArtist(item) && item.id === id) ??
 		tracks[0]?.artists.find((candidate) => candidate.id === id);
-	const title = artist?.name ?? tracks[0]?.artists[0]?.name ?? "Artist";
+	const title = artist?.name ?? tracks[0]?.artists[0]?.name ?? m.common.artist;
 	const context = { type: "radio" as const, id, title };
 	// What the header's own two buttons play, and the reason they are only rendered when it stated them.
 	const { shuffle, radio } = artist ?? {};
@@ -126,7 +128,7 @@ function ArtistPage() {
 			)}
 			<div className="relative">
 				<header className={cn("flex flex-col gap-2 pb-8", banner && "-mt-52")}>
-					<span className="text-muted-foreground text-xs font-medium tracking-wide uppercase">Artist</span>
+					<span className="text-muted-foreground text-xs font-medium tracking-wide uppercase">{m.common.artist}</span>
 					<h1 className="text-4xl leading-tight font-bold tracking-tight">{title}</h1>
 					{/* Upstream's own line and upstream's own figure, worded and abbreviated where it was
 					    counted. Not a count of what the shelves happen to render: an artist page lists a
@@ -143,32 +145,44 @@ function ArtistPage() {
 						{shuffle && (
 							<Button onClick={() => void playRadio(engine, { type: "radio", ...shuffle }, context)}>
 								<Shuffle data-icon="inline-start" />
-								Shuffle
+								{m.common.shuffle}
 							</Button>
 						)}
 						{radio && (
 							<Button variant="outline" onClick={() => void playRadio(engine, { type: "radio", ...radio }, context)}>
 								<Radio data-icon="inline-start" />
-								Mix
+								{m.pages.artist.mix}
 							</Button>
 						)}
 						{/* The library page lists who is followed; this page reads it out of the store instead. */}
 						<Button
 							variant="outline"
+							// Both wordings share one grid cell, so the button is as wide as the longer of them
+							// whichever one is showing. Sized off the live label it stepped on every press, and by a
+							// different amount in each language ("Subscribe" grows into "Subscribed" where
+							// "Iscriviti" shrinks into "Iscritto"), taking the menu beside it along. The stack needs
+							// no measurement and no magic width, which is what `settings.tsx` does for the same
+							// reason, and `invisible` keeps the hidden wording out of the accessible name as well.
+							className="grid"
 							onClick={() =>
 								void setSubscribed(id, !subscribed).then((landed) => {
 									if (landed) void invalidatePages({ routeId: "/library" });
 								})
 							}
 						>
-							{subscribed ? "Subscribed" : "Subscribe"}
+							<span className={cn("col-start-1 row-start-1 text-center", subscribed && "invisible")}>
+								{m.pages.artist.subscribe}
+							</span>
+							<span className={cn("col-start-1 row-start-1 text-center", !subscribed && "invisible")}>
+								{m.pages.artist.subscribed}
+							</span>
 						</Button>
 						{artist && <EntityMenu item={artist} />}
 					</div>
 				</header>
 				{tracks.length > 0 && (
 					<section className="flex flex-col gap-4 pb-10">
-						<h2 className="text-xl font-bold tracking-tight">Songs</h2>
+						<h2 className="text-xl font-bold tracking-tight">{m.common.songs}</h2>
 						{/* No album column: these rows carry no release of their own, and every one of them
 					    belongs to this artist anyway. Same list, same reason, as the one on `/search`. */}
 						<TrackList tracks={tracks.slice(0, expanded ? 10 : 5)} context={context} showAlbum={false} />
@@ -179,7 +193,7 @@ function ArtistPage() {
 								onClick={() => setExpanded(!expanded)}
 								aria-expanded={expanded}
 							>
-								{expanded ? "See less" : "See more"}
+								{expanded ? m.pages.artist.seeLess : m.pages.artist.seeMore}
 								{expanded ? <ChevronUp data-icon="inline-end" /> : <ChevronDown data-icon="inline-end" />}
 							</Button>
 						)}
@@ -198,7 +212,7 @@ function ArtistPage() {
 					</div>
 				) : (
 					// A response that named no shelf at all still lists what it holds, the way it always did.
-					<MediaShelf title="Releases" items={albums} />
+					<MediaShelf title={m.pages.artist.releases} items={albums} />
 				)}
 			</div>
 		</div>

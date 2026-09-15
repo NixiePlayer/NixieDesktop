@@ -2,6 +2,7 @@ import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
 import { XIcon } from "lucide-react";
 import * as React from "react";
 import { Button } from "#/components/ui/button.tsx";
+import { useMessages } from "#/lib/i18n.ts";
 import { cn } from "#/lib/utils.ts";
 
 function Dialog({ ...props }: DialogPrimitive.Root.Props) {
@@ -41,6 +42,7 @@ function DialogContent({
 }: DialogPrimitive.Popup.Props & {
 	showCloseButton?: boolean;
 }) {
+	const m = useMessages();
 	return (
 		<DialogPortal>
 			<DialogOverlay />
@@ -59,7 +61,7 @@ function DialogContent({
 						render={<Button variant="ghost" className="absolute top-4 right-4" size="icon-sm" />}
 					>
 						<XIcon />
-						<span className="sr-only">Close</span>
+						<span className="sr-only">{m.common.close}</span>
 					</DialogPrimitive.Close>
 				)}
 			</DialogPrimitive.Popup>
@@ -79,6 +81,7 @@ function DialogFooter({
 }: React.ComponentProps<"div"> & {
 	showCloseButton?: boolean;
 }) {
+	const m = useMessages();
 	return (
 		<div
 			data-slot="dialog-footer"
@@ -86,7 +89,9 @@ function DialogFooter({
 			{...props}
 		>
 			{children}
-			{showCloseButton && <DialogPrimitive.Close render={<Button variant="outline" />}>Close</DialogPrimitive.Close>}
+			{showCloseButton && (
+				<DialogPrimitive.Close render={<Button variant="outline" />}>{m.common.close}</DialogPrimitive.Close>
+			)}
 		</div>
 	);
 }

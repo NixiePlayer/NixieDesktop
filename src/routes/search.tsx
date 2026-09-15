@@ -6,6 +6,7 @@ import { Skeleton } from "#/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "#/components/ui/tabs";
 import { queryMusic } from "#/lib/api";
 import { formatDuration } from "#/lib/format";
+import { useMessages } from "#/lib/i18n";
 import { cn } from "#/lib/utils";
 import { usePlayer } from "#/player";
 import type { Artist, MusicEntity, Page, QueueContext, Track } from "#/shared/contracts";
@@ -17,11 +18,13 @@ import {
 	entityTitle,
 	isAlbum,
 	isArtist,
+	isPodcast,
 	isTrack,
 	searchAnchor,
 	trackAlbumId,
 	toTracks,
 } from "#/shared/entities";
+import type { Messages } from "#/shared/i18n";
 
 type SearchFilter = "all" | "songs" | "albums" | "artists" | "playlists";
 
@@ -67,9 +70,18 @@ export const Route = createFileRoute("/search")({
 function SearchHeader() {
 	const { q, filter } = Route.useSearch();
 	const navigate = useNavigate({ from: Route.fullPath });
+	const m = useMessages();
+	// Our own filters, not chips upstream sends, so their names are ours to translate.
+	const labels: Record<SearchFilter, string> = {
+		all: m.pages.search.all,
+		songs: m.common.songs,
+		albums: m.common.albums,
+		artists: m.common.artists,
+		playlists: m.common.playlists,
+	};
 	return (
 		<>
-			<PageTitle>{q ? `Results for ${q}` : "Search"}</PageTitle>
+			<PageTitle>{q ? m.pages.search.resultsFor(q) : m.pages.search.title}</PageTitle>
 			<Tabs
 				value={filter}
 				onValueChange={(value) => void navigate({ search: { q, filter: value as SearchFilter } })}
@@ -78,8 +90,7 @@ function SearchHeader() {
 				<TabsList variant="line">
 					{filters.map((value) => (
 						<TabsTrigger key={value} value={value}>
-							{value[0]?.toUpperCase()}
-							{value.slice(1)}
+							{labels[value]}
 						</TabsTrigger>
 					))}
 				</TabsList>
@@ -111,7 +122,8 @@ function SearchPending() {
 function SearchPage() {
 	const { q, filter } = Route.useSearch();
 	const { items, artist } = Route.useLoaderData();
-	const context: QueueContext = { type: "search", title: `Results for ${q}` };
+	const m = useMessages();
+	const context: QueueContext = { type: "search", title: m.pages.search.resultsFor(q) };
 	// Only the unfiltered search is ranked across kinds, and `withSearchTopResult` puts the one
 	// YouTube Music is most confident about at the head of the page. A filtered tab is a plain list.
 	const top = filter === "all" ? items[0] : undefined;
@@ -145,30 +157,42 @@ function SearchPage() {
 							</Await>
 						)}
 					</div>
-					{top && <MediaShelf title={`From this ${entityKind(top).toLowerCase()}`} items={from} />}
+					{top && <MediaShelf title={m.pages.search.fromThis(kindOf(top), entityKind(top, m))} items={from} />}
 					{artistId && artist && (
 						<Await promise={artist} fallback={<Skeleton className="h-64 w-full rounded-xl" />}>
 							{(page) => <ArtistSections items={page.items} artistId={artistId} ranked={items} />}
 						</Await>
 					)}
 					<section className="flex flex-col gap-4">
-						{(artistId || from.length > 0) && <h2 className="text-xl font-bold tracking-tight">More results</h2>}
+						{(artistId || from.length > 0) && (
+							<h2 className="text-xl font-bold tracking-tight">{m.pages.search.moreResults}</h2>
+						)}
 						<MediaList items={rest} context={context} />
 					</section>
 				</div>
 			) : (
-				<p className="text-muted-foreground text-sm">
-					{q ? "No results. Try fewer words or a different filter." : "Search YouTube Music for anything."}
-				</p>
+				<p className="text-muted-foreground text-sm">{q ? m.pages.search.noResults : m.pages.search.prompt}</p>
 			)}
 		</div>
 	);
 }
 
+/**
+ * What the top result is, in words no language changes. The shelf under it agrees in gender in Italian,
+ * so it cannot be named off the localised kind the way English lowercases it.
+ */
+function kindOf(item: MusicEntity) {
+	const track = "track" in item ? item.track : isTrack(item) ? item : undefined;
+	if (track) return track.episode ? "episode" : "song";
+	if (isAlbum(item)) return "album";
+	if (isArtist(item)) return "artist";
+	return isPodcast(item) ? "podcast" : "playlist";
+}
+
 /** By id, never "the first artist on the page": an artist page carries related artists too. */
-function artistContext(items: MusicEntity[], artistId: string): QueueContext {
+function artistContext(items: MusicEntity[], artistId: string, m: Messages): QueueContext {
 	const artist = items.find((item): item is Artist => isArtist(item) && item.id === artistId);
-	return { type: "radio", id: artistId, title: artist?.name ?? "Artist" };
+	return { type: "radio", id: artistId, title: artist?.name ?? m.common.artist };
 }
 
 /**
@@ -177,13 +201,14 @@ function artistContext(items: MusicEntity[], artistId: string): QueueContext {
  * every row here belongs to the same artist, and the length reads at the end of the row instead.
  */
 function ArtistTopSongs({ items, artistId }: { items: MusicEntity[]; artistId: string }) {
+	const m = useMessages();
 	const tracks = toTracks(items).slice(0, 5);
 	if (!tracks.length) return null;
 
 	return (
 		<section className="flex flex-col">
-			<h2 className="text-muted-foreground pb-3 text-sm font-medium">Songs</h2>
-			<MediaList items={tracks} context={artistContext(items, artistId)} />
+			<h2 className="text-muted-foreground pb-3 text-sm font-medium">{m.common.songs}</h2>
+			<MediaList items={tracks} context={artistContext(items, artistId, m)} />
 		</section>
 	);
 }
@@ -201,11 +226,18 @@ function ArtistSections({
 	artistId: string;
 	ranked: MusicEntity[];
 }) {
+	const m = useMessages();
 	return (
 		<>
 			{/* The artist's own top songs rank harder than the search does, so they go first. */}
-			<MediaShelf title="Albums" items={byPopularity(items.filter(isAlbum), [...toTracks(items), ...ranked])} />
-			<MediaShelf title="Fans might also like" items={items.filter(isArtist).filter((item) => item.id !== artistId)} />
+			<MediaShelf
+				title={m.common.albums}
+				items={byPopularity(items.filter(isAlbum), [...toTracks(items), ...ranked])}
+			/>
+			<MediaShelf
+				title={m.pages.search.fansMightAlsoLike}
+				items={items.filter(isArtist).filter((item) => item.id !== artistId)}
+			/>
 		</>
 	);
 }
@@ -228,21 +260,22 @@ function TopResult({
 	details?: Promise<Page<MusicEntity>>;
 }) {
 	const engine = usePlayer();
+	const m = useMessages();
 	const track = isTrack(item) ? item : undefined;
 	// A search never returns a playlist row, which is the one entity with nowhere of its own to go.
 	if ("track" in item) return null;
 
-	const title = entityTitle(item);
+	const title = entityTitle(item, m);
 	const releaseId = track && trackAlbumId(track);
 	// A release or an artist carries no songs on a search row, so playing one opens it first.
 	const playEntity = () => (track ? engine.play(track, queue, context) : playCollection(engine, item, title));
 
 	// The kind is the line above, so an artist upstream states no count for would read "Artist" twice.
-	const detail = entitySubtitle(item);
-	const subtitle = detail === entityKind(item) ? undefined : detail;
+	const detail = entitySubtitle(item, m);
+	const subtitle = detail === entityKind(item, m) ? undefined : detail;
 	const meta = [
 		isAlbum(item) ? item.year : undefined,
-		isAlbum(item) && item.trackCount ? `${item.trackCount} songs` : undefined,
+		isAlbum(item) && item.trackCount ? m.common.songCount(item.trackCount) : undefined,
 		track && track.durationSeconds > 0 ? formatDuration(track.durationSeconds) : undefined,
 	]
 		.filter(Boolean)
@@ -268,7 +301,7 @@ function TopResult({
 
 	const info = (
 		<div className="flex min-w-0 flex-col gap-1 text-left">
-			<span className="text-muted-foreground text-xs font-medium tracking-wide uppercase">{entityKind(item)}</span>
+			<span className="text-muted-foreground text-xs font-medium tracking-wide uppercase">{entityKind(item, m)}</span>
 			<span className="truncate text-4xl font-bold tracking-tight group-hover/open:underline">{title}</span>
 			{/* A byline names people and reads at full weight. An artist's line is a count, which is
 			    muted here for the same reason the meta line under it is. */}
@@ -320,10 +353,10 @@ function TopResult({
 	// the text opens the result, including the release behind a song.
 	return (
 		<section className="flex flex-col">
-			<h2 className="text-muted-foreground pb-3 text-sm font-medium">Top result</h2>
+			<h2 className="text-muted-foreground pb-3 text-sm font-medium">{m.pages.search.topResult}</h2>
 			<div className="group/top flex h-full w-full flex-1 items-center gap-6">
 				<button
-					aria-label={`Play ${title}`}
+					aria-label={m.common.playTitle(title)}
 					className="focus-visible:ring-ring/50 rounded-lg focus-visible:ring-3 focus-visible:outline-none"
 					onClick={() => void playEntity()}
 				>

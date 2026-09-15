@@ -178,6 +178,8 @@ Now Playing in Control Center. It is a desktop app, not a web page in a frame.
 - One window per install: launching Nixie again brings back the one you have rather than
   opening a second copy over the same saved session.
 - Automatic updates on all three platforms.
+- In English and Italian. It opens in your system's language and can be changed in Settings,
+  and YouTube Music's own shelves and genres follow the same choice.
 - Keyboard shortcuts follow the platform: Cmd+K to search and the app menu's playback
   items on macOS, Ctrl+K and Ctrl+Left / Ctrl+Right on Windows and Linux.
 
