@@ -343,7 +343,17 @@ export type MusicCommand =
 	| { type: "playlist-update"; playlistId: RemoteId; title?: string; description?: string; privacy?: PlaylistPrivacy }
 	| { type: "playlist-add"; playlistId: RemoteId; trackIds: RemoteId[] }
 	| { type: "playlist-remove"; playlistId: RemoteId; itemIds: RemoteId[] }
-	| { type: "playlist-reorder"; playlistId: RemoteId; itemId: RemoteId; beforeItemId?: RemoteId }
+	/**
+	 * A move names the row it lands before, or, when it lands last, the row it lands after: upstream
+	 * addresses the two with different actions, and the last row has no successor to name.
+	 */
+	| {
+			type: "playlist-reorder";
+			playlistId: RemoteId;
+			itemId: RemoteId;
+			beforeItemId?: RemoteId;
+			afterItemId?: RemoteId;
+	  }
 	| { type: "playlist-delete"; playlistId: RemoteId }
 	/** Writes one YouTube Music account setting, which applies to every device signed in. */
 	| { type: "account-setting"; key: AccountSettingKey; enabled: boolean };

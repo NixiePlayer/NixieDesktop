@@ -183,7 +183,9 @@ function playlistItemIdFrom(node: UnknownRecord): string | undefined {
 	for (const item of items.filter(record)) {
 		const payload = endpointPayload(item);
 		const actions = payload && Array.isArray(payload.actions) ? payload.actions : [];
-		const id = actions.filter(record).find((action) => firstString(action, "setVideoId"));
+		const id = actions
+			.filter(record)
+			.find((action) => action.action === "ACTION_REMOVE_VIDEO" && firstString(action, "setVideoId"));
 		if (id) return firstString(id, "setVideoId");
 	}
 }
@@ -589,14 +591,25 @@ export class YouTubeAdapter {
 				);
 				break;
 			case "playlist-reorder":
-				if (!request.beforeItemId) throw new Error("A destination item is required");
-				await this.#editPlaylist(client, request.playlistId, [
-					{
-						action: "ACTION_MOVE_VIDEO_BEFORE",
-						setVideoId: request.itemId,
-						movedSetVideoIdSuccessor: request.beforeItemId,
-					},
-				]);
+				if (request.beforeItemId) {
+					await this.#editPlaylist(client, request.playlistId, [
+						{
+							action: "ACTION_MOVE_VIDEO_BEFORE",
+							setVideoId: request.itemId,
+							movedSetVideoIdSuccessor: request.beforeItemId,
+						},
+					]);
+				} else if (request.afterItemId) {
+					await this.#editPlaylist(client, request.playlistId, [
+						{
+							action: "ACTION_MOVE_VIDEO_AFTER",
+							setVideoId: request.itemId,
+							movedSetVideoIdPredecessor: request.afterItemId,
+						},
+					]);
+				} else {
+					throw new Error("A destination item is required");
+				}
 				break;
 			case "playlist-delete": {
 				const result = await client.playlist.delete(request.playlistId.replace(/^VL/, ""));
