@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { Fragment, useState } from "react";
 import { formatDuration } from "#/lib/format";
+import { useMessages } from "#/lib/i18n";
 import { nextRating, rate, useRating } from "#/lib/rating";
 import { usePlayback, usePlaybackPosition, usePlayer } from "#/player";
 import type { Track } from "#/shared/contracts";
@@ -37,6 +38,7 @@ function SeekBar() {
 	const engine = usePlayer();
 	const { playback } = usePlayback();
 	const position = usePlaybackPosition();
+	const m = useMessages();
 	const [hoverRatio, setHoverRatio] = useState<number>();
 	// Held only while a drag is in flight, so the thumb tracks the pointer without the engine
 	// receiving a seek per pixel. The committed value comes back through `position`.
@@ -64,7 +66,7 @@ function SeekBar() {
 				max={Math.max(duration, 1)}
 				step={1}
 				disabled={!track}
-				aria-label="Seek"
+				aria-label={m.shell.seek}
 				aria-valuetext={formatDuration(value)}
 				onValueChange={(next) => setDragging(first(next))}
 				onValueCommitted={(next) => {
@@ -136,6 +138,7 @@ function TrackLinks({ track }: { track: Track }) {
  */
 function Rating({ track }: { track: Track }) {
 	const rating = useRating(track.id);
+	const m = useMessages();
 	const thumb = (control: "like" | "dislike", Icon: typeof ThumbsUp, label: string) => (
 		<Tooltip>
 			<TooltipTrigger
@@ -158,8 +161,8 @@ function Rating({ track }: { track: Track }) {
 
 	return (
 		<>
-			{thumb("like", ThumbsUp, "Add to liked songs")}
-			{thumb("dislike", ThumbsDown, "Dislike")}
+			{thumb("like", ThumbsUp, m.shell.addToLiked)}
+			{thumb("dislike", ThumbsDown, m.shell.dislike)}
 		</>
 	);
 }
@@ -171,6 +174,7 @@ function Rating({ track }: { track: Track }) {
  * column; with nothing playing there is no subject for a menu, so the same block is drawn plain.
  */
 function NowPlaying({ track, failure }: { track?: Track; failure?: string }) {
+	const m = useMessages();
 	const className = "flex min-w-0 items-center gap-3";
 	const body = (
 		<>
@@ -179,7 +183,7 @@ function NowPlaying({ track, failure }: { track?: Track; failure?: string }) {
 				{track ? (
 					<TrackLink track={track} className="truncate text-sm font-medium hover:underline" />
 				) : (
-					<span className="truncate text-sm font-medium">Nothing playing</span>
+					<span className="truncate text-sm font-medium">{m.shell.nothingPlaying}</span>
 				)}
 				{failure ? (
 					<span className="text-destructive truncate text-xs" title={failure}>
@@ -188,7 +192,7 @@ function NowPlaying({ track, failure }: { track?: Track; failure?: string }) {
 				) : track ? (
 					<TrackLinks track={track} />
 				) : (
-					<span className="text-muted-foreground truncate text-xs">Pick something to start</span>
+					<span className="text-muted-foreground truncate text-xs">{m.shell.pickSomething}</span>
 				)}
 			</div>
 			{/* `shrink-0` beside a `min-w-0` title block: the title gives up width first, these never do. */}
@@ -220,10 +224,11 @@ export function PlayerBar({
 	const engine = usePlayer();
 	const { playback } = usePlayback();
 	const position = usePlaybackPosition();
+	const m = useMessages();
 	const track = playback.currentTrack;
 	const duration = track?.durationSeconds ?? 0;
 	const playing = playback.status === "playing" || playback.status === "loading";
-	const failure = playback.status === "error" ? (playback.errorMessage ?? "Playback failed") : undefined;
+	const failure = playback.status === "error" ? (playback.errorMessage ?? m.shell.playbackFailed) : undefined;
 	const VolumeIcon = playback.volume === 0 ? VolumeX : playback.volume < 0.5 ? Volume1 : Volume2;
 
 	const togglePanel = (tab: PanelTab) => onPanelChange(panel === tab ? undefined : tab);
@@ -242,7 +247,7 @@ export function PlayerBar({
 							<Button
 								variant="ghost"
 								size="icon-sm"
-								aria-label="Shuffle"
+								aria-label={m.common.shuffle}
 								aria-pressed={playback.shuffle}
 								onClick={() => engine.toggleShuffle()}
 							/>
@@ -250,20 +255,20 @@ export function PlayerBar({
 					>
 						<Shuffle />
 					</TooltipTrigger>
-					<TooltipContent>Shuffle</TooltipContent>
+					<TooltipContent>{m.common.shuffle}</TooltipContent>
 				</Tooltip>
-				<Button variant="ghost" size="icon-sm" aria-label="Previous" onClick={() => engine.previous()}>
+				<Button variant="ghost" size="icon-sm" aria-label={m.common.previous} onClick={() => engine.previous()}>
 					<SkipBack fill="currentColor" />
 				</Button>
 				<Button
 					size="icon-lg"
 					className="rounded-full"
-					aria-label={playing ? "Pause" : "Play"}
+					aria-label={playing ? m.common.pause : m.common.play}
 					onClick={() => engine.toggle()}
 				>
 					{playing ? <Pause fill="currentColor" /> : <Play fill="currentColor" />}
 				</Button>
-				<Button variant="ghost" size="icon-sm" aria-label="Next" onClick={() => engine.next()}>
+				<Button variant="ghost" size="icon-sm" aria-label={m.common.next} onClick={() => engine.next()}>
 					<SkipForward fill="currentColor" />
 				</Button>
 				<Tooltip>
@@ -272,7 +277,7 @@ export function PlayerBar({
 							<Button
 								variant="ghost"
 								size="icon-sm"
-								aria-label={`Repeat: ${playback.repeat}`}
+								aria-label={m.shell.repeatLabel[playback.repeat]}
 								aria-pressed={playback.repeat !== "off"}
 								onClick={() => engine.cycleRepeat()}
 							/>
@@ -280,7 +285,7 @@ export function PlayerBar({
 					>
 						{playback.repeat === "one" ? <Repeat1 /> : <Repeat />}
 					</TooltipTrigger>
-					<TooltipContent>Repeat {playback.repeat}</TooltipContent>
+					<TooltipContent>{m.shell.repeatTooltip[playback.repeat]}</TooltipContent>
 				</Tooltip>
 				<span className="text-muted-foreground w-10 text-xs tabular-nums">{formatDuration(duration)}</span>
 			</div>
@@ -289,7 +294,7 @@ export function PlayerBar({
 				<Button
 					variant="ghost"
 					size="icon-sm"
-					aria-label="Lyrics"
+					aria-label={m.shell.lyrics}
 					aria-pressed={panel === "lyrics"}
 					onClick={() => togglePanel("lyrics")}
 				>
@@ -298,7 +303,7 @@ export function PlayerBar({
 				<Button
 					variant="ghost"
 					size="icon-sm"
-					aria-label="Queue"
+					aria-label={m.shell.queue}
 					aria-pressed={panel === "queue"}
 					onClick={() => togglePanel("queue")}
 				>
@@ -318,7 +323,7 @@ export function PlayerBar({
 						min={0}
 						max={1}
 						step={0.01}
-						aria-label="Volume"
+						aria-label={m.shell.volume}
 						onValueChange={(value) => engine.setVolume(first(value))}
 					/>
 				</div>

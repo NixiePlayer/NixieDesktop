@@ -7,6 +7,9 @@ import "./lib/theme";
 // Also for its side effect: it stamps the platform on the document before the first render, so the top
 // bar reserves the right space for the window controls on the first frame rather than a frame later.
 import "./lib/platform";
+// And for its side effect: it resolves the mirrored language before the first render, so the window
+// never opens in one language and redraws in the other once the state file answers.
+import "./lib/i18n";
 import { router } from "./router";
 
 const rootElement = document.getElementById("app")!;

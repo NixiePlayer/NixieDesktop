@@ -1,4 +1,5 @@
 import type { AccountSetting, AccountSettingKey } from "./account-settings";
+import type { LanguageSetting } from "./i18n";
 
 export type { AccountSetting, AccountSettingKey };
 
@@ -286,6 +287,12 @@ export type LinkedAccount =
 
 export interface Settings {
 	theme: Theme;
+	/**
+	 * The app's language, and the language YouTube Music is asked to answer in, so shelf titles and
+	 * genres read the same as the rest of the window. Undefined is `system`, which follows the device and
+	 * is what a fresh install starts on, so a state file written before this existed needs no migration.
+	 */
+	language?: LanguageSetting;
 	quality: AudioQuality;
 	normalization: NormalizationLevel;
 	volume: number;

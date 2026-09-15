@@ -38,8 +38,8 @@ const fold = (value: string) =>
 
 /**
  * Undefined when no locale names this region, which drops the option rather than sending upstream a
- * code that means somewhere else. The session language is unset, so upstream answers in English
- * unless the account is set otherwise, and the reader's own locale covers that case.
+ * code that means somewhere else. The session follows the app language, so upstream names regions
+ * in it, and `locale` is that language; English stays the first table for a session left on it.
  */
 export function regionCode(name: string, locale = "en"): string | undefined {
 	const folded = fold(name);

@@ -14,6 +14,7 @@ import {
 import { Button, buttonVariants } from "#/components/ui/button";
 import { Skeleton } from "#/components/ui/skeleton";
 import { heldFeeds, queryMusic } from "#/lib/api";
+import { useMessages } from "#/lib/i18n";
 import { cn } from "#/lib/utils";
 import { usePlayer } from "#/player";
 import type { FeedFilter, MusicEntity, Page, QueueContext, Track } from "#/shared/contracts";
@@ -98,9 +99,10 @@ export const Route = createFileRoute("/")({
  */
 function QuickTile({ item, queue, context }: { item: MusicEntity; queue: Track[]; context: QueueContext }) {
 	const engine = usePlayer();
-	const kind = entityKind(item);
+	const m = useMessages();
+	const kind = entityKind(item, m);
 	// An artist is only ever itself, and "Artist • Artist" is what naming it twice reads as.
-	const subtitle = entitySubtitle(item);
+	const subtitle = entitySubtitle(item, m);
 	const content = (
 		<>
 			<Artwork
@@ -109,7 +111,7 @@ function QuickTile({ item, queue, context }: { item: MusicEntity; queue: Track[]
 				className={cn("size-14", isArtist(item) ? "m-2 size-10" : "rounded-none")}
 			/>
 			<span className="flex min-w-0 flex-col px-3 text-left">
-				<span className="truncate text-sm font-semibold">{entityTitle(item)}</span>
+				<span className="truncate text-sm font-semibold">{entityTitle(item, m)}</span>
 				<span className="text-muted-foreground truncate text-xs">
 					{subtitle && subtitle !== kind ? `${kind} • ${subtitle}` : kind}
 				</span>
@@ -132,7 +134,7 @@ function QuickTile({ item, queue, context }: { item: MusicEntity; queue: Track[]
 			</TrackLink>
 			<Button
 				size="icon"
-				aria-label={`Play ${entityTitle(item)}`}
+				aria-label={m.common.playTitle(entityTitle(item, m))}
 				className={playButton}
 				onClick={() => void engine.play(track, queue, context)}
 			>
@@ -154,6 +156,7 @@ function QuickTile({ item, queue, context }: { item: MusicEntity; queue: Track[]
 }
 
 function HomeChips({ filters, selected }: { filters: FeedFilter[]; selected?: string }) {
+	const m = useMessages();
 	const { rail, edges, updateEdges, scroll } = useHorizontalRail(filters.length, selected ?? "");
 	if (!filters.length) return null;
 	return (
@@ -187,7 +190,7 @@ function HomeChips({ filters, selected }: { filters: FeedFilter[]; selected?: st
 					);
 				})}
 			</div>
-			<RailControls title="filters" edges={edges} onScroll={scroll} />
+			<RailControls title={m.pages.home.filters} edges={edges} onScroll={scroll} />
 		</div>
 	);
 }
@@ -255,6 +258,7 @@ function HomePage() {
 	const page = Route.useLoaderData();
 	const { chip } = Route.useSearch();
 	const router = useRouter();
+	const m = useMessages();
 	const key = chip ?? "";
 	const [grown, setGrown] = useState<GrownFeed>();
 	const [loading, setLoading] = useState(false);
@@ -265,7 +269,7 @@ function HomePage() {
 	// and on a cache hit there is no pending phase either. Without this the pages grown under one chip
 	// would render under the next one.
 	const feed = grown?.key === key ? grown : undefined;
-	const available = [...homeShelves(page, true), ...(feed?.shelves ?? [])];
+	const available = [...homeShelves(page, true, m), ...(feed?.shelves ?? [])];
 	const next = feed ? feed.next : page.continuation;
 	const first = available[0];
 	const promoted = first?.items.slice(0, 6) ?? [];
@@ -280,7 +284,7 @@ function HomePage() {
 			if (router.state.location.pathname === "/" || Date.now() - fetchedAt < REFRESH_AFTER_MS) return;
 			void queryMusic({ type: "home" })
 				.then((next) => {
-					if (!homeShelves(next, true).length) return;
+					if (!homeShelves(next, true, m).length) return;
 					heldFeeds.home = next;
 					fetchedAt = Date.now();
 					// The page the router holds is what it would answer with, so it has to go for the loader
@@ -289,7 +293,7 @@ function HomePage() {
 				})
 				.catch(() => undefined);
 		},
-		[router]
+		[router, m]
 	);
 
 	useEffect(() => {
@@ -303,7 +307,7 @@ function HomePage() {
 			inFlight.current = true;
 			setLoading(true);
 			const more = await queryMusic({ type: "home", continuation: next }).catch(() => undefined);
-			setGrown((state) => appendPage(state, key, more));
+			setGrown((state) => appendPage(state, key, more, m));
 			inFlight.current = false;
 			setLoading(false);
 		};
@@ -318,10 +322,9 @@ function HomePage() {
 		);
 		observer.observe(target);
 		return () => observer.disconnect();
-	}, [next, key]);
+	}, [next, key, m]);
 
-	if (!first)
-		return <p className="text-muted-foreground text-sm">Your YouTube Music home feed has nothing to show yet.</p>;
+	if (!first) return <p className="text-muted-foreground text-sm">{m.pages.home.empty}</p>;
 
 	const firstQueue = toTracks(first.items);
 	const firstContext = { type: "home" as const, title: first.title };

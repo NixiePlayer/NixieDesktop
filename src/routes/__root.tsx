@@ -6,6 +6,7 @@ import { Button } from "#/components/ui/button";
 import { Toaster } from "#/components/ui/toast";
 import { TooltipProvider } from "#/components/ui/tooltip";
 import { dropHeldPages } from "#/lib/api";
+import { applyLanguage, useMessages } from "#/lib/i18n";
 import { resetLibrary } from "#/lib/library";
 import { applyTheme } from "#/lib/theme";
 import { PlayerProvider } from "#/player";
@@ -14,14 +15,19 @@ import "../styles.css";
 
 export const Route = createRootRoute({
 	component: RootComponent,
-	errorComponent: ({ error, reset }) => (
-		<div className="flex flex-col items-start gap-3 py-12">
-			<h1 className="text-2xl font-bold">Something went wrong</h1>
-			<p className="text-muted-foreground text-sm">{error.message}</p>
-			<Button onClick={reset}>Try again</Button>
-		</div>
-	),
+	errorComponent: RootError,
 });
+
+function RootError({ error, reset }: { error: Error; reset: () => void }) {
+	const m = useMessages();
+	return (
+		<div className="flex flex-col items-start gap-3 py-12">
+			<h1 className="text-2xl font-bold">{m.signin.somethingWentWrong}</h1>
+			<p className="text-muted-foreground text-sm">{error.message}</p>
+			<Button onClick={reset}>{m.common.tryAgain}</Button>
+		</div>
+	);
+}
 
 function RootComponent() {
 	// Undefined until the first auth answer arrives, so the shell never flashes before the gate.
@@ -54,7 +60,10 @@ function RootComponent() {
 		const bridge = window.nixie;
 		if (!bridge) return setAuth({ status: "signed-out" });
 		void bridge.auth.state().then(setAuth);
-		void bridge.local.load().then((state) => applyTheme(state.settings.theme));
+		void bridge.local.load().then((state) => {
+			applyTheme(state.settings.theme);
+			applyLanguage(state.settings.language);
+		});
 	}, []);
 
 	// The extension holding the session reconnects after that first answer, and main pushes what it

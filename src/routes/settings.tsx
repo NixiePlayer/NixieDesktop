@@ -27,50 +27,31 @@ import { Switch } from "#/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "#/components/ui/tabs";
 import { toast } from "#/components/ui/toast";
 import { dropHeldPages, queryRegions } from "#/lib/api";
+import { applyLanguage, language, storedLanguage, useMessages } from "#/lib/i18n";
 import { platform } from "#/lib/platform";
 import { applyTheme, storedTheme } from "#/lib/theme";
 import { checkForUpdates, useUpdateState } from "#/lib/updates";
 import { cn } from "#/lib/utils";
-import type { AppInfo, NixiePlatform, NormalizationLevel, Settings } from "#/shared/contracts";
+import type { AppInfo, NormalizationLevel, Settings } from "#/shared/contracts";
 import { defaultState } from "#/shared/defaults";
+import type { Language, LanguageSetting } from "#/shared/i18n";
 import { maxBoostDb, normalizationTargets } from "#/shared/normalization";
 import { regionCode } from "#/shared/regions";
 
+// Labels are read off the dictionary at render, so only what never changes with the language is here.
 const themes = [
-	{ value: "dark", label: "Dark", caption: "Always", icon: Moon },
-	{ value: "light", label: "Light", caption: "Always", icon: Sun },
-	{ value: "system", label: "System", caption: "Follows the device", icon: Monitor },
+	{ value: "dark", icon: Moon },
+	{ value: "light", icon: Sun },
+	{ value: "system", icon: Monitor },
 ] as const;
 
-// Where the switch that is on and silent is turned back on. Each platform hides it somewhere else.
-const NOTIFICATION_SETTINGS_HINT: Record<NixiePlatform, string> = {
-	darwin: "Allow notifications for Nixie in System Settings, under Notifications.",
-	win32:
-		"Allow notifications for Nixie in Settings, under System and then Notifications, and check that Do not disturb is off.",
-	linux:
-		"Allow notifications for Nixie in your desktop's notification settings, and check that a notification service is running.",
-};
-
-// The label carries the loudness each level aims for, which is the whole difference between them.
 type Level = Exclude<NormalizationLevel, "off">;
-const levels: Record<Level, string> = {
-	quiet: `Quiet (${normalizationTargets.quiet} LUFS)`,
-	normal: `Normal (${normalizationTargets.normal} LUFS)`,
-	loud: `Loud (${normalizationTargets.loud} LUFS)`,
-};
-
-// Passed to Select as `items` so the trigger shows the label instead of the raw value.
-const qualities: Record<Settings["quality"], string> = {
-	low: "Data saver",
-	normal: "Balanced",
-	high: "Highest available",
-};
 
 const tabs = [
-	{ value: "general", label: "General", icon: SlidersHorizontal },
-	{ value: "playback", label: "Playback", icon: Gauge },
-	{ value: "privacy", label: "Privacy", icon: Shield },
-	{ value: "about", label: "About", icon: Info },
+	{ value: "general", icon: SlidersHorizontal },
+	{ value: "playback", icon: Gauge },
+	{ value: "privacy", icon: Shield },
+	{ value: "about", icon: Info },
 ] as const;
 
 const REPOSITORY = "https://github.com/NixiePlayer/NixieDesktop";
@@ -188,21 +169,34 @@ function Choice({
  * them this app can ask for. Their codes are recovered from their names, since upstream states each
  * option as a browse rather than a country code. Empty until it lands, and empty for good if the
  * browse fails, which leaves the current region as whatever upstream infers.
+ *
+ * The names arrive in the session's language, so they are matched against it, and read again when the
+ * session changes language: `sessionLanguage` moves only once the new setting is stored and the held
+ * charts page dropped, since asking before that is answered with the old page in the old words.
  */
-function useRegions() {
+function useRegions(sessionLanguage: Language) {
 	const [regions, setRegions] = useState<{ code: string; label: string }[]>([]);
 	useEffect(() => {
+		let current = true;
 		void queryRegions()
 			.then((page) => {
+				if (!current) return;
 				const seen = new Map<string, string>();
 				for (const region of page.explore?.regions ?? []) {
-					const code = regionCode(region.label);
+					const code = regionCode(region.label, sessionLanguage);
 					if (code && !seen.has(code)) seen.set(code, region.label);
 				}
-				setRegions([...seen].map(([code, label]) => ({ code, label })).sort((a, b) => a.label.localeCompare(b.label)));
+				setRegions(
+					[...seen]
+						.map(([code, label]) => ({ code, label }))
+						.sort((a, b) => a.label.localeCompare(b.label, sessionLanguage))
+				);
 			})
-			.catch(() => setRegions([]));
-	}, []);
+			.catch(() => current && setRegions([]));
+		return () => {
+			current = false;
+		};
+	}, [sessionLanguage]);
 	return regions;
 }
 
@@ -245,16 +239,18 @@ function useAppInfo() {
  */
 function UpdateSetting() {
 	const state = useUpdateState();
+	const common = useMessages().common;
+	const m = useMessages().settings.update;
 	const update = window.nixie?.update;
 	const version = state.version ?? "";
 	// Held once because it is written twice: the downloading button is sized against it, so a reworded
 	// button would otherwise leave the bar the width of a sentence nobody prints any more.
-	const restart = "Restart now";
+	const restart = m.restartNow;
 	// Nothing rests on "available" now that the download starts itself: it is the first tick of the
 	// download, a beat before the first percent, so it reads as one state rather than two.
 	const downloading = {
-		label: `Downloading Nixie ${version}`,
-		description: "Keep listening, this runs in the background.",
+		label: m.downloading.label(version),
+		description: m.downloading.description,
 		control: (
 			// The button is the bar: a hard-edged gradient fills it from the left as the download runs,
 			// so the number has something behind it moving at its own pace rather than a figure ticking
@@ -283,45 +279,45 @@ function UpdateSetting() {
 	};
 	const row = {
 		unsupported: {
-			label: "Check for updates",
-			description: "A development build has no release feed behind it, so this answers nothing.",
+			label: m.unsupported.label,
+			description: m.unsupported.description,
 			control: (
 				<Button variant="outline" onClick={checkForUpdates}>
-					Check now
+					{m.unsupported.action}
 				</Button>
 			),
 		},
 		checking: {
-			label: "Checking for updates",
-			description: "Asking GitHub what the latest release is.",
+			label: m.checking.label,
+			description: m.checking.description,
 			control: (
 				<Button variant="outline" disabled>
-					Checking
+					{m.checking.action}
 				</Button>
 			),
 		},
 		current: {
-			label: "Up to date",
-			description: "This is the latest release.",
+			label: m.current.label,
+			description: m.current.description,
 			control: (
 				<Button variant="outline" onClick={checkForUpdates}>
-					Check again
+					{m.current.action}
 				</Button>
 			),
 		},
 		available: downloading,
 		downloading,
 		ready: {
-			label: `Nixie ${version} is ready`,
-			description: "Restarting installs it, and so does quitting Nixie later.",
+			label: m.ready.label(version),
+			description: m.ready.description,
 			control: <Button onClick={() => void update?.install()}>{restart}</Button>,
 		},
 		error: {
-			label: "Could not check for updates",
-			description: "GitHub could not be reached. Every release is on the repository as well.",
+			label: m.error.label,
+			description: m.error.description,
 			control: (
 				<Button variant="outline" onClick={checkForUpdates}>
-					Try again
+					{common.tryAgain}
 				</Button>
 			),
 		},
@@ -334,16 +330,44 @@ function SettingsPage() {
 	const router = useRouter();
 	// The theme is the one setting already in hand: the state file is an IPC round trip away, and a
 	// card selected on the default and moved a frame later is the selection visibly changing itself.
-	const [settings, setSettings] = useState<Settings>(() => ({ ...defaultState().settings, theme: storedTheme() }));
+	// The language is the same: mirrored in `localStorage`, so the select never jumps either.
+	const [settings, setSettings] = useState<Settings>(() => ({
+		...defaultState().settings,
+		theme: storedTheme(),
+		language: storedLanguage(),
+	}));
+	const m = useMessages();
+	const s = m.settings;
 	// Remembers the target across an off/on toggle, since "off" cannot hold one.
 	const [lastLevel, setLastLevel] = useState<Level>("normal");
 	const level = settings.normalization === "off" ? lastLevel : settings.normalization;
 	const account = useAccountSettings();
-	const regions = useRegions();
+	const [sessionLanguage, setSessionLanguage] = useState(language);
+	const regions = useRegions(sessionLanguage);
 	const regionItems = useMemo(
-		() => ({ [AUTOMATIC_REGION]: "Chosen by YouTube", ...Object.fromEntries(regions.map((r) => [r.code, r.label])) }),
-		[regions]
+		() => ({
+			[AUTOMATIC_REGION]: s.general.region.automatic,
+			...Object.fromEntries(regions.map((r) => [r.code, r.label])),
+		}),
+		[regions, s]
 	);
+	// The label carries the loudness each level aims for, which is the whole difference between them.
+	const levels: Record<Level, string> = {
+		quiet: s.playback.normalization.quiet(normalizationTargets.quiet),
+		normal: s.playback.normalization.normal(normalizationTargets.normal),
+		loud: s.playback.normalization.loud(normalizationTargets.loud),
+	};
+	// Passed to Select as `items` so the trigger shows the label instead of the raw value.
+	const qualities: Record<Settings["quality"], string> = {
+		low: s.playback.quality.low,
+		normal: s.playback.quality.normal,
+		high: s.playback.quality.high,
+	};
+	const languages: Record<LanguageSetting, string> = {
+		system: s.general.language.system,
+		en: s.general.language.en,
+		it: s.general.language.it,
+	};
 	const info = useAppInfo();
 	const notificationsRefused = useNotificationsRefused();
 
@@ -363,18 +387,17 @@ function SettingsPage() {
 	 * in the router's cache was answered for the old value and would go on being shown for it: nothing
 	 * is revalidated under a reader here. Invalidating is what makes the change visible.
 	 */
-	const saveAndRefetch = (next: Settings) => {
+	const saveAndRefetch = (next: Settings) =>
 		// Awaited, not fired alongside: the adapter reads the region and Restricted Mode off the stored
 		// state when it builds its next session, so invalidating before the write lands would refetch
 		// every page against the value being replaced.
-		void save(next).then(() => {
+		save(next).then(() => {
 			// Invalidating reaches the pages the router holds. The refreshed Home and Explore feeds and
 			// the drawn mixes are held outside it, and a Home feed drawn for the old region is exactly
 			// what the next visit would be served.
 			dropHeldPages();
 			void router.invalidate();
 		});
-	};
 
 	const accountGroup = (scope: string, rows: number, children: React.ReactNode) => {
 		if (account.state.status === "loading") {
@@ -409,29 +432,30 @@ function SettingsPage() {
 		// with a navigation rail and a Now panel that either can open, so the viewport says nothing
 		// about how much room is actually left.
 		<div className="@container">
-			<PageTitle>Settings</PageTitle>
+			<PageTitle>{s.title}</PageTitle>
 			<Tabs defaultValue="general" orientation="vertical" className="gap-8">
-				<TabsList>
-					{tabs.map(({ value, label, icon: Icon }) => (
+				{/* A fixed rail, so a longer set of names in another language does not move the page under it. */}
+				<TabsList className="w-48 shrink-0 @max-2xl:w-fit">
+					{tabs.map(({ value, icon: Icon }) => (
 						// The rail keeps its shape as the column narrows: the labels go, the icons stay, and
 						// the name is on the trigger itself so it is still announced and still on hover.
-						<TabsTrigger key={value} value={value} aria-label={label} title={label}>
+						<TabsTrigger key={value} value={value} aria-label={s.tabs[value]} title={s.tabs[value]}>
 							<Icon />
-							<span className="@max-2xl:hidden">{label}</span>
+							<span className="@max-2xl:hidden">{s.tabs[value]}</span>
 						</TabsTrigger>
 					))}
 				</TabsList>
 
-				<TabsContent value="general">
-					<Section title="General" description="How Nixie looks, and what YouTube Music sends it.">
-						<ScopeGroup scope="On this computer">
-							<Setting label="Theme" description="System follows your device's appearance.">
+				<TabsContent value="general" className="mx-auto w-full max-w-2xl">
+					<Section title={s.tabs.general} description={s.general.description}>
+						<ScopeGroup scope={s.scope.computer}>
+							<Setting label={s.general.theme.label} description={s.general.theme.description}>
 								<div className="flex flex-wrap gap-2">
 									{themes.map((option) => (
 										<Choice
 											key={option.value}
-											label={option.label}
-											caption={option.caption}
+											label={s.general.theme[option.value]}
+											caption={option.value === "system" ? s.general.theme.followsDevice : s.general.theme.always}
 											icon={option.icon}
 											selected={settings.theme === option.value}
 											onSelect={() => save({ ...settings, theme: option.value })}
@@ -440,8 +464,40 @@ function SettingsPage() {
 								</div>
 							</Setting>
 							<Setting
-								label="Notify on track change"
-								description="Names the next track when the queue moves on by itself. Nothing is shown while Nixie is the app you are in."
+								label={s.general.language.label}
+								description={s.general.language.description}
+								control={
+									<Select
+										items={languages}
+										value={settings.language ?? "system"}
+										onValueChange={(next) => {
+											const setting = next as LanguageSetting;
+											// Drawn at once, stored after: main builds the next YouTube session in the new
+											// language, so every held and cached page was answered in the old one.
+											applyLanguage(setting);
+											void saveAndRefetch({ ...settings, language: setting }).then(() =>
+												setSessionLanguage(language())
+											);
+										}}
+									>
+										<SelectTrigger className="w-56" aria-label={s.general.language.label}>
+											<SelectValue />
+										</SelectTrigger>
+										<SelectContent>
+											<SelectGroup>
+												{Object.entries(languages).map(([value, label]) => (
+													<SelectItem key={value} value={value}>
+														{label}
+													</SelectItem>
+												))}
+											</SelectGroup>
+										</SelectContent>
+									</Select>
+								}
+							/>
+							<Setting
+								label={s.general.notify.label}
+								description={s.general.notify.description}
 								control={
 									<Switch
 										checked={settings.notifyTrackChange !== false}
@@ -451,13 +507,13 @@ function SettingsPage() {
 							>
 								{notificationsRefused && settings.notifyTrackChange !== false && (
 									<p className="text-destructive text-sm">
-										Your system refused the last one. {NOTIFICATION_SETTINGS_HINT[platform]}
+										{s.general.notify.refused} {s.general.notify.hint[platform]}
 									</p>
 								)}
 							</Setting>
 							<Setting
-								label="Content region"
-								description="Decides which charts, new releases and recommendations you are shown. This is not the app's language."
+								label={s.general.region.label}
+								description={s.general.region.description}
 								control={
 									<Select
 										items={regionItems}
@@ -473,7 +529,7 @@ function SettingsPage() {
 											})
 										}
 									>
-										<SelectTrigger aria-label="Content region">
+										<SelectTrigger className="w-56" aria-label={s.general.region.label}>
 											<SelectValue />
 										</SelectTrigger>
 										<SelectContent>
@@ -490,8 +546,8 @@ function SettingsPage() {
 								}
 							/>
 							<Setting
-								label="Restricted mode"
-								description="Hides songs and videos with potentially mature content. No filter catches everything. YouTube keeps this per app rather than on your account, so it covers Nixie alone."
+								label={s.general.restricted.label}
+								description={s.general.restricted.description}
 								control={
 									<Switch
 										checked={settings.restricted === true}
@@ -501,23 +557,23 @@ function SettingsPage() {
 							/>
 						</ScopeGroup>
 						{accountGroup(
-							"Your account · every device",
+							s.scope.account,
 							1,
 							<Setting
-								label="Liked music from YouTube"
-								description="Shows music videos you gave a thumbs up in other YouTube apps in your Liked music playlist."
+								label={s.general.likedFromYouTube.label}
+								description={s.general.likedFromYouTube.description}
 								control={<AccountSwitch settings={settingsOf} setting="likedFromYouTube" onChange={account.write} />}
 							/>
 						)}
 					</Section>
 				</TabsContent>
 
-				<TabsContent value="playback">
-					<Section title="Playback" description="How Nixie streams and levels what you play.">
-						<ScopeGroup scope="On this computer">
+				<TabsContent value="playback" className="mx-auto w-full max-w-2xl">
+					<Section title={s.tabs.playback} description={s.playback.description}>
+						<ScopeGroup scope={s.scope.computer}>
 							<Setting
-								label="Volume normalization"
-								description={`Holds tracks near one loudness, using the levels YouTube measured. Quiet tracks are brought up toward the target and loud ones held down, with the lift capped at ${maxBoostDb} dB so nothing clips.`}
+								label={s.playback.normalization.label}
+								description={s.playback.normalization.description(maxBoostDb)}
 								control={
 									<Switch
 										checked={settings.normalization !== "off"}
@@ -538,7 +594,7 @@ function SettingsPage() {
 											void save({ ...settings, normalization: next as Level });
 										}}
 									>
-										<SelectTrigger>
+										<SelectTrigger className="w-56">
 											<SelectValue />
 										</SelectTrigger>
 										<SelectContent>
@@ -554,8 +610,8 @@ function SettingsPage() {
 								</div>
 							</Setting>
 							<Setting
-								label="Autoplay"
-								description="Keeps playing when the queue runs out, on a radio YouTube Music seeds from the track that just finished. Turning this off stops Nixie at the end of the queue."
+								label={s.playback.autoplay.label}
+								description={s.playback.autoplay.description}
 								control={
 									<Switch
 										checked={settings.autoplay !== false}
@@ -564,15 +620,15 @@ function SettingsPage() {
 								}
 							/>
 							<Setting
-								label="Audio quality"
-								description="Opus is preferred, AAC is the fallback."
+								label={s.playback.quality.label}
+								description={s.playback.quality.description}
 								control={
 									<Select
 										items={qualities}
 										value={settings.quality}
 										onValueChange={(quality) => save({ ...settings, quality: quality as Settings["quality"] })}
 									>
-										<SelectTrigger>
+										<SelectTrigger className="w-56">
 											<SelectValue />
 										</SelectTrigger>
 										<SelectContent>
@@ -589,26 +645,23 @@ function SettingsPage() {
 							/>
 						</ScopeGroup>
 						{accountGroup(
-							"Your account · every device",
+							s.scope.account,
 							1,
 							<Setting
-								label="Dynamic queue"
-								description="Lets YouTube Music update queues and radios as it learns what you listen to."
+								label={s.playback.dynamicQueue.label}
+								description={s.playback.dynamicQueue.description}
 								control={<AccountSwitch settings={settingsOf} setting="dynamicQueue" onChange={account.write} />}
 							/>
 						)}
 					</Section>
 				</TabsContent>
 
-				<TabsContent value="privacy">
-					<Section
-						title="Privacy"
-						description="Nixie has no account service, backend, telemetry, or media cache. Nothing here leaves this device except what the rows below send to the account you linked."
-					>
-						<ScopeGroup scope="On this computer">
+				<TabsContent value="privacy" className="mx-auto w-full max-w-2xl">
+					<Section title={s.tabs.privacy} description={s.privacy.description}>
+						<ScopeGroup scope={s.scope.computer}>
 							<Setting
-								label="Report plays to YouTube"
-								description="Tells YouTube Music what you played, which is what personalises your home feed. Turning this off leaves the feed on whatever it already knows about you."
+								label={s.privacy.reportHistory.label}
+								description={s.privacy.reportHistory.description}
 								control={
 									<Switch
 										checked={settings.reportHistory !== false}
@@ -617,61 +670,61 @@ function SettingsPage() {
 								}
 							/>
 							<Setting
-								label="Diagnostics"
-								description="Writes a log file with playback and session events. Cookies, stream URLs, file paths, and lyrics are redacted."
+								label={s.privacy.diagnostics.label}
+								description={s.privacy.diagnostics.description}
 								control={
 									<Button variant="outline" onClick={() => void window.nixie?.local.exportDiagnostics()}>
 										<Download data-icon="inline-start" />
-										Export
+										{s.privacy.diagnostics.action}
 									</Button>
 								}
 							/>
 							<Setting
-								label="Local data"
-								description="Removes the queue, settings, and the linked browser account, so this signs you out."
+								label={s.privacy.localData.label}
+								description={s.privacy.localData.description}
 								control={
 									<Button variant="destructive" onClick={() => void window.nixie?.local.clear("all")}>
 										<Trash2 data-icon="inline-start" />
-										Clear
+										{s.privacy.localData.action}
 									</Button>
 								}
 							/>
 						</ScopeGroup>
 						{accountGroup(
-							"Your account · every device",
+							s.scope.account,
 							2,
 							<>
 								<Setting
-									label="Pause watch history"
-									description="Stops YouTube recording what you play, in every app signed in to this account. It can take a moment to apply."
+									label={s.privacy.pauseWatchHistory.label}
+									description={s.privacy.pauseWatchHistory.description}
 									control={<AccountSwitch settings={settingsOf} setting="pauseWatchHistory" onChange={account.write} />}
 								/>
 								<Setting
-									label="Pause search history"
-									description="Stops YouTube recording what you search for, in every app signed in to this account."
+									label={s.privacy.pauseSearchHistory.label}
+									description={s.privacy.pauseSearchHistory.description}
 									control={
 										<AccountSwitch settings={settingsOf} setting="pauseSearchHistory" onChange={account.write} />
 									}
 								/>
 								<LinkRow
 									href="https://myactivity.google.com/product/youtube"
-									label="Manage or delete your history"
-									description="Review and remove what YouTube has recorded. Deleting is permanent and covers every device."
+									label={s.privacy.manageHistory.label}
+									description={s.privacy.manageHistory.description}
 								/>
 							</>
 						)}
 					</Section>
 				</TabsContent>
 
-				<TabsContent value="about">
-					<Section title="About" description="What this build is, and how to tell us it is wrong.">
+				<TabsContent value="about" className="mx-auto w-full max-w-2xl">
+					<Section title={s.tabs.about} description={s.about.description}>
 						<ScopeGroup>
 							<Setting
 								label={`Nixie ${info?.version ?? ""}`.trim()}
 								description={
 									info
 										? `${info.os} · ${info.arch} · Electron ${info.electron} · Chromium ${info.chrome}`
-										: "Reading this build."
+										: s.about.readingBuild
 								}
 								control={
 									<Button
@@ -683,72 +736,55 @@ function SettingsPage() {
 												.writeText(
 													`Nixie ${info.version} · ${info.os} · ${info.arch} · Electron ${info.electron} · Chromium ${info.chrome}`
 												)
-												.then(() => toast.add({ title: "Version copied", type: "success" }));
+												.then(() => toast.add({ title: s.about.versionCopied, type: "success" }));
 										}}
 									>
 										<Copy data-icon="inline-start" />
-										Copy
+										{s.about.copy}
 									</Button>
 								}
 							/>
 							<UpdateSetting />
 							<LinkRow
 								href={issueUrl}
-								label="Report an issue"
-								description="Opens a new issue on GitHub with this build's version already filled in."
+								label={s.about.reportIssue.label}
+								description={s.about.reportIssue.description}
 							/>
 						</ScopeGroup>
 
-						<p className="text-muted-foreground max-w-2xl text-sm">
-							Nixie is an independent, unofficial client and is not affiliated with, endorsed by, or sponsored by Google
-							or YouTube. YouTube and YouTube Music are trademarks of Google LLC. It is not a YouTube Music product and
-							does not reproduce or imitate one: it plays what the account you linked can already play, and it stores no
-							media of its own.
-						</p>
+						<p className="text-muted-foreground max-w-2xl text-sm">{s.about.disclaimer}</p>
 
 						<ScopeGroup scope="Nixie">
-							<DocumentRow name="LICENSE" title="License" description="Nixie is released under the MIT license." />
-							<DocumentRow
-								name="PRIVACY.md"
-								title="Privacy"
-								description="What is stored on this computer, and the one thing that leaves it."
-							/>
-							<DocumentRow
-								name="SECURITY.md"
-								title="Security"
-								description="How the app is sandboxed, and how to report a vulnerability."
-							/>
-							<DocumentRow
-								name="THIRD_PARTY_NOTICES.md"
-								title="Third-party notices"
-								description="The projects and lyrics sources Nixie depends on."
-							/>
-							<DocumentRow
-								name="THIRD_PARTY_LICENSES.txt"
-								title="Third-party licenses"
-								description="The license of every open source package bundled into this build."
-							/>
+							<DocumentRow name="LICENSE" {...s.about.documents.license} />
+							<DocumentRow name="PRIVACY.md" {...s.about.documents.privacy} />
+							<DocumentRow name="SECURITY.md" {...s.about.documents.security} />
+							<DocumentRow name="THIRD_PARTY_NOTICES.md" {...s.about.documents.notices} />
+							<DocumentRow name="THIRD_PARTY_LICENSES.txt" {...s.about.documents.licenses} />
 						</ScopeGroup>
 
-						<ScopeGroup scope="YouTube and Google">
+						<ScopeGroup scope={s.about.youtubeAndGoogle}>
 							<LinkRow
 								href="https://www.youtube.com/t/terms"
-								label="YouTube Terms of Service"
-								description="The terms covering the account Nixie plays through."
+								label={s.about.terms.label}
+								description={s.about.terms.description}
 							/>
 							<LinkRow
 								href="https://policies.google.com/privacy"
-								label="Google Privacy Policy"
-								description="How Google handles the data behind that account."
+								label={s.about.googlePrivacy.label}
+								description={s.about.googlePrivacy.description}
 							/>
 							<LinkRow
 								href="https://music.youtube.com"
 								label="YouTube Music"
-								description="The official app, where every account setting can also be changed."
+								description={s.about.youtubeMusic.description}
 							/>
 						</ScopeGroup>
 					</Section>
 				</TabsContent>
+				{/* The rail stays on the left and the settings sit in the middle of the page rather than in the
+				    middle of what is left beside it, which is what this spacer buys: it balances the rail, and it
+				    goes when the column is too narrow to spend that width on nothing. */}
+				<div aria-hidden className="w-48 shrink-0 @max-4xl:hidden" />
 			</Tabs>
 		</div>
 	);

@@ -1,6 +1,7 @@
 import { useEffect, useSyncExternalStore } from "react";
 import { toast } from "#/components/ui/toast";
 import { queryMusic } from "#/lib/api";
+import { messages } from "#/lib/i18n";
 import type { MusicCommand, MusicEntity, Playlist } from "#/shared/contracts";
 import { isAlbum, isArtist, isPlaylist, isPodcast } from "#/shared/entities";
 
@@ -80,17 +81,22 @@ async function toggle(id: string, next: boolean, command: MusicCommand, failure:
 		if (next) held.delete(id);
 		else held.add(id);
 		emit();
-		toast.add({ title: failure, description: "YouTube Music would not do that.", type: "error" });
+		toast.add({ title: failure, description: messages().shell.libraryRefused, type: "error" });
 		return false;
 	}
 }
 
 export const saveToLibrary = (id: string, saved: boolean) =>
-	toggle(id, saved, { type: "library-save", id, saved }, saved ? "Not saved" : "Not removed from library");
+	toggle(
+		id,
+		saved,
+		{ type: "library-save", id, saved },
+		saved ? messages().shell.notSaved : messages().shell.notRemoved
+	);
 
 /** Following an artist is the same fact behind another endpoint, so it reads out of the same store. */
 export const setSubscribed = (artistId: string, subscribed: boolean) =>
-	toggle(artistId, subscribed, { type: "subscribe", artistId, subscribed }, "Subscription not updated");
+	toggle(artistId, subscribed, { type: "subscribe", artistId, subscribed }, messages().shell.subscriptionNotUpdated);
 
 export function addPlaylist(playlist: Playlist) {
 	playlists = [playlist, ...playlists];

@@ -2,6 +2,7 @@ import { ChevronRight, Globe, Puzzle } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import markDev from "#/assets/logo-dev.png";
 import markProd from "#/assets/logo.png";
+import { useMessages } from "#/lib/i18n";
 import { platform } from "#/lib/platform";
 import type { AuthState, BrowserAccount, ExtensionSource } from "#/shared/contracts";
 import { Button } from "./ui/button";
@@ -23,6 +24,7 @@ const MARK = import.meta.env.DEV ? markDev : markProd;
 
 /** Decoration only. There is no session yet, so there is no artwork to draw this from. */
 function HeroPanel() {
+	const m = useMessages();
 	return (
 		<div className="relative hidden flex-1 flex-col justify-between overflow-hidden p-10 lg:flex">
 			<div
@@ -36,10 +38,8 @@ function HeroPanel() {
 			/>
 			<img src={MARK} alt="" className="relative size-11 rounded-xl" />
 			<div className="relative flex flex-col gap-4">
-				<p className="max-w-md text-5xl font-bold tracking-tight text-balance">A real player for your music.</p>
-				<p className="text-muted-foreground max-w-sm">
-					Your playlists, albums and library, in a native desktop player. No browser tab, no ads, gapless.
-				</p>
+				<p className="max-w-md text-5xl font-bold tracking-tight text-balance">{m.signin.heroTitle}</p>
+				<p className="text-muted-foreground max-w-sm">{m.signin.heroBody}</p>
 			</div>
 		</div>
 	);
@@ -54,6 +54,7 @@ function AccountRow({
 	disabled: boolean;
 	onSelect: () => void;
 }) {
+	const m = useMessages();
 	const name = account.accountName ?? account.browser;
 	// The browser is only in the icon once a profile names itself, so the detail line states it too.
 	const detail = [account.accountEmail ?? account.label, name === account.browser ? undefined : account.browser]
@@ -64,7 +65,7 @@ function AccountRow({
 			type="button"
 			disabled={disabled}
 			onClick={onSelect}
-			aria-label={detail ? `Continue with ${name}, ${detail}` : `Continue with ${name}`}
+			aria-label={m.signin.continueWith(name, detail)}
 			className="border-border bg-card hover:bg-accent flex items-center gap-3 rounded-xl border p-3 text-left transition-colors disabled:pointer-events-none disabled:opacity-60"
 		>
 			<span className="relative shrink-0">
@@ -108,9 +109,10 @@ function ExtensionBlock({
 	disabled: boolean;
 	onLink: (installId: string, pairingSecret: string) => void;
 }) {
+	const m = useMessages();
 	return (
 		<div className="flex flex-col gap-3">
-			<h2 className="text-sm font-medium">Connect Chrome, Edge, Brave or Vivaldi</h2>
+			<h2 className="text-sm font-medium">{m.signin.extensionTitle}</h2>
 			{sources.length > 0 ? (
 				<div className="flex flex-col gap-2">
 					{sources.map((source) =>
@@ -127,7 +129,7 @@ function ExtensionBlock({
 								<span className="flex min-w-0 flex-col">
 									<span className="truncate text-sm font-medium">{source.browser}</span>
 									<span className="text-muted-foreground truncate text-xs">
-										Not signed in to{" "}
+										{m.signin.notSignedInTo}{" "}
 										<a
 											href="https://music.youtube.com"
 											target="_blank"
@@ -145,19 +147,17 @@ function ExtensionBlock({
 			) : (
 				<div className="border-border flex flex-col gap-2 rounded-xl border border-dashed p-4">
 					<p className="text-muted-foreground text-sm">
-						{platform === "win32"
-							? "Windows protects these browsers' cookies so that only the browser can read them. Nixie Link asks the browser for your YouTube session instead. "
-							: "If Nixie cannot find this browser profile, use Nixie Link instead. "}
-						The extension is not in browser marketplaces. Follow the{" "}
+						{platform === "win32" ? m.signin.extensionWindows : m.signin.extensionFallback}
+						{m.signin.installBefore}
 						<a
 							href="https://github.com/NixiePlayer/nixie-link-extension#install"
 							target="_blank"
 							rel="noreferrer"
 							className="text-foreground underline underline-offset-4"
 						>
-							manual installation guide
+							{m.signin.installGuide}
 						</a>
-						, then open Nixie Link once. Your profile appears here automatically.
+						{m.signin.installAfter}
 					</p>
 				</div>
 			)}
@@ -174,6 +174,7 @@ function ExtensionPairingRow({
 	disabled: boolean;
 	onLink: (installId: string, pairingSecret: string) => void;
 }) {
+	const m = useMessages();
 	const [pairingSecret, setPairingSecret] = useState("");
 	const id = `pairing-${source.installId}`;
 	return (
@@ -190,12 +191,12 @@ function ExtensionPairingRow({
 				</span>
 				<span className="flex min-w-0 flex-col">
 					<span className="truncate text-sm font-medium">{source.browser}</span>
-					<span className="text-muted-foreground truncate text-xs">Connected through the extension</span>
+					<span className="text-muted-foreground truncate text-xs">{m.signin.connectedThroughExtension}</span>
 				</span>
 			</div>
 			<FieldGroup className="gap-3">
 				<Field data-disabled={disabled}>
-					<FieldLabel htmlFor={id}>Pairing code</FieldLabel>
+					<FieldLabel htmlFor={id}>{m.signin.pairingCode}</FieldLabel>
 					<Input
 						id={id}
 						type="password"
@@ -209,10 +210,10 @@ function ExtensionPairingRow({
 						disabled={disabled}
 						required
 					/>
-					<FieldDescription>Copy this code from the Nixie Link popup.</FieldDescription>
+					<FieldDescription>{m.signin.pairingHint}</FieldDescription>
 				</Field>
 				<Button type="submit" disabled={disabled || pairingSecret.trim().length !== 43}>
-					Connect
+					{m.signin.connect}
 				</Button>
 			</FieldGroup>
 		</form>
@@ -221,6 +222,7 @@ function ExtensionPairingRow({
 
 /** The whole app is behind this. Nothing renders until an account is linked. */
 export function SignInView({ onSignedIn }: { onSignedIn: (auth: AuthState) => void }) {
+	const m = useMessages();
 	const [error, setError] = useState("");
 	const [busy, setBusy] = useState(false);
 	// Undefined until detection answers, so the empty state never renders over a running scan.
@@ -247,15 +249,19 @@ export function SignInView({ onSignedIn }: { onSignedIn: (auth: AuthState) => vo
 	}, []);
 
 	const run = (work?: Promise<AuthState>) => {
-		if (!work) return setError("Sign-in is only available in the Nixie desktop app.");
+		if (!work) return setError(m.signin.onlyInApp);
 		setError("");
 		setBusy(true);
 		void work
 			.then((state) => {
-				if (state.status !== "authenticated") return setError("That did not sign you in. Please try again.");
+				if (state.status !== "authenticated") return setError(m.signin.didNotSignIn);
 				onSignedIn(state);
 			})
-			.catch((reason: Error) => setError(reason.message))
+			// Electron wraps a handler's rejection in an English prefix naming the channel, which is not
+			// something to show a reader in any language: main already put the message in theirs.
+			.catch((reason: Error) =>
+				setError(reason.message.replace(/^Error invoking remote method '[^']*': (?:Error: )?/, ""))
+			)
 			.finally(() => setBusy(false));
 	};
 
@@ -268,11 +274,8 @@ export function SignInView({ onSignedIn }: { onSignedIn: (auth: AuthState) => vo
 				<div className="flex w-full max-w-sm flex-col gap-6">
 					<div className="flex flex-col gap-3">
 						<img src={MARK} alt="" className="size-11 rounded-xl lg:hidden" />
-						<h1 className="text-2xl font-bold tracking-tight">Continue with a signed-in browser</h1>
-						<p className="text-muted-foreground text-sm">
-							Nixie continues the YouTube session you are already signed in to in your browser. Google refuses to sign
-							in inside an app window, so it never asks you here.
-						</p>
+						<h1 className="text-2xl font-bold tracking-tight">{m.signin.title}</h1>
+						<p className="text-muted-foreground text-sm">{m.signin.intro}</p>
 					</div>
 
 					{error && (
@@ -316,18 +319,14 @@ export function SignInView({ onSignedIn }: { onSignedIn: (auth: AuthState) => vo
 									/>
 								))}
 							</div>
-							<p className="text-muted-foreground text-sm">
-								Each row states the account signed in to that browser profile. Your system may ask once for permission
-								to read the browser's saved cookies. Nixie re-reads that profile while it runs, because Google expires
-								the session every few minutes. The cookies go to YouTube and nowhere else.
-							</p>
+							<p className="text-muted-foreground text-sm">{m.signin.accountsNote}</p>
 						</div>
 					) : (
 						<div className="border-border flex flex-col items-start gap-3 rounded-xl border border-dashed p-4">
 							<p className="text-muted-foreground text-sm">
 								{platform === "win32" ? (
 									<>
-										No signed-in Firefox found. Sign in at{" "}
+										{m.signin.noFirefoxBefore}{" "}
 										<a
 											href="https://music.youtube.com"
 											target="_blank"
@@ -336,11 +335,11 @@ export function SignInView({ onSignedIn }: { onSignedIn: (auth: AuthState) => vo
 										>
 											music.youtube.com
 										</a>{" "}
-										in Firefox, or connect Chrome, Edge, Brave or Vivaldi through the extension above.
+										{m.signin.noFirefoxAfter}
 									</>
 								) : (
 									<>
-										No signed-in browser found. Sign in at{" "}
+										{m.signin.noBrowserBefore}{" "}
 										<a
 											href="https://music.youtube.com"
 											target="_blank"
@@ -349,12 +348,12 @@ export function SignInView({ onSignedIn }: { onSignedIn: (auth: AuthState) => vo
 										>
 											music.youtube.com
 										</a>{" "}
-										in Chrome, Brave, Edge, Vivaldi, or Firefox, then check again.
+										{m.signin.noBrowserAfter}
 									</>
 								)}
 							</p>
 							<Button variant="outline" size="sm" onClick={findAccounts}>
-								Check again
+								{m.signin.checkAgain}
 							</Button>
 						</div>
 					)}
@@ -375,13 +374,7 @@ export function SignInView({ onSignedIn }: { onSignedIn: (auth: AuthState) => vo
 					 * unofficial interface rather than the trademark, since that is the part carrying real risk
 					 * to the account being linked, and it is the one thing no other screen says.
 					 */}
-					<p className="text-muted-foreground border-border border-t pt-4 text-xs">
-						Nixie is an independent, unofficial client and is not affiliated with, endorsed by, or sponsored by Google
-						or YouTube. YouTube and YouTube Music are trademarks of Google LLC. Nixie plays only what the account you
-						link can already play, and your use of that account stays subject to YouTube's terms. It reaches YouTube
-						through the private interface the YouTube Music apps use, which YouTube does not publish or support, so the
-						account you link carries whatever risk that brings.
-					</p>
+					<p className="text-muted-foreground border-border border-t pt-4 text-xs">{m.signin.disclaimer}</p>
 				</div>
 			</main>
 		</div>
@@ -398,6 +391,7 @@ export function SignInView({ onSignedIn }: { onSignedIn: (auth: AuthState) => vo
  * line says rather than offering a "check again" that would be one more thing to press.
  */
 export function PremiumRequiredView({ onSignedOut }: { onSignedOut: (auth: AuthState) => void }) {
+	const m = useMessages();
 	const [busy, setBusy] = useState(false);
 
 	return (
@@ -409,16 +403,9 @@ export function PremiumRequiredView({ onSignedOut }: { onSignedOut: (auth: AuthS
 				<div className="flex w-full max-w-sm flex-col gap-6">
 					<div className="flex flex-col gap-3">
 						<img src={MARK} alt="" className="size-11 rounded-xl lg:hidden" />
-						<h1 className="text-2xl font-bold tracking-tight">Nixie needs Music Premium</h1>
-						<p className="text-muted-foreground text-sm">
-							Nixie plays without advertisements, in the background, and through its own audio engine. Those are things
-							YouTube sells as a Music Premium subscription, so it plays only for an account that holds one. The account
-							you linked does not.
-						</p>
-						<p className="text-muted-foreground text-sm">
-							A subscription started on the web is picked up the next time Nixie opens. Signing out here goes back to
-							picking an account.
-						</p>
+						<h1 className="text-2xl font-bold tracking-tight">{m.signin.premium.title}</h1>
+						<p className="text-muted-foreground text-sm">{m.signin.premium.why}</p>
+						<p className="text-muted-foreground text-sm">{m.signin.premium.next}</p>
 					</div>
 					<Button
 						variant="outline"
@@ -432,7 +419,7 @@ export function PremiumRequiredView({ onSignedOut }: { onSignedOut: (auth: AuthS
 								.finally(() => setBusy(false));
 						}}
 					>
-						Sign out
+						{m.signin.premium.signOut}
 					</Button>
 					<a
 						href="https://music.youtube.com"
@@ -440,7 +427,7 @@ export function PremiumRequiredView({ onSignedOut }: { onSignedOut: (auth: AuthS
 						rel="noreferrer"
 						className="text-muted-foreground hover:text-foreground self-start text-sm underline underline-offset-4"
 					>
-						Open YouTube Music
+						{m.signin.premium.openYouTubeMusic}
 					</a>
 				</div>
 			</main>
@@ -458,6 +445,7 @@ export function PremiumRequiredView({ onSignedOut }: { onSignedOut: (auth: AuthS
  * and the disclosure of what the grant reaches is stated beside it rather than left to System Settings.
  */
 export function DataAccessView({ onUseLink }: { onUseLink: () => void }) {
+	const m = useMessages();
 	const [busy, setBusy] = useState(false);
 
 	return (
@@ -469,20 +457,18 @@ export function DataAccessView({ onUseLink }: { onUseLink: () => void }) {
 				<div className="flex w-full max-w-sm flex-col gap-6">
 					<div className="flex flex-col gap-3">
 						<img src={MARK} alt="" className="size-11 rounded-xl lg:hidden" />
-						<h1 className="text-2xl font-bold tracking-tight">Allow Nixie to read your browser</h1>
-						<p className="text-muted-foreground text-sm">
-							Nixie stays signed in by reading the YouTube session saved in your browser, and reads it again every few
-							minutes because Google keeps replacing it. macOS is blocking that read, so nothing can play until you
-							allow it.
-						</p>
+						<h1 className="text-2xl font-bold tracking-tight">{m.signin.dataAccess.title}</h1>
+						<p className="text-muted-foreground text-sm">{m.signin.dataAccess.why}</p>
 						<ol className="text-muted-foreground list-decimal space-y-1 pl-5 text-sm">
-							<li>Open System Settings, then Privacy &amp; Security, then Full Disk Access.</li>
-							<li>Turn on Nixie.</li>
-							<li>Restart Nixie.</li>
+							<li>{m.signin.dataAccess.stepOpen}</li>
+							<li>{m.signin.dataAccess.stepTurnOn}</li>
+							<li>{m.signin.dataAccess.stepRestart}</li>
 						</ol>
 					</div>
 					<div className="flex flex-wrap gap-2">
-						<Button onClick={() => void window.nixie?.app.openPrivacySettings()}>Open System Settings</Button>
+						<Button onClick={() => void window.nixie?.app.openPrivacySettings()}>
+							{m.signin.dataAccess.openSettings}
+						</Button>
 						<Button
 							variant="outline"
 							disabled={busy}
@@ -491,16 +477,15 @@ export function DataAccessView({ onUseLink }: { onUseLink: () => void }) {
 								void window.nixie?.app.relaunch().finally(() => setBusy(false));
 							}}
 						>
-							Restart Nixie
+							{m.signin.dataAccess.restart}
 						</Button>
 					</div>
 					<p className="text-muted-foreground text-sm">
-						Full Disk Access lets Nixie read files other apps keep, not only your browser's. If you would rather not
-						allow that,{" "}
+						{m.signin.dataAccess.linkBefore}
 						<button type="button" onClick={onUseLink} className="text-foreground underline underline-offset-4">
-							connect through Nixie Link
+							{m.signin.dataAccess.useLink}
 						</button>
-						, which reads the session through the browser instead.
+						{m.signin.dataAccess.linkAfter}
 					</p>
 				</div>
 			</main>

@@ -4,7 +4,8 @@ import { EntityMenu } from "#/components/entity-menu";
 import { ArtistLinks, DetailHeader, DetailSkeleton, ExplicitBadge, TrackList } from "#/components/media";
 import { Button } from "#/components/ui/button";
 import { queryMusic } from "#/lib/api";
-import { formatTotalDuration, plural } from "#/lib/format";
+import { formatTotalDuration } from "#/lib/format";
+import { useMessages } from "#/lib/i18n";
 import { usePlayer } from "#/player";
 import { isAlbum, toTracks } from "#/shared/entities";
 
@@ -22,18 +23,19 @@ function AlbumPage() {
 	const { track: marked } = Route.useSearch();
 	const { items } = Route.useLoaderData();
 	const engine = usePlayer();
+	const m = useMessages();
 	const tracks = toTracks(items);
 	// The page carries its own header entity when upstream provides one, otherwise the
 	// tracks know which album they belong to.
 	const album = items.find(isAlbum) ?? tracks[0]?.album;
-	const title = album?.title ?? "Album";
+	const title = album?.title ?? m.common.album;
 	const context = { type: "album" as const, id, title };
 	const totalSeconds = tracks.reduce((total, track) => total + track.durationSeconds, 0);
 
 	return (
 		<div>
 			<DetailHeader
-				kind={album?.kind ?? "Album"}
+				kind={album?.kind ?? m.common.album}
 				title={title}
 				meta={
 					<span className="flex items-center gap-2">
@@ -46,7 +48,11 @@ function AlbumPage() {
 									{" · "}
 								</>
 							) : null}
-							{[album?.year, plural(tracks.length, "track"), totalSeconds > 0 && formatTotalDuration(totalSeconds)]
+							{[
+								album?.year,
+								m.common.trackCount(tracks.length),
+								totalSeconds > 0 && formatTotalDuration(totalSeconds, m),
+							]
 								.filter(Boolean)
 								.join(" · ")}
 						</span>
@@ -57,7 +63,7 @@ function AlbumPage() {
 					<>
 						<Button disabled={!tracks[0]} onClick={() => tracks[0] && void engine.play(tracks[0], tracks, context)}>
 							<Play data-icon="inline-start" fill="currentColor" />
-							Play
+							{m.common.play}
 						</Button>
 						{album && <EntityMenu item={album} />}
 					</>

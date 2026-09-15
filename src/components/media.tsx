@@ -2,6 +2,7 @@ import { Link, useMatchRoute } from "@tanstack/react-router";
 import { ChevronLeft, ChevronRight, Music, Play, ThumbsDown, ThumbsUp } from "lucide-react";
 import { Fragment, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { expandPlays, formatDuration, formatTotalDuration } from "#/lib/format";
+import { useMessages } from "#/lib/i18n";
 import { nextRating, rate, useRating } from "#/lib/rating";
 import { cn } from "#/lib/utils";
 import { usePlayback, usePlayer } from "#/player";
@@ -60,11 +61,12 @@ export function Artwork({
 
 /** Parental advisory, as the square every other player prints beside the title. */
 export function ExplicitBadge() {
+	const m = useMessages();
 	return (
 		<span
 			className="bg-muted-foreground/20 text-muted-foreground shrink-0 rounded-[3px] px-1 text-[10px] leading-4 font-semibold"
-			title="Explicit"
-			aria-label="Explicit"
+			title={m.media.explicit}
+			aria-label={m.media.explicit}
 		>
 			E
 		</span>
@@ -73,8 +75,13 @@ export function ExplicitBadge() {
 
 /** Now-playing indicator. Three bars beat "Playing" text and take a quarter of the room. */
 export function PlayingBars({ paused = false }: { paused?: boolean }) {
+	const m = useMessages();
 	return (
-		<span className="flex h-3.5 items-end gap-[2px]" role="img" aria-label={paused ? "Paused" : "Now playing"}>
+		<span
+			className="flex h-3.5 items-end gap-[2px]"
+			role="img"
+			aria-label={paused ? m.media.paused : m.media.nowPlaying}
+		>
 			{[0, 0.3, 0.15].map((delay, index) => (
 				<span
 					key={index}
@@ -174,11 +181,12 @@ export function TrackLink({
 
 export function CollectionPlayButton({ collection, className }: { collection: Album | Playlist; className?: string }) {
 	const engine = usePlayer();
+	const m = useMessages();
 
 	return (
 		<Button
 			size="icon"
-			aria-label={`Play ${entityTitle(collection)}`}
+			aria-label={m.common.playTitle(entityTitle(collection, m))}
 			className={className}
 			onClick={() => void playCollection(engine, collection)}
 		>
@@ -232,8 +240,9 @@ export function MediaCard({
 	className?: string;
 }) {
 	const engine = usePlayer();
+	const m = useMessages();
 	const round = isArtist(item);
-	const title = entityTitle(item);
+	const title = entityTitle(item, m);
 	const artists = entityArtists(item);
 	const image = (
 		<Artwork
@@ -250,7 +259,7 @@ export function MediaCard({
 			{isTrack(item) && (
 				<Button
 					size="icon"
-					aria-label={`Play ${title}`}
+					aria-label={m.common.playTitle(title)}
 					className="absolute right-2 bottom-2 rounded-full opacity-0 shadow-lg transition-opacity group-hover/card:opacity-100 focus-visible:opacity-100"
 					onClick={() => void engine.play(item, queue ?? [item], context)}
 				>
@@ -274,7 +283,7 @@ export function MediaCard({
 					<span className="line-clamp-2 text-sm font-medium">{title}</span>
 				</EntityLink>
 				<span className="text-muted-foreground line-clamp-1 text-xs">
-					{artists?.length ? <ArtistLinks artists={artists} /> : entitySubtitle(item)}
+					{artists?.length ? <ArtistLinks artists={artists} /> : entitySubtitle(item, m)}
 					{/* A release states its year where upstream gave one. An artist page's own shelves name
 					    no artist at all (the page is the artist), so that line was empty there. */}
 					{isAlbum(item) && item.year && (artists?.length ? ` • ${item.year}` : item.year)}
@@ -332,13 +341,14 @@ export function RailControls({
 	edges: RailEdges;
 	onScroll: (direction: -1 | 1) => void;
 }) {
+	const m = useMessages();
 	if (!edges.overflow) return null;
 	return (
 		<div className="flex gap-1">
 			<Button
 				variant="ghost"
 				size="icon-sm"
-				aria-label={`Scroll ${title} backward`}
+				aria-label={m.media.scrollBackward(title)}
 				disabled={edges.start}
 				onClick={() => onScroll(-1)}
 			>
@@ -347,7 +357,7 @@ export function RailControls({
 			<Button
 				variant="ghost"
 				size="icon-sm"
-				aria-label={`Scroll ${title} forward`}
+				aria-label={m.media.scrollForward(title)}
 				disabled={edges.end}
 				onClick={() => onScroll(1)}
 			>
@@ -550,6 +560,7 @@ export function MediaRow({
 	rank?: number;
 }) {
 	const engine = usePlayer();
+	const m = useMessages();
 	const { playback } = usePlayback();
 	const track = isTrack(item) ? item : undefined;
 	const current = track && playback.currentTrack?.id === track.id;
@@ -566,7 +577,7 @@ export function MediaRow({
 			{track && (
 				<Button
 					size="icon-sm"
-					aria-label={`Play ${entityTitle(item)}`}
+					aria-label={m.common.playTitle(entityTitle(item, m))}
 					className="absolute inset-0 m-auto rounded-full opacity-0 shadow-lg transition-opacity group-hover/row:opacity-100 focus-visible:opacity-100"
 					onClick={() => void engine.play(track, queue ?? [track], context)}
 				>
@@ -592,7 +603,9 @@ export function MediaRow({
 			<span className="flex min-w-0 flex-1 flex-col text-left">
 				<EntityLink item={item} className="min-w-0 hover:underline">
 					<span className="flex min-w-0 items-center gap-1.5">
-						<span className={cn("truncate text-sm font-medium", current && "text-primary")}>{entityTitle(item)}</span>
+						<span className={cn("truncate text-sm font-medium", current && "text-primary")}>
+							{entityTitle(item, m)}
+						</span>
 						{"explicit" in item && item.explicit && <ExplicitBadge />}
 					</span>
 				</EntityLink>
@@ -614,19 +627,20 @@ export function MediaRow({
  * of as many rows as it leaves out a duration and a column that empty is worse than a longer line.
  */
 export function EntityDetail({ item }: { item: MusicEntity }) {
+	const m = useMessages();
 	// Only a song or a release names artists, and only those become links. Everything else keeps the
 	// one line upstream gave it.
 	const artists = isTrack(item) || isAlbum(item) ? item.artists : undefined;
-	const detail = artists?.length ? undefined : entitySubtitle(item);
+	const detail = artists?.length ? undefined : entitySubtitle(item, m);
 	// An artist upstream states no count for falls back to its own kind, which the line already opens
 	// with: "Artist • Artist" is what printing it anyway reads as.
-	const subtitle = detail === entityKind(item) ? undefined : detail;
+	const subtitle = detail === entityKind(item, m) ? undefined : detail;
 	// Named here rather than left to a column header, since this is one line and not a table.
 	const plays = isTrack(item) && item.plays ? expandPlays(item.plays) : undefined;
 
 	return (
 		<>
-			{entityKind(item)}
+			{entityKind(item, m)}
 			{artists?.length ? (
 				<>
 					{" • "}
@@ -635,7 +649,7 @@ export function EntityDetail({ item }: { item: MusicEntity }) {
 			) : (
 				subtitle && ` • ${subtitle}`
 			)}
-			{plays && ` • ${plays} plays`}
+			{plays && ` • ${m.media.plays(plays)}`}
 		</>
 	);
 }
@@ -765,29 +779,30 @@ interface TrackColumns {
 
 /** Named columns, for the one page whose rows are a table rather than a shelf. */
 function TrackHeader({ columns }: { columns: TrackColumns }) {
+	const m = useMessages();
 	return (
 		<div
 			className="text-muted-foreground mb-2 grid items-center gap-4 border-b px-2 pb-2 text-xs font-medium tracking-wide uppercase"
 			style={trackColumns(columns)}
 		>
 			<span className="text-center">#</span>
-			<span>Name</span>
-			{columns.album && <span>Album</span>}
-			{columns.plays && <span className="text-right">Plays</span>}
+			<span>{m.media.columns.name}</span>
+			{columns.album && <span>{m.media.columns.album}</span>}
+			{columns.plays && <span className="text-right">{m.media.columns.plays}</span>}
 			{/* Words for the thumbs would be the account's actions, which are longer than the column and
 			    not what a heading says. The icons are the headings. */}
 			{columns.rating && (
 				<span className="flex justify-self-end">
 					<span className="flex size-8 items-center justify-center">
-						<ThumbsUp role="img" aria-label="Liked" className="size-4" />
+						<ThumbsUp role="img" aria-label={m.media.columns.liked} className="size-4" />
 					</span>
 					<span className="flex size-8 items-center justify-center">
-						<ThumbsDown role="img" aria-label="Disliked" className="size-4" />
+						<ThumbsDown role="img" aria-label={m.media.columns.disliked} className="size-4" />
 					</span>
 				</span>
 			)}
 			<span className="flex items-center justify-end gap-1">
-				Duration
+				{m.media.columns.duration}
 				{/* Stands in for the row menu, so the word ends where every length under it does. */}
 				<span className="size-8" aria-hidden />
 			</span>
@@ -807,6 +822,7 @@ function TrackHeader({ columns }: { columns: TrackColumns }) {
  */
 function TrackRating({ track }: { track: Track }) {
 	const rating = useRating(track.id);
+	const m = useMessages();
 	const thumb = (control: "like" | "dislike", Icon: typeof ThumbsUp, label: string) => (
 		<Button
 			variant="ghost"
@@ -832,8 +848,8 @@ function TrackRating({ track }: { track: Track }) {
 
 	return (
 		<span className="flex items-center justify-self-end">
-			{thumb("like", ThumbsUp, "Add to liked songs")}
-			{thumb("dislike", ThumbsDown, "Dislike")}
+			{thumb("like", ThumbsUp, m.media.like)}
+			{thumb("dislike", ThumbsDown, m.media.dislike)}
 		</span>
 	);
 }
@@ -864,6 +880,7 @@ export function TrackRow({
 }) {
 	const columns = { album: showAlbum, plays: showPlays, rating: showRating };
 	const engine = usePlayer();
+	const m = useMessages();
 	const { playback } = usePlayback();
 	const current = playback.currentTrack?.id === track.id;
 	// Paused, idle after the queue ran out, or failed: the row offers play back on hover.
@@ -915,7 +932,7 @@ export function TrackRow({
 						<Button
 							variant="ghost"
 							size="icon-sm"
-							aria-label={`Play ${track.title}`}
+							aria-label={m.common.playTitle(track.title)}
 							className="hidden group-hover/row:inline-flex"
 							// Resuming the current row passes no track, so the engine keeps its position
 							// instead of tearing the deck down and starting over, which is also why this
@@ -993,11 +1010,12 @@ function EpisodeRow({
 	action?: React.ReactNode;
 }) {
 	const engine = usePlayer();
+	const m = useMessages();
 	const { playback } = usePlayback();
 	const current = playback.currentTrack?.id === track.id;
 	const running = playback.status === "playing" || playback.status === "loading";
 	const row = useRef<HTMLDivElement>(null);
-	const meta = [track.published, track.durationSeconds > 0 && formatTotalDuration(track.durationSeconds)]
+	const meta = [track.published, track.durationSeconds > 0 && formatTotalDuration(track.durationSeconds, m)]
 		.filter(Boolean)
 		.join(" • ");
 
@@ -1036,7 +1054,7 @@ function EpisodeRow({
 						<Button
 							variant="secondary"
 							size="icon-sm"
-							aria-label={`Play ${track.title}`}
+							aria-label={m.common.playTitle(track.title)}
 							className="rounded-full opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100"
 							onClick={(event) => {
 								event.stopPropagation();

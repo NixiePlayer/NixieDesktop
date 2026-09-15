@@ -1,5 +1,6 @@
 import { useEffect, useSyncExternalStore } from "react";
 import { toast } from "#/components/ui/toast";
+import { messages } from "#/lib/i18n";
 import type { UpdateState } from "#/shared/contracts";
 
 /**
@@ -38,13 +39,14 @@ function set(next: UpdateState) {
  * a listener who left the room to a full album should not come back to a decision that timed out.
  */
 function announce(version: string | undefined) {
+	const m = messages().settings.update;
 	toast.add({
-		title: version ? `Nixie ${version} is ready` : "An update is ready",
-		description: "Restart to install it, or keep listening and it installs when you next quit.",
+		title: version ? m.ready.label(version) : m.toast.anyReady,
+		description: m.toast.description,
 		type: "success",
 		timeout: 0,
 		actionProps: {
-			children: "Restart now",
+			children: m.restartNow,
 			onClick: () => void window.nixie?.update.install(),
 		},
 	});

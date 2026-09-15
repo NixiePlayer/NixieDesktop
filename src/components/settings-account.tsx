@@ -5,10 +5,12 @@ import { Button } from "#/components/ui/button";
 import { Skeleton } from "#/components/ui/skeleton";
 import { Switch } from "#/components/ui/switch";
 import { toast } from "#/components/ui/toast";
+import { messages, useMessages } from "#/lib/i18n";
 import type { AccountSetting, AccountSettingKey } from "#/shared/contracts";
 
 /** The one link that stands in for every switch this section could not draw. */
-export function OpenYouTubeMusicSettings({ children = "Open YouTube Music settings" }: { children?: string }) {
+export function OpenYouTubeMusicSettings({ children }: { children?: string }) {
+	const m = useMessages();
 	return (
 		<a
 			href="https://music.youtube.com/settings"
@@ -16,7 +18,7 @@ export function OpenYouTubeMusicSettings({ children = "Open YouTube Music settin
 			rel="noreferrer"
 			className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-sm"
 		>
-			{children}
+			{children ?? m.settings.account.openSettings}
 			<ExternalLink className="size-3.5" />
 		</a>
 	);
@@ -69,7 +71,7 @@ export function useAccountSettings() {
 				() => router.invalidate(),
 				() => {
 					setState({ status: "ready", settings: previous });
-					toast.add({ title: "YouTube Music did not save that", type: "error" });
+					toast.add({ title: messages().settings.account.notSaved, type: "error" });
 				}
 			);
 	};
@@ -95,14 +97,16 @@ export function AccountSettingsSkeleton({ rows }: { rows: number }) {
 }
 
 export function AccountSettingsUnavailable({ onRetry }: { onRetry: () => void }) {
+	const m = useMessages();
 	return (
 		<div className="border-border flex flex-col items-start gap-4 rounded-xl border p-5">
-			<p className="text-muted-foreground text-sm">
-				Nixie could not reach your account settings. They are still yours to change on YouTube Music.
-			</p>
-			<div className="flex items-center gap-4">
+			<p className="text-muted-foreground text-sm">{m.settings.account.unavailable}</p>
+			{/* Wraps rather than overflowing: the link beside the button is a sentence, and it is half as
+			    long again in another language ("Open YouTube Music settings" against "Apri le impostazioni
+			    di YouTube Music"), which a narrow settings column cannot hold on one line. */}
+			<div className="flex flex-wrap items-center gap-4">
 				<Button variant="outline" size="sm" onClick={onRetry}>
-					Try again
+					{m.common.tryAgain}
 				</Button>
 				<OpenYouTubeMusicSettings />
 			</div>

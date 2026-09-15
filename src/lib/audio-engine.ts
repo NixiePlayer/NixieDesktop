@@ -1,3 +1,4 @@
+import { messages } from "#/lib/i18n";
 import {
 	MEDIA_ID_LIFETIME_MS,
 	type NixieBridge,
@@ -202,7 +203,7 @@ export function createAudioEngine(deps: AudioEngineDeps = {}): AudioEngine {
 			}
 			// MediaError codes are the only detail the element gives up, and 4 (SRC_NOT_SUPPORTED)
 			// is what an upstream rejection looks like from here.
-			set({ status: "error", errorMessage: `Audio element failed (media error ${element.error?.code ?? 0})` });
+			set({ status: "error", errorMessage: messages().shell.mediaError(element.error?.code ?? 0) });
 		});
 		element.addEventListener("durationchange", () => {
 			if (deck === active) syncDuration(element);
@@ -378,7 +379,7 @@ export function createAudioEngine(deps: AudioEngineDeps = {}): AudioEngine {
 			generation += 1;
 			preloaded = undefined;
 			clearDeck();
-			set({ status: "error", positionSeconds: 0, errorMessage: "Playback did not start within 15 seconds" });
+			set({ status: "error", positionSeconds: 0, errorMessage: messages().shell.playbackTimeout });
 		}, PLAY_START_TIMEOUT_MS);
 	}
 
@@ -444,7 +445,7 @@ export function createAudioEngine(deps: AudioEngineDeps = {}): AudioEngine {
 				set({ status: "playing" });
 			} catch (error) {
 				if (token !== generation) return;
-				const reason = error instanceof Error ? `${error.name}: ${error.message}` : "Unknown playback failure";
+				const reason = error instanceof Error ? `${error.name}: ${error.message}` : messages().shell.unknownFailure;
 				set({ status: "error", errorMessage: reason });
 			} finally {
 				if (token === generation) clearLoadingTimeout();
@@ -494,7 +495,7 @@ export function createAudioEngine(deps: AudioEngineDeps = {}): AudioEngine {
 			const stored = await getBridge()?.local.load();
 			if (token !== generation) return;
 			// Without a bridge there is nothing to resolve media against, so this cannot play.
-			if (!stored) return set({ status: "error", errorMessage: "No player bridge available" });
+			if (!stored) return set({ status: "error", errorMessage: messages().shell.noBridge });
 			const settings = stored.settings;
 			const fresh = fastPath?.settings === settingsKey(settings) ? fastPath : undefined;
 			const gainDb = fresh ? fresh.gainDb : await prepare(current, active, token, settings);
@@ -513,7 +514,7 @@ export function createAudioEngine(deps: AudioEngineDeps = {}): AudioEngine {
 		} catch (error) {
 			// Swallowing this is what made playback failures undiagnosable, so the reason is kept.
 			if (token !== generation) return;
-			const reason = error instanceof Error ? `${error.name}: ${error.message}` : "Unknown playback failure";
+			const reason = error instanceof Error ? `${error.name}: ${error.message}` : messages().shell.unknownFailure;
 			console.error("[nixie] play failed", error);
 			set({ status: "error", errorMessage: reason });
 		} finally {

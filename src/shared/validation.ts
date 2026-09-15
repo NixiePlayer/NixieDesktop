@@ -9,6 +9,7 @@ import type {
 	PlaylistPrivacy,
 	Track,
 } from "./contracts";
+import { isLanguageSetting } from "./i18n";
 
 const idPattern = /^[\w-]{1,256}$/;
 const privacies: string[] = ["public", "unlisted", "private"] satisfies PlaylistPrivacy[];
@@ -343,4 +344,6 @@ export function validateState(value: unknown): asserts value is PersistedState {
 	}
 	const restricted = value.settings.restricted;
 	if (restricted !== undefined && typeof restricted !== "boolean") throw new TypeError("Invalid restricted mode");
+	const language = value.settings.language;
+	if (language !== undefined && !isLanguageSetting(language)) throw new TypeError("Invalid language");
 }

@@ -17,6 +17,7 @@ describe("regionCode", () => {
 	it("falls back to the reader's own locale when upstream answered in it", () => {
 		expect(regionCode("Italia", "it")).toBe("IT");
 		expect(regionCode("Giappone", "it")).toBe("JP");
+		expect(regionCode("Stati Uniti", "it")).toBe("US");
 	});
 
 	it("states nothing for a name no locale holds, rather than a code meaning somewhere else", () => {
