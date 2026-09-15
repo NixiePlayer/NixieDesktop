@@ -1,5 +1,6 @@
 import { useEffect, useSyncExternalStore } from "react";
 import { toast } from "#/components/ui/toast";
+import { invalidatePages } from "#/lib/invalidate";
 import type { TrackRating } from "#/shared/contracts";
 
 /**
@@ -31,6 +32,9 @@ export async function rate(trackId: string, rating: TrackRating) {
 	emit();
 	try {
 		await window.nixie?.music.command({ type: "rate", trackId, rating });
+		// Liked music is the thumbs, so whatever that playlist's cached page lists is now out of date.
+		// Nothing else is: every other thumb in the app reads this store.
+		void invalidatePages({ routeId: "/playlist/$id", id: "LM" });
 	} catch {
 		if (previous) ratings.set(trackId, previous);
 		else ratings.delete(trackId);

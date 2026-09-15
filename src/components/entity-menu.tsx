@@ -39,6 +39,7 @@ import {
 import { toast } from "#/components/ui/toast";
 import { queryMusic } from "#/lib/api";
 import type { AudioEngine } from "#/lib/audio-engine";
+import { invalidatePages } from "#/lib/invalidate";
 import { removePlaylist, saveToLibrary, setSubscribed, useHeld, usePlaylists } from "#/lib/library";
 import { rate } from "#/lib/rating";
 import { usePlayer } from "#/player";
@@ -255,23 +256,26 @@ function MenuItems({
 		run(`Not added to ${playlist.title}`, async () => {
 			await addToPlaylist(item, playlist);
 			toast.add({ title: "Saved", description: `Added to ${playlist.title}.`, type: "success" });
-			// The playlist now holds a song its cached page does not list.
-			void router.invalidate();
+			// The playlist now holds a song its cached page does not list, and the library a count it does not state.
+			void invalidatePages({ routeId: "/playlist/$id", id: playlist.id }, { routeId: "/library" });
 		});
 
 	// The store owns the state and reports a refusal; the toast here is what a closing menu leaves
-	// behind, since the label it flipped is no longer on screen. The library page lists what changed.
+	// behind, since the label it flipped is no longer on screen. The library page lists what changed,
+	// and it is the only page that does: every other page reads the saved state out of the store.
 	const toggleLibrary = async () => {
 		if (await saveToLibrary(item.id, !held)) {
 			toast.add({ title: held ? "Removed from library" : "Saved to library", type: "success" });
-			void router.invalidate();
+			void invalidatePages({ routeId: "/library" });
 		}
 	};
 
+	// Not the artist's own page: it reads the subscription out of the store too, and nothing its loader
+	// answers changes with it.
 	const toggleSubscription = async () => {
 		if (await setSubscribed(item.id, !held)) {
 			toast.add({ title: held ? "Unsubscribed" : "Subscribed", type: "success" });
-			void router.invalidate();
+			void invalidatePages({ routeId: "/library" });
 		}
 	};
 
@@ -289,7 +293,9 @@ function MenuItems({
 			toast.add({ title: "Playlist deleted", type: "success" });
 			// Deleted from its own page, there is no page left to stand on.
 			if (router.state.location.pathname === `/playlist/${item.id}`) void router.navigate({ to: "/library" });
-			void router.invalidate();
+			// Its own cached page too, or going back reaches a playlist that no longer exists. The rail is
+			// the store's and already dropped it above.
+			void invalidatePages({ routeId: "/library" }, { routeId: "/playlist/$id", id: item.id });
 		});
 	};
 
@@ -441,7 +447,6 @@ function MenuItems({
  * a dialog mounted among them would be torn down before it drew. The root outlives both.
  */
 function useNewPlaylist(item: Subject) {
-	const router = useRouter();
 	const [open, setOpen] = useState(false);
 	const dialog = (
 		<NewPlaylistDialog
@@ -451,7 +456,7 @@ function useNewPlaylist(item: Subject) {
 				void run(`Not added to ${playlist.title}`, async () => {
 					await addToPlaylist(item, playlist);
 					// The dialog says the playlist was created; only a refusal to fill it needs a word here.
-					void router.invalidate();
+					void invalidatePages({ routeId: "/playlist/$id", id: playlist.id }, { routeId: "/library" });
 				})
 			}
 		/>

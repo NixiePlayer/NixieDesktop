@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Link2, MoveDown, MoveUp, Play, Trash2, X } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { EntityMenu } from "#/components/entity-menu";
 import { DetailHeader, DetailSkeleton, TrackList } from "#/components/media";
 import { EditPlaylistDialog, PrivacyLabel } from "#/components/playlist-dialog";
@@ -10,6 +10,7 @@ import { Input } from "#/components/ui/input";
 import { toast } from "#/components/ui/toast";
 import { queryMusic } from "#/lib/api";
 import { formatTotalDuration, plural } from "#/lib/format";
+import { invalidatePages } from "#/lib/invalidate";
 import { updatePlaylist } from "#/lib/library";
 import { usePlayer } from "#/player";
 import type { MusicCommand, Playlist, PlaylistItem } from "#/shared/contracts";
@@ -77,12 +78,26 @@ function PlaylistPage() {
 	// public URL does not.
 	const shareUrl = `https://music.youtube.com/playlist?list=${id.replace(/^(VL|MPSP)/, "")}`;
 
+	// This page's own cached copy is dropped on the way out rather than refetched in place: upstream can
+	// apply an edit a beat late, and a refetch answered before it lands would put the old order back
+	// under the reader, over the optimistic rows. Leaving is late enough, and the next visit loads fresh.
+	const edited = useRef(false);
+	useEffect(
+		() => () => {
+			if (edited.current) void invalidatePages({ routeId: "/playlist/$id", id });
+		},
+		[id]
+	);
+
 	const mutate = async (next: PlaylistItem[], command: MusicCommand) => {
 		const previous = items;
 		setItems(next);
 		try {
 			await window.nixie?.music.command(command);
 			toast.add({ title: "Playlist updated", description: "Your change is now on YouTube Music.", type: "success" });
+			// Outside the try would also run after a rollback.
+			edited.current = true;
+			void invalidatePages({ routeId: "/library" });
 		} catch {
 			setItems(previous);
 			toast.add({ title: "Change rolled back", description: "YouTube Music rejected the update.", type: "error" });
@@ -174,17 +189,24 @@ function PlaylistPage() {
 											description: nextDescription,
 											privacy: nextPrivacy,
 										})
-										.catch(() => {
-											setTitle(previous.title);
-											setDescription(previous.description);
-											setPrivacy(previous.privacy);
-											updatePlaylist(id, previous);
-											toast.add({
-												title: "Change rolled back",
-												description: "YouTube Music rejected the edit.",
-												type: "error",
-											});
-										});
+										.then(
+											// After the write lands, never beside it: a refetch racing it answers the old name.
+											() => {
+												edited.current = true;
+												void invalidatePages({ routeId: "/library" });
+											},
+											() => {
+												setTitle(previous.title);
+												setDescription(previous.description);
+												setPrivacy(previous.privacy);
+												updatePlaylist(id, previous);
+												toast.add({
+													title: "Change rolled back",
+													description: "YouTube Music rejected the edit.",
+													type: "error",
+												});
+											}
+										);
 								}}
 							/>
 						)}

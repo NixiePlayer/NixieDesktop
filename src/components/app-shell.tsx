@@ -14,7 +14,7 @@ import {
 	User,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { queryMusic, rememberSearch } from "#/lib/api";
+import { heldSuggestions, queryMusic, rememberSearch } from "#/lib/api";
 import { usePlaylists } from "#/lib/library";
 import { isMac } from "#/lib/platform";
 import { useUpdateState } from "#/lib/updates";
@@ -309,6 +309,17 @@ function NavRail({ open }: { open: boolean }) {
 }
 
 /**
+ * Suggestion rows are held by trimmed query (`heldSuggestions`), so backspacing onto a query already
+ * typed redraws its rows on the same keystroke instead of blanking to a round trip. Only an answer is
+ * held: a rejected request never reaches the `then` that writes it, so the next keystroke asks again.
+ * ponytail: a minute of life and fifty entries, no revalidation. Upstream's preview barely moves
+ * inside a minute; give it a stale-while-revalidate pass if it ever reads as out of date.
+ */
+const suggestions = heldSuggestions;
+const SUGGESTION_LIMIT = 50;
+const SUGGESTION_LIFE_MS = 60_000;
+
+/**
  * Results land in a dropdown under the input rather than behind a dialog, so the page you were
  * on stays visible. cmdk supplies the arrow-key and Enter handling; it must not filter, because
  * the rows are whatever YouTube returned for the query, not a local list.
@@ -327,10 +338,21 @@ function SearchField({ inputRef }: { inputRef: React.RefObject<HTMLInputElement 
 			setResults([]);
 			return;
 		}
+		const held = suggestions.get(query);
+		if (held && Date.now() - held.at < SUGGESTION_LIFE_MS) {
+			setResults(held.items);
+			return;
+		}
 		let current = true;
 		const timer = window.setTimeout(() => {
 			void queryMusic({ type: "suggestions", query }).then((page) => {
-				if (current) setResults(page.items.slice(0, 6));
+				const items = page.items.slice(0, 6);
+				// Re-inserted so the Map's insertion order stays oldest first, which is what the cap evicts.
+				suggestions.delete(query);
+				suggestions.set(query, { at: Date.now(), items });
+				const oldest = suggestions.keys().next().value;
+				if (suggestions.size > SUGGESTION_LIMIT && oldest !== undefined) suggestions.delete(oldest);
+				if (current) setResults(items);
 			});
 		}, 180);
 		return () => {

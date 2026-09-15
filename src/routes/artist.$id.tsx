@@ -6,6 +6,7 @@ import { BrowseAction, MediaShelf, ShelfSkeleton, TrackList } from "#/components
 import { Button } from "#/components/ui/button";
 import { Skeleton } from "#/components/ui/skeleton";
 import { queryMusic } from "#/lib/api";
+import { invalidatePages } from "#/lib/invalidate";
 import { setSubscribed, useHeld } from "#/lib/library";
 import { cn } from "#/lib/utils";
 import { usePlayer } from "#/player";
@@ -151,7 +152,15 @@ function ArtistPage() {
 								Mix
 							</Button>
 						)}
-						<Button variant="outline" onClick={() => void setSubscribed(id, !subscribed)}>
+						{/* The library page lists who is followed; this page reads it out of the store instead. */}
+						<Button
+							variant="outline"
+							onClick={() =>
+								void setSubscribed(id, !subscribed).then((landed) => {
+									if (landed) void invalidatePages({ routeId: "/library" });
+								})
+							}
+						>
 							{subscribed ? "Subscribed" : "Subscribe"}
 						</Button>
 						{artist && <EntityMenu item={artist} />}

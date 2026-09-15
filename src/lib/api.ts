@@ -13,8 +13,33 @@ import type { MusicEntity, MusicQuery, Page } from "#/shared/contracts";
  * ponytail: capped rather than expiring. A mix is one list for as long as the app is open, which is
  * the point; give it a clock if a session ever runs long enough for that to read as stale.
  */
-const mixes = new Map<string, Promise<Page<MusicEntity>>>();
-const MIX_LIMIT = 8;
+const mixes = new Map<string, Held>();
+const HOLD_LIMIT = 8;
+
+type Held = { page: Promise<Page<MusicEntity>>; fetchedAt: number };
+
+/**
+ * An artist page, held briefly because `/search` asks for the top result's artist and opening that
+ * artist asks again, which main answers with two browses (the page and its top songs playlist). The
+ * router holds the page once `/artist/$id` has loaded, so this only covers the first open after a
+ * search and a quick return after the router dropped it. Subscription state is not read off it: the
+ * page reads `useHeld` from the library store, so a held page cannot show a stale subscription.
+ */
+const artists = new Map<string, Held>();
+const ARTIST_MAX_AGE_MS = 5 * 60_000;
+
+/**
+ * The charts page, held for its region picker, which the settings page reads on every visit and which
+ * does not change within a session. Empty or failed answers are not held.
+ */
+let regionsPage: Promise<Page<MusicEntity>> | undefined;
+
+/**
+ * The search dropdown's rows by trimmed query, read and written by `SearchField` in `app-shell.tsx`.
+ * Held here so a region, a Restricted Mode or an account change forgets them with everything else,
+ * since each of those answers the preview differently.
+ */
+export const heldSuggestions = new Map<string, { at: number; items: MusicEntity[] }>();
 
 /**
  * The feeds `/` and `/explore` refresh on the way out, held here rather than in the router's cache so
@@ -39,6 +64,9 @@ let authState: Promise<boolean> | undefined;
  */
 export function dropHeldPages() {
 	mixes.clear();
+	artists.clear();
+	regionsPage = undefined;
+	heldSuggestions.clear();
 	authState = undefined;
 	heldFeeds.home = undefined;
 	heldFeeds.explore = undefined;
@@ -70,20 +98,46 @@ export async function queryMusic(request: MusicQuery, fresh = false): Promise<Pa
 		}
 	);
 	if (!(await authState)) return { items: [] };
-	const key = fresh ? undefined : mixKey(request);
-	if (!key) return bridge.music.query(request);
-	let held = mixes.get(key);
-	if (!held) {
-		// A failed draw is not the mix, so it is dropped rather than replayed at every later reader.
-		held = bridge.music.query(request).catch((error: unknown) => {
-			mixes.delete(key);
+	if (fresh) return bridge.music.query(request);
+	const mix = mixKey(request);
+	if (mix) return hold(mixes, mix, Infinity, () => bridge.music.query(request));
+	if (request.type === "artist" && !request.continuation)
+		return hold(artists, request.id, ARTIST_MAX_AGE_MS, () => bridge.music.query(request));
+	return bridge.music.query(request);
+}
+
+/**
+ * The shared shape of every hold: capped at `HOLD_LIMIT` with the oldest out, an entry older than
+ * `maxAge` asked for again, and a failed answer dropped rather than replayed at every later reader.
+ */
+function hold(held: Map<string, Held>, key: string, maxAge: number, fetch: () => Promise<Page<MusicEntity>>) {
+	const entry = held.get(key);
+	if (entry && Date.now() - entry.fetchedAt < maxAge) return entry.page;
+	const page = fetch().catch((error: unknown) => {
+		if (held.get(key)?.page === page) held.delete(key);
+		throw error;
+	});
+	// Deleted first so a refetched key moves to the back of the insertion order.
+	held.delete(key);
+	held.set(key, { page, fetchedAt: Date.now() });
+	const oldest = held.keys().next().value;
+	if (held.size > HOLD_LIMIT && oldest) held.delete(oldest);
+	return page;
+}
+
+/** The charts page for its region list, asked once per session and again only after a failed or empty answer. */
+export function queryRegions(): Promise<Page<MusicEntity>> {
+	const page = (regionsPage ??= queryMusic({ type: "explore", browseId: "FEmusic_charts" }).then(
+		(answer) => {
+			if (!answer.explore?.regions?.length && regionsPage === page) regionsPage = undefined;
+			return answer;
+		},
+		(error: unknown) => {
+			if (regionsPage === page) regionsPage = undefined;
 			throw error;
-		});
-		mixes.set(key, held);
-		const oldest = mixes.keys().next().value;
-		if (mixes.size > MIX_LIMIT && oldest) mixes.delete(oldest);
-	}
-	return held;
+		}
+	));
+	return page;
 }
 
 /** Most recent first, deduplicated, capped where the store caps it anyway. */

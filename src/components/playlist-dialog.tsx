@@ -1,5 +1,6 @@
 import { Globe, Link2, Lock, Pencil, Plus } from "lucide-react";
 import { useState } from "react";
+import { invalidatePages } from "#/lib/invalidate";
 import { addPlaylist } from "#/lib/library";
 import type { Playlist, PlaylistPrivacy } from "#/shared/contracts";
 import { Button } from "./ui/button";
@@ -130,6 +131,8 @@ export function NewPlaylistDialog({
 								// Straight into the store rather than back up to the rail: the submenu offering the
 								// same playlists is nowhere near that rail and has to see the new one too.
 								addPlaylist(playlist);
+								// The rail is the store's; the library page is a cached loader and lists it only once dropped.
+								void invalidatePages({ routeId: "/library" });
 								onCreated?.(playlist);
 								setOpen(false);
 								toast.add({ title: "Playlist created", description: title, type: "success" });

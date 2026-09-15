@@ -26,7 +26,7 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectVa
 import { Switch } from "#/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "#/components/ui/tabs";
 import { toast } from "#/components/ui/toast";
-import { dropHeldPages, queryMusic } from "#/lib/api";
+import { dropHeldPages, queryRegions } from "#/lib/api";
 import { platform } from "#/lib/platform";
 import { applyTheme, storedTheme } from "#/lib/theme";
 import { checkForUpdates, useUpdateState } from "#/lib/updates";
@@ -192,7 +192,7 @@ function Choice({
 function useRegions() {
 	const [regions, setRegions] = useState<{ code: string; label: string }[]>([]);
 	useEffect(() => {
-		void queryMusic({ type: "explore", browseId: "FEmusic_charts" })
+		void queryRegions()
 			.then((page) => {
 				const seen = new Map<string, string>();
 				for (const region of page.explore?.regions ?? []) {
