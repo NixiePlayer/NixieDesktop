@@ -914,6 +914,13 @@ describe("entity extraction", () => {
 							type: "Menu",
 							items: [
 								{ type: "MenuNavigationItem", endpoint: { payload: { browseId: "MPREb_2OsyiPiMOco" } } },
+								// Only the remove action names the row: any other action carrying the field is not it.
+								{
+									type: "MenuServiceItem",
+									endpoint: {
+										payload: { playlistId: "PL0PpBFf", actions: [{ action: "ACTION_ADD_VIDEO", setVideoId: "DECOY" }] },
+									},
+								},
 								{
 									type: "MenuServiceItem",
 									endpoint: {

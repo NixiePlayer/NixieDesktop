@@ -92,9 +92,11 @@ function PlaylistPage() {
 		const [item] = next.splice(index, 1);
 		if (!item?.itemId) return;
 		next.splice(target, 0, item);
-		const before = next[target + 1]?.itemId;
-		if (!before) return;
-		void mutate(next, { type: "playlist-reorder", playlistId: id, itemId: item.itemId, beforeItemId: before });
+		// The last row has no successor to land before, so a move onto it names the row it lands after.
+		const beforeItemId = next[target + 1]?.itemId;
+		const afterItemId = beforeItemId ? undefined : next[target - 1]?.itemId;
+		if (!beforeItemId && !afterItemId) return;
+		void mutate(next, { type: "playlist-reorder", playlistId: id, itemId: item.itemId, beforeItemId, afterItemId });
 	};
 
 	return (

@@ -225,7 +225,12 @@ export function validateMusicCommand(value: unknown): asserts value is MusicComm
 			if (!validId(value.playlistId) || !validIds(value.itemIds)) throw new TypeError("Invalid playlist removal");
 			break;
 		case "playlist-reorder":
-			if (!validId(value.playlistId) || !validId(value.itemId) || !validId(value.beforeItemId, true)) {
+			if (
+				!validId(value.playlistId) ||
+				!validId(value.itemId) ||
+				!validId(value.beforeItemId, true) ||
+				!validId(value.afterItemId, true)
+			) {
 				throw new TypeError("Invalid playlist reorder");
 			}
 			break;
