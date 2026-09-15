@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { net } from "electron";
-import type { AudioVariantFingerprint } from "../src/shared/contracts";
+import { MEDIA_ID_LIFETIME_MS, type AudioVariantFingerprint } from "../src/shared/contracts";
 import { parseByteRange, type ByteRange } from "../src/shared/range";
 
 interface MediaTarget {
@@ -55,7 +55,7 @@ export class SecureResourceRegistry {
 
 	registerMedia(target: Omit<MediaTarget, "expiresAt">) {
 		const id = token();
-		this.#media.set(id, { ...target, expiresAt: Date.now() + 4 * 60 * 60 * 1000 });
+		this.#media.set(id, { ...target, expiresAt: Date.now() + MEDIA_ID_LIFETIME_MS });
 		this.#prune();
 		return `nixie://app/media/${id}`;
 	}
@@ -69,9 +69,19 @@ export class SecureResourceRegistry {
 		return `nixie://app/artwork/${Buffer.from(url).toString("base64url")}`;
 	}
 
+	/**
+	 * Every refusal a deck can receive carries no body. Chromium reads the body of a failed range
+	 * request as media bytes, asks again from past them and never fires `error`, so an expired id
+	 * answered with "Not found" left the element loading forever: the engine went on reporting
+	 * `playing` over a frozen clock and silence, and no press could ever reach its recovery.
+	 */
+	#refuse(request: Request, status: number, headers: Record<string, string> = {}) {
+		return new Response(null, { status, headers: { "cache-control": "no-store", ...this.#cors(request), ...headers } });
+	}
+
 	async handleMedia(request: Request, id: string) {
 		const target = this.#media.get(id);
-		if (!target || target.expiresAt < Date.now()) return new Response("Not found", { status: 404 });
+		if (!target || target.expiresAt < Date.now()) return this.#refuse(request, 404);
 		// The type without its codec parameters, which is what an element wants and what a range
 		// response has to keep stating.
 		const [mimeType = target.fingerprint.mimeType] = target.fingerprint.mimeType.split(";");
@@ -80,13 +90,14 @@ export class SecureResourceRegistry {
 		try {
 			range = parseByteRange(request.headers.get("range"), target.contentLength);
 		} catch {
-			return new Response("Range not satisfiable", {
-				status: 416,
-				headers: target.contentLength ? { "content-range": `bytes */${target.contentLength}` } : undefined,
-			});
+			return this.#refuse(
+				request,
+				416,
+				target.contentLength ? { "content-range": `bytes */${target.contentLength}` } : undefined
+			);
 		}
 
-		if (!target.url) return new Response("Not found", { status: 404 });
+		if (!target.url) return this.#refuse(request, 404);
 		const url = new URL(target.url);
 		if (range) url.searchParams.set("range", `${range.start}-${range.end}`);
 		const upstream = await net.fetch(url.toString(), {
@@ -96,9 +107,7 @@ export class SecureResourceRegistry {
 		if (!upstream.ok) {
 			this.#log(`media fetch rejected: ${upstream.status} itag ${target.fingerprint.itag}`);
 			await upstream.body?.cancel().catch(() => undefined);
-			const headers = new Headers({ "cache-control": "no-store" });
-			for (const [name, value] of Object.entries(this.#cors(request) ?? {})) headers.set(name, value);
-			return new Response(null, { status: upstream.status, headers });
+			return this.#refuse(request, upstream.status);
 		}
 		const headers = new Headers(upstream.headers);
 		headers.set("accept-ranges", "bytes");

@@ -546,6 +546,138 @@ describe("audio engine", () => {
 		expect(resolve.mock.calls.length).toBe(resolvedBefore);
 	});
 
+	it("resolves again rather than resuming a deck whose media id has run out", async () => {
+		vi.useFakeTimers();
+		const { engine, audio, resolve } = harness();
+		await engine.start();
+		const started = engine.play(track("t1"), [track("t1")]);
+		await vi.advanceTimersByTimeAsync(0);
+		await started;
+		audio[0].currentTime = 120;
+		audio[0].dispatch("timeupdate");
+		engine.pause();
+		const resolvedBefore = resolve.mock.calls.length;
+
+		vi.setSystemTime(Date.now() + 3 * 60 * 60 * 1000);
+		engine.toggle();
+		await vi.advanceTimersByTimeAsync(0);
+		expect(resolve.mock.calls.length).toBe(resolvedBefore + 1);
+		audio[0].currentTime = 0;
+		audio[0].dispatch("loadedmetadata");
+		await vi.advanceTimersByTimeAsync(0);
+
+		expect(engine.getSnapshot().playback.status).toBe("playing");
+		expect(audio[0].currentTime).toBe(120);
+	});
+
+	it("resolves again rather than playing a restored deck prepared hours ago", async () => {
+		vi.useFakeTimers();
+		const { engine, audio, resolve, stored } = harness();
+		stored.playback.currentTrack = track("t1");
+		stored.playback.queue = [track("t1")];
+		stored.playback.positionSeconds = 42;
+		await engine.start();
+		await vi.advanceTimersByTimeAsync(0);
+		expect(audio[0].src).toContain("t1");
+		audio[0].dispatch("loadedmetadata");
+		const resolvedBefore = resolve.mock.calls.length;
+
+		vi.setSystemTime(Date.now() + 3 * 60 * 60 * 1000);
+		engine.toggle();
+		await vi.advanceTimersByTimeAsync(0);
+		expect(resolve.mock.calls.length).toBe(resolvedBefore + 1);
+		audio[0].currentTime = 0;
+		audio[0].dispatch("loadedmetadata");
+		await vi.advanceTimersByTimeAsync(0);
+
+		expect(engine.getSnapshot().playback.status).toBe("playing");
+		expect(audio[0].currentTime).toBe(42);
+	});
+
+	it("resolves a fresh stream at the live playhead when the playing deck fails", async () => {
+		const { engine, audio, resolve } = harness();
+		await engine.start();
+		await engine.play(track("t1"), [track("t1")]);
+		audio[0].currentTime = 93;
+		audio[0].dispatch("timeupdate");
+		const resolvedBefore = resolve.mock.calls.length;
+
+		// An expired media id: the element errors mid-play, and nobody has pressed anything.
+		audio[0].dispatch("error");
+		await vi.waitFor(() => expect(resolve.mock.calls.length).toBe(resolvedBefore + 1));
+		audio[0].currentTime = 0;
+		audio[0].dispatch("loadedmetadata");
+
+		await vi.waitFor(() => expect(engine.getSnapshot().playback.status).toBe("playing"));
+		expect(audio[0].currentTime).toBe(93);
+	});
+
+	it("surfaces the failure when the fresh stream fails as well", async () => {
+		const { engine, audio, resolve } = harness();
+		await engine.start();
+		await engine.play(track("t1"), [track("t1")]);
+		audio[0].dispatch("error");
+		await vi.waitFor(() => expect(engine.getSnapshot().playback.status).toBe("playing"));
+		const resolvedBefore = resolve.mock.calls.length;
+
+		audio[0].dispatch("error");
+
+		expect(engine.getSnapshot().playback.status).toBe("error");
+		expect(resolve.mock.calls.length).toBe(resolvedBefore);
+	});
+
+	it("resolves again when a pause cancelled the recovery from a failed deck", async () => {
+		const { engine, audio, resolve } = harness({ resolveDelay: 20 });
+		await engine.start();
+		await engine.play(track("t1"), [track("t1")]);
+		const resolvedBefore = resolve.mock.calls.length;
+
+		audio[0].dispatch("error");
+		engine.pause();
+		engine.toggle();
+
+		await vi.waitFor(() => expect(resolve.mock.calls.length).toBe(resolvedBefore + 1));
+		await vi.waitFor(() => expect(engine.getSnapshot().playback.status).toBe("playing"));
+	});
+
+	it("carries a seek made during recovery onto the fresh source", async () => {
+		const { engine, audio, resolve } = harness({ resolveDelay: 20 });
+		await engine.start();
+		await engine.play(track("t1"), [track("t1")]);
+		audio[0].currentTime = 93;
+		audio[0].dispatch("timeupdate");
+		const resolvedBefore = resolve.mock.calls.length;
+
+		audio[0].dispatch("error");
+		engine.seek(150);
+		await vi.waitFor(() => expect(resolve.mock.calls.length).toBe(resolvedBefore + 1));
+		audio[0].currentTime = 0;
+		audio[0].dispatch("loadedmetadata");
+
+		await vi.waitFor(() => expect(engine.getSnapshot().playback.status).toBe("playing"));
+		expect(audio[0].currentTime).toBe(150);
+	});
+
+	it("forgets a source that failed while paused and resumes on a fresh one", async () => {
+		const { engine, audio, resolve } = harness();
+		await engine.start();
+		await engine.play(track("t1"), [track("t1")]);
+		audio[0].currentTime = 50;
+		audio[0].dispatch("timeupdate");
+		engine.pause();
+		const resolvedBefore = resolve.mock.calls.length;
+
+		audio[0].dispatch("error");
+		expect(engine.getSnapshot().playback.status).toBe("paused");
+
+		engine.toggle();
+		await vi.waitFor(() => expect(resolve.mock.calls.length).toBe(resolvedBefore + 1));
+		audio[0].currentTime = 0;
+		audio[0].dispatch("loadedmetadata");
+		await vi.waitFor(() => expect(engine.getSnapshot().playback.status).toBe("playing"));
+		expect(audio[0].currentTime).toBe(50);
+	});
+
 	it("takes the length off the loaded media when upstream stated none", async () => {
 		const { engine, audio } = harness();
 		await engine.start();

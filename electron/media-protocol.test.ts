@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("electron", () => ({ net: { fetch: vi.fn(async () => new Response("image", { status: 200 })) } }));
 
 const { SecureResourceRegistry } = await import("./media-protocol");
+const { MEDIA_ID_LIFETIME_MS } = await import("../src/shared/contracts");
 
 function artworkId(url: string) {
 	return new URL(new SecureResourceRegistry().registerArtwork(url)).pathname.split("/").at(-1) ?? "";
@@ -68,5 +69,47 @@ describe("remote media", () => {
 		expect(response.headers.get("content-length")).toBeNull();
 		expect(cancel).toHaveBeenCalledOnce();
 		expect(log).toHaveBeenCalledWith("media fetch rejected: 403 itag 251");
+	});
+
+	it("refuses an expired id with no body, so the deck errors instead of reading it as audio", async () => {
+		vi.useFakeTimers();
+		try {
+			const registry = new SecureResourceRegistry({ allowedOrigins: ["http://localhost:5173"] });
+			const url = registry.registerMedia({
+				url: "https://example.test/audio",
+				contentLength: 10,
+				fingerprint: { itag: 251, mimeType: "audio/webm", codec: "opus", bitrate: 128_000, durationMs: 1_000 },
+			});
+			const id = new URL(url).pathname.split("/").at(-1) ?? "";
+			const request = () => new Request(url, { headers: { range: "bytes=4-", origin: "http://localhost:5173" } });
+
+			vi.setSystemTime(Date.now() + MEDIA_ID_LIFETIME_MS + 1);
+			const response = await registry.handleMedia(request(), id);
+			expect(response.status).toBe(404);
+			expect(response.body).toBeNull();
+			expect(response.headers.get("access-control-allow-origin")).toBe("http://localhost:5173");
+
+			const unknown = await registry.handleMedia(request(), "gone");
+			expect(unknown.status).toBe(404);
+			expect(unknown.body).toBeNull();
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it("refuses an unsatisfiable range with no body and the length it can serve", async () => {
+		const registry = new SecureResourceRegistry();
+		const url = registry.registerMedia({
+			url: "https://example.test/audio",
+			contentLength: 10,
+			fingerprint: { itag: 251, mimeType: "audio/webm", codec: "opus", bitrate: 128_000, durationMs: 1_000 },
+		});
+		const id = new URL(url).pathname.split("/").at(-1) ?? "";
+
+		const response = await registry.handleMedia(new Request(url, { headers: { range: "bytes=50-" } }), id);
+
+		expect(response.status).toBe(416);
+		expect(response.body).toBeNull();
+		expect(response.headers.get("content-range")).toBe("bytes */10");
 	});
 });

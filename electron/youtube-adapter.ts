@@ -302,6 +302,8 @@ function walk(value: unknown, visit: (node: UnknownRecord) => void, seen = new S
 
 export class YouTubeAdapter {
 	#client?: Innertube;
+	/** The session being built for the current keys, until it lands. */
+	#building?: Promise<Innertube>;
 	#cookie?: string;
 	readonly #continuations = new Map<string, { next: () => Promise<unknown>; skipVideos: boolean }>();
 	/**
@@ -905,18 +907,37 @@ export class YouTubeAdapter {
 		// value. Compared as one string so a single check covers all three.
 		const session = await this.#getSessionOptions();
 		const key = `${session.region ?? ""}|${session.restricted ? "1" : ""}`;
-		if (!this.#client || cookie !== this.#cookie || key !== this.#sessionKey) {
-			await pruneCache(this.#cachePath);
+		if ((!this.#client && !this.#building) || cookie !== this.#cookie || key !== this.#sessionKey) {
 			this.#cookie = cookie;
 			this.#sessionKey = key;
-			this.#client = await Innertube.create({
-				cookie,
-				cache: new UniversalCache(true, this.#cachePath),
-				location: session.region,
-				enable_safety_mode: session.restricted,
-			});
+			const build = pruneCache(this.#cachePath).then(() =>
+				Innertube.create({
+					cookie,
+					cache: new UniversalCache(true, this.#cachePath),
+					location: session.region,
+					enable_safety_mode: session.restricted,
+				})
+			);
+			this.#building = build;
+			try {
+				const client = await build;
+				if (this.#building === build) this.#client = client;
+				return client;
+			} catch (error) {
+				// A create that failed (the network not back yet after a wake) would otherwise leave the old
+				// client standing under the new keys, so every later call reused a session built on rotated
+				// cookies and each stream came back 403. Forgetting the keys makes the next call try again.
+				if (this.#building === build) {
+					this.#cookie = undefined;
+					this.#sessionKey = undefined;
+				}
+				throw error;
+			} finally {
+				if (this.#building === build) this.#building = undefined;
+			}
 		}
-		return this.#client;
+		// A caller arriving mid-rebuild waits for the session its keys name, never the one being replaced.
+		return this.#building ?? (this.#client as Innertube);
 	}
 
 	/**

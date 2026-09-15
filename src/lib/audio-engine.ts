@@ -1,4 +1,11 @@
-import type { NixieBridge, PlaybackSnapshot, QueueContext, Settings, Track } from "#/shared/contracts";
+import {
+	MEDIA_ID_LIFETIME_MS,
+	type NixieBridge,
+	type PlaybackSnapshot,
+	type QueueContext,
+	type Settings,
+	type Track,
+} from "#/shared/contracts";
 import { defaultState } from "#/shared/defaults";
 import { isTrack } from "#/shared/entities";
 import { dbToLinear, normalizationGainDb, normalizationTargets, volumeGain } from "#/shared/normalization";
@@ -72,6 +79,14 @@ const PLAY_START_TIMEOUT_MS = 15_000;
 const SWITCH_LEAD_MS = 80;
 /** Far enough out that a `timeupdate` (roughly every 250ms) always lands inside it. */
 const HANDOFF_ARM_SECONDS = 2;
+/**
+ * A deck is reused only while its media id has this long left to live, so the track resumed on it can
+ * play out before main starts refusing the ranges it still has to fetch. Chromium drops a paused
+ * element's buffer within a minute, so a resume always fetches again and an expired id is silence.
+ * ponytail: one fixed margin rather than the track's remaining length; the error recovery below
+ * catches the rare track that outlives it.
+ */
+const SOURCE_REUSE_MS = MEDIA_ID_LIFETIME_MS - 60 * 60 * 1000;
 
 export function createAudioEngine(deps: AudioEngineDeps = {}): AudioEngine {
 	const random = deps.random ?? Math.random;
@@ -98,6 +113,11 @@ export function createAudioEngine(deps: AudioEngineDeps = {}): AudioEngine {
 	/** Set by the callers of `move` nobody watched happen, and read by `play` on the same tick. */
 	let unwatchedMove = false;
 	let restoreTo = 0;
+	/** When each deck's media was asked for, which is never later than when main minted its id. */
+	const preparedAt: [number, number] = [0, 0];
+	const reusable = (deck: Deck) => Date.now() - preparedAt[deck] < SOURCE_REUSE_MS;
+	/** The generation the one automatic retry after a failed deck runs under. */
+	let recovery = -1;
 
 	const listeners = new Set<() => void>();
 	const positionListeners = new Set<() => void>();
@@ -163,7 +183,23 @@ export function createAudioEngine(deps: AudioEngineDeps = {}): AudioEngine {
 			if (deck === active) move("next", true);
 		});
 		element.addEventListener("error", () => {
+			// The source is what failed, usually an id or a signed URL that expired while nothing played, so
+			// the deck is never reused again, whatever happens next: a pause landing mid-recovery cancels
+			// the fresh resolve, and the next press has to resolve rather than resume this element.
+			preparedAt[deck] = 0;
+			if (preloaded?.deck === deck) preloaded = undefined;
 			if (deck !== active) return;
+			const { status } = state.playback;
+			// Paused, nothing more: the playhead is kept and the next press resolves a fresh source.
+			if (status === "paused") return;
+			// Playing, the same fresh resolve happens at once from where the listener was, one time only:
+			// a stream that fails again straight away is a real failure and is reported as one.
+			if ((status === "playing" || status === "loading") && recovery !== generation) {
+				preloaded = undefined;
+				recovery = generation + 1;
+				void play();
+				return;
+			}
 			// MediaError codes are the only detail the element gives up, and 4 (SRC_NOT_SUPPORTED)
 			// is what an upstream rejection looks like from here.
 			set({ status: "error", errorMessage: `Audio element failed (media error ${element.error?.code ?? 0})` });
@@ -231,8 +267,10 @@ export function createAudioEngine(deps: AudioEngineDeps = {}): AudioEngine {
 	async function prepare(track: Track, deck: Deck, token: number, settings: Settings): Promise<number | undefined> {
 		const bridge = getBridge();
 		if (!bridge) return undefined;
+		const requestedAt = Date.now();
 		const media = await bridge.player.resolve(track.id, settings.quality);
 		if (token !== generation) return undefined;
+		preparedAt[deck] = requestedAt;
 		const target = settings.normalization === "off" ? undefined : normalizationTargets[settings.normalization];
 		const gainDb = target === undefined ? 0 : normalizationGainDb(media.integratedLufs, target);
 		const element = elements[deck];
@@ -388,6 +426,7 @@ export function createAudioEngine(deps: AudioEngineDeps = {}): AudioEngine {
 			state.playback.status === "paused" &&
 			current.id === state.playback.currentTrack?.id &&
 			elements[active]?.src &&
+			reusable(active) &&
 			!preloaded?.restored
 		) {
 			const token = ++generation;
@@ -416,7 +455,7 @@ export function createAudioEngine(deps: AudioEngineDeps = {}): AudioEngine {
 		if (outgoing && outgoing.id !== current.id && position > 0) report(outgoing.id, position);
 
 		const token = ++generation;
-		const fastPath = preloaded?.trackId === current.id ? preloaded : undefined;
+		const fastPath = preloaded?.trackId === current.id && reusable(preloaded.deck) ? preloaded : undefined;
 		// A handoff starts the next deck before the current track has finished, so the deck it leaves
 		// is left running and plays its own tail out under the new one. Every other switch stops it.
 		// Nothing else claims that deck in the meantime: `preloadNext` only reaches it after a resolve,
@@ -424,8 +463,10 @@ export function createAudioEngine(deps: AudioEngineDeps = {}): AudioEngine {
 		if (!handoff || !fastPath) elements[active]?.pause();
 		active = fastPath?.deck ?? active;
 		if (fastPath) gains[active]?.gain.setValueAtTime(dbToLinear(fastPath.gainDb), audioContext?.currentTime ?? 0);
-		// Resuming the current track without an explicit argument keeps the restored position.
-		restoreTo = !track && current.id === state.playback.currentTrack?.id ? state.playback.positionSeconds : 0;
+		// Resuming the current track without an explicit argument keeps the live playhead. The snapshot's
+		// `positionSeconds` is not it: `timeupdate` and `pause` never write there, so a fresh source for a
+		// track paused minutes in would otherwise start back where the session was restored.
+		restoreTo = !track && current.id === state.playback.currentTrack?.id ? position : 0;
 		setPosition(restoreTo);
 		set({
 			currentTrack: current,
@@ -623,7 +664,9 @@ export function createAudioEngine(deps: AudioEngineDeps = {}): AudioEngine {
 		clearHandoff();
 		const element = elements[active];
 		if (element?.src) element.currentTime = seconds;
-		restoreTo = 0;
+		// A source still loading resets the element when its metadata lands, so the seek is carried over
+		// to it rather than written onto the element being replaced and lost.
+		restoreTo = state.playback.status === "loading" ? seconds : 0;
 		setPosition(seconds);
 		set({ positionSeconds: seconds });
 	}

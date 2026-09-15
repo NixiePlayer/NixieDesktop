@@ -363,6 +363,13 @@ export type MusicCommand =
 
 export type MusicEntity = Track | Album | Artist | Playlist | PlaylistItem;
 
+/**
+ * How long main serves a resolved `nixie://app/media/…` id before refusing it. The renderer reads the
+ * same number to stop reusing a deck whose id has run out, which a paused or restored deck otherwise
+ * does after hours without playback.
+ */
+export const MEDIA_ID_LIFETIME_MS = 4 * 60 * 60 * 1000;
+
 export interface ResolvedMedia {
 	url: string;
 	fingerprint: AudioVariantFingerprint;
