@@ -311,7 +311,11 @@ export function createAudioEngine(deps: AudioEngineDeps = {}): AudioEngine {
 				const page = await getBridge()?.music?.query?.({ type: "radio", id: last.id });
 				if (!page || token !== generation) return false;
 				const held = new Set(state.playback.queue.map((item) => item.id));
-				const rows = page.items.filter(isTrack).filter((item) => !held.has(item.id));
+				// An episode's radio is other episodes and a song's is songs, and each keeps to its own: a
+				// podcast queue that ran into music (or the other way round) is the wrong thing to keep going.
+				const rows = page.items
+					.filter(isTrack)
+					.filter((item) => !held.has(item.id) && Boolean(item.episode) === Boolean(last.episode));
 				if (!rows.length) return false;
 				update({ queue: [...state.playback.queue, ...rows] });
 				return true;

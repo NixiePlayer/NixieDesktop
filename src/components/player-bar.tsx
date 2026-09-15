@@ -194,7 +194,7 @@ function NowPlaying({ track, failure }: { track?: Track; failure?: string }) {
 			{/* `shrink-0` beside a `min-w-0` title block: the title gives up width first, these never do. */}
 			{track && (
 				<div className="flex shrink-0 items-center">
-					<Rating track={track} />
+					{!track.episode && <Rating track={track} />}
 					<TrackMenu track={track} />
 				</div>
 			)}

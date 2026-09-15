@@ -1,7 +1,7 @@
 import { Link, useMatchRoute } from "@tanstack/react-router";
 import { ChevronLeft, ChevronRight, Music, Play, ThumbsDown, ThumbsUp } from "lucide-react";
 import { Fragment, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
-import { expandPlays, formatDuration } from "#/lib/format";
+import { expandPlays, formatDuration, formatTotalDuration } from "#/lib/format";
 import { nextRating, rate, useRating } from "#/lib/rating";
 import { cn } from "#/lib/utils";
 import { usePlayback, usePlayer } from "#/player";
@@ -138,6 +138,20 @@ export function TrackLink({
 	children?: React.ReactNode;
 }) {
 	const matchRoute = useMatchRoute();
+	// An episode's title opens its show, the page it belongs to the way a song belongs to its release.
+	if (track.show && !matchRoute({ to: "/playlist/$id", params: { id: track.show.id } })) {
+		return (
+			<Link
+				to="/playlist/$id"
+				params={{ id: track.show.id }}
+				search={{ find: undefined }}
+				className={className}
+				onClick={(event) => event.stopPropagation()}
+			>
+				{children}
+			</Link>
+		);
+	}
 	const id = trackAlbumId(track);
 	// Nowhere deeper to go: upstream named no release, or the reader is already on it. Either way the
 	// title is plain text that does not stop the click, so a row underneath it plays as if the click
@@ -919,7 +933,8 @@ export function TrackRow({
 					{track.plays && expandPlays(track.plays)}
 				</span>
 			)}
-			{showRating && <TrackRating track={track} />}
+			{/* An episode is not rated, and its empty cell still holds the column for the rows around it. */}
+			{showRating && (track.episode ? <span /> : <TrackRating track={track} />)}
 			<div className="flex items-center justify-end gap-1">
 				{/* The cell holds its width whether or not there is a length in it: `auto` collapsed on the
 				    rows that state none, and every column before it slid right on those rows alone. */}
@@ -927,6 +942,101 @@ export function TrackRow({
 					{track.durationSeconds > 0 && formatDuration(track.durationSeconds)}
 				</span>
 				<TrackMenu track={track} extra={action} className="text-muted-foreground" />
+			</div>
+		</EntityContextMenu>
+	);
+}
+
+/**
+ * An episode as YouTube Music draws one: read before it is played, so a paragraph rather than a table
+ * row. The summary is what tells a daily show's episodes apart, and a column headed "Album" means
+ * nothing for one. It keeps `TrackRow`'s split: the row and the button over the artwork play, the
+ * title opens the show.
+ */
+function EpisodeRow({
+	track,
+	queue,
+	context,
+	marked,
+	action,
+}: {
+	track: Track;
+	queue: Track[];
+	context?: QueueContext;
+	marked: boolean;
+	action?: React.ReactNode;
+}) {
+	const engine = usePlayer();
+	const { playback } = usePlayback();
+	const current = playback.currentTrack?.id === track.id;
+	const running = playback.status === "playing" || playback.status === "loading";
+	const row = useRef<HTMLDivElement>(null);
+	const meta = [track.published, track.durationSeconds > 0 && formatTotalDuration(track.durationSeconds)]
+		.filter(Boolean)
+		.join(" • ");
+
+	// The same passive scroll `TrackRow` makes, for the same reason.
+	useEffect(() => {
+		if (marked) row.current?.scrollIntoView({ block: "nearest" });
+	}, [marked]);
+
+	return (
+		<EntityContextMenu
+			item={track}
+			extra={action}
+			render={
+				<div
+					ref={row}
+					className={cn(
+						"group/row hover:bg-accent flex cursor-pointer gap-4 rounded-lg p-3",
+						marked && "bg-accent scroll-mb-24"
+					)}
+					// The containment test is `TrackRow`'s: a portaled menu stays a React child of the row.
+					onClick={(event) => {
+						if (!(event.target instanceof Node) || !row.current?.contains(event.target)) return;
+						void engine.play(track, queue, context);
+					}}
+				/>
+			}
+		>
+			<div className="relative shrink-0 self-start">
+				<Artwork src={track.artworkUrl} className="aspect-video w-28" />
+				<div className="absolute inset-0 flex items-center justify-center">
+					{current && running ? (
+						<span className="bg-background/80 flex size-8 items-center justify-center rounded-full">
+							<PlayingBars paused={playback.status !== "playing"} />
+						</span>
+					) : (
+						<Button
+							variant="secondary"
+							size="icon-sm"
+							aria-label={`Play ${track.title}`}
+							className="rounded-full opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100"
+							onClick={(event) => {
+								event.stopPropagation();
+								void (current ? engine.play() : engine.play(track, queue, context));
+							}}
+						>
+							<Play fill="currentColor" />
+						</Button>
+					)}
+				</div>
+			</div>
+			<div className="flex min-w-0 flex-1 flex-col gap-1.5">
+				<div className="flex items-start gap-2">
+					<span className="flex min-w-0 flex-1 flex-col">
+						<TrackLink
+							track={track}
+							className={cn("line-clamp-2 text-sm font-medium hover:underline", current && "text-primary")}
+						/>
+						<span className="text-muted-foreground truncate text-xs">
+							<ArtistLinks artists={track.artists} />
+						</span>
+					</span>
+					<TrackMenu track={track} extra={action} className="text-muted-foreground" />
+				</div>
+				{track.description && <p className="text-muted-foreground line-clamp-2 text-sm">{track.description}</p>}
+				{meta && <span className="text-muted-foreground text-xs tabular-nums">{meta}</span>}
 			</div>
 		</EntityContextMenu>
 	);
@@ -954,7 +1064,30 @@ export function TrackList({
 	// upstream states the count for all of a list's rows or for none of them. The thumbs go with the
 	// table for a harder reason: reading a rating costs a request per track, and a shelf of five on a
 	// page of shelves is not where that is worth spending.
-	const columns = { album: showAlbum, plays: tracks.some((track) => track.plays), rating: headers };
+	// A show's page is all episodes, which have no thumbs, so it names no column for them either.
+	const columns = {
+		album: showAlbum,
+		plays: tracks.some((track) => track.plays),
+		rating: headers && !tracks.every((track) => track.episode),
+	};
+
+	// A page of nothing but episodes (a show, "New episodes", "Episodes for later") is not a table.
+	if (headers && tracks.length && tracks.every((track) => track.episode)) {
+		return (
+			<div className="flex flex-col gap-1">
+				{tracks.map((track, index) => (
+					<EpisodeRow
+						key={`${track.id}-${index}`}
+						track={track}
+						queue={tracks}
+						context={context}
+						marked={marked === track.id}
+						action={renderAction?.(index)}
+					/>
+				))}
+			</div>
+		);
+	}
 
 	return (
 		<div className="flex flex-col">

@@ -57,6 +57,8 @@ function PlaylistPage() {
 	const [privacy, setPrivacy] = useState(header?.privacy);
 	// Liked music and episodes for later: upstream draws no cover for either and names nobody behind them.
 	const auto = autoPlaylist(id);
+	// A podcast show opens here too, since it lists and plays exactly like a playlist.
+	const show = id.startsWith("MPSP");
 
 	const tracks = items.map((item) => item.track);
 	const visibleTracks =
@@ -70,8 +72,9 @@ function PlaylistPage() {
 			: tracks;
 	const context = { type: "playlist" as const, id, title };
 	const totalSeconds = tracks.reduce((total, track) => total + track.durationSeconds, 0);
-	// The playlist as everyone else reaches it. A browse id carries a `VL` the public URL does not.
-	const shareUrl = `https://music.youtube.com/playlist?list=${id.replace(/^VL/, "")}`;
+	// The playlist as everyone else reaches it. A browse id carries a `VL` (or a show's `MPSP`) the
+	// public URL does not.
+	const shareUrl = `https://music.youtube.com/playlist?list=${id.replace(/^(VL|MPSP)/, "")}`;
 
 	const mutate = async (next: PlaylistItem[], command: MusicCommand) => {
 		const previous = items;
@@ -102,7 +105,7 @@ function PlaylistPage() {
 	return (
 		<div>
 			<DetailHeader
-				kind="Playlist"
+				kind={show ? "Podcast" : "Playlist"}
 				title={title}
 				meta={
 					<span className="flex items-center gap-2">
@@ -113,7 +116,10 @@ function PlaylistPage() {
 							{[
 								header?.author ?? auto?.author,
 								description,
-								plural(items.length, "track"),
+								plural(
+									items.length,
+									show || (tracks.length && tracks.every((track) => track.episode)) ? "episode" : "track"
+								),
 								totalSeconds > 0 && formatTotalDuration(totalSeconds),
 							]
 								.filter(Boolean)
@@ -216,7 +222,8 @@ function PlaylistPage() {
 					// All three commands address the row rather than the song in it, and upstream states a
 					// row's own id only for a playlist this account can edit. Without one there is nothing
 					// to offer here: the video id names the song, and this endpoint refuses it.
-					if (!item?.itemId) return null;
+					// A show is the same: the edit endpoint is addressed by a playlist id, never by `MPSP`.
+					if (show || !item?.itemId) return null;
 					const itemId = item.itemId;
 					return (
 						<>

@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { Innertube } from "youtubei.js";
+import { Innertube, Parser } from "youtubei.js";
 import { isArtist, isTrack } from "../src/shared/entities";
 import {
 	extractEntities,
@@ -13,6 +13,8 @@ import {
 	extractRating,
 	readEntitlement,
 	exploreTitle,
+	episodeLengths,
+	showHeader,
 	feedContinuation,
 	libraryTarget,
 	pruneCache,
@@ -28,7 +30,9 @@ import {
 
 vi.mock("youtubei.js", () => ({
 	Innertube: { create: vi.fn(() => Promise.resolve({})) },
+	Parser: { parseArray: vi.fn(() => []), parseResponse: vi.fn(() => ({})) },
 	UniversalCache: vi.fn(),
+	YTNodes: { MusicMultiRowListItem: class {} },
 }));
 
 const paths: string[] = [];
@@ -573,12 +577,12 @@ describe("home shelves", () => {
 		expect(page.continuation).toBeTruthy();
 	});
 
-	it("drops the podcasts chip, which filters the feed down to rows nothing here plays", () => {
+	it("keeps the podcasts chip, whose episodes play like any other row", () => {
 		const chips = {
 			type: "ChipCloud",
-			chips: [chip("Podcast", "podcast%3D"), chip("Relax", "relax%3D")],
+			chips: [chip("Podcasts", "podcast%3D"), chip("Relax", "relax%3D")],
 		};
-		expect(extractHomeFilters(chips).map((filter) => filter.label)).toEqual(["Relax"]);
+		expect(extractHomeFilters(chips).map((filter) => filter.label)).toEqual(["Podcasts", "Relax"]);
 	});
 
 	it("states nothing upstream about a chip beyond its label", async () => {
@@ -754,9 +758,72 @@ describe("entity extraction", () => {
 		expect(extractEntities(results, identity)).toHaveLength(4);
 		expect(extractEntities(results, identity, true)).toMatchObject([
 			{ id: "aaaaaaaaaaa" },
-			{ id: "ccccccccccc" },
+			{ id: "ccccccccccc", episode: true },
 			{ id: "MPSPPLddddddddd" },
 		]);
+	});
+
+	it("reads an episode row, the show it links, and the podcast shapes carrying no item type", () => {
+		const showRun = (text: string) => ({
+			text,
+			endpoint: {
+				payload: {
+					browseId: "MPSPPLdaily",
+					browseEndpointContextSupportedConfigs: {
+						browseEndpointContextMusicConfig: { pageType: "MUSIC_PAGE_TYPE_PODCAST_SHOW_DETAIL_PAGE" },
+					},
+				},
+			},
+		});
+		const feed = {
+			contents: [
+				// A show's own playlist row: the second column links the show.
+				{
+					id: "_lg1MZt6Q-I",
+					item_type: "non_music_track",
+					title: "The Bond Market Is Flipping Out",
+					flex_columns: [
+						{ title: { text: "The Bond Market Is Flipping Out", runs: [{ text: "The Bond Market Is Flipping Out" }] } },
+						{ title: { text: "The Daily", runs: [showRun("The Daily")] } },
+						{ title: { text: "Sep 15, 2026", runs: [{ text: "Sep 15, 2026" }] } },
+					],
+					// The parse sets no `duration` on this kind of row, and states the length only here.
+					fixed_columns: [{ title: { text: "28:29" } }],
+				},
+				// A Home episode: no id or item type, only the video its tap plays, and a view count beneath.
+				{
+					type: "MusicMultiRowListItem",
+					title: { text: "The history of astronaut food" },
+					subtitle: { text: "56K views • 4d ago" },
+					on_tap: {
+						payload: {
+							videoId: "AN2J7WcdTy8",
+							watchEndpointMusicSupportedConfigs: {
+								watchEndpointMusicConfig: { musicVideoType: "MUSIC_VIDEO_TYPE_PODCAST_EPISODE" },
+							},
+						},
+					},
+				},
+				// A show card, which youtubei.js types as a video.
+				{ id: "MPSPPLcard", item_type: "video", title: "Record Night Podcast" },
+			],
+		};
+		expect(extractEntities(feed, identity, true)).toEqual([
+			expect.objectContaining({
+				id: "_lg1MZt6Q-I",
+				episode: true,
+				show: { id: "MPSPPLdaily", title: "The Daily" },
+				artists: [{ id: "", name: "The Daily" }],
+				durationSeconds: 1709,
+				plays: undefined,
+			}),
+			expect.objectContaining({ id: "AN2J7WcdTy8", episode: true, show: undefined, artists: [] }),
+			expect.objectContaining({ id: "MPSPPLcard", title: "Record Night Podcast" }),
+		]);
+	});
+
+	it("marks nothing about a song as an episode", () => {
+		expect(extractEntities(shelf, identity)[0]).not.toHaveProperty("episode");
 	});
 
 	it("drops a playlist covered by a video frame, which is one from YouTube proper", () => {
@@ -1127,6 +1194,145 @@ describe("playlist header", () => {
 
 	it("leaves the page alone when upstream sent no header", () => {
 		expect(withPlaylistHeader("VLPLcool", {}, [], (url) => url)).toEqual([]);
+	});
+});
+
+describe("podcast show", () => {
+	it("reads rows off the playlist behind the show and the header off the show's own browse", async () => {
+		const header = {
+			type: "MusicResponsiveHeader",
+			title: { text: "The Daily" },
+			strapline_text_one: { text: "New York Times Podcasts" },
+			description: { type: "MusicDescriptionShelf", description: { text: "This is how the news should sound." } },
+			thumbnail: { type: "MusicThumbnail", contents: [{ url: "https://i.ytimg.com/podcasts_artwork/daily.jpg" }] },
+		};
+		const getPlaylist = vi.fn().mockResolvedValue({
+			contents: [{ id: "_lg1MZt6Q-I", item_type: "non_music_track", title: "The Bond Market Is Flipping Out" }],
+		});
+		// The show's own reading of the same episode, the only one stating its summary and its age.
+		const episode = {
+			type: "MusicMultiRowListItem",
+			title: { text: "The Bond Market Is Flipping Out" },
+			subtitle: { text: "Sep 15, 2026" },
+			description: { text: "Why bonds are moving." },
+			on_tap: {
+				payload: {
+					videoId: "_lg1MZt6Q-I",
+					watchEndpointMusicSupportedConfigs: {
+						watchEndpointMusicConfig: { musicVideoType: "MUSIC_VIDEO_TYPE_PODCAST_EPISODE" },
+					},
+				},
+			},
+		};
+		// Raw, since parsed whole the shelf holding that episode comes back empty.
+		const rawEpisode = { musicMultiRowListItemRenderer: { title: { runs: [{ text: episode.title.text }] } } };
+		const data = { contents: { musicShelfRenderer: { contents: [rawEpisode] } } };
+		const execute = vi.fn().mockResolvedValue({ data });
+		vi.mocked(Parser.parseResponse).mockImplementationOnce((response) => {
+			expect(response).toBe(data);
+			return { contents: { is_array: false, item: () => ({ type: "SectionList", contents: [header] }) } } as never;
+		});
+		vi.mocked(Parser.parseArray).mockImplementationOnce((rows) => {
+			expect(rows).toEqual([rawEpisode]);
+			return [episode] as never;
+		});
+		vi.mocked(Innertube.create).mockResolvedValueOnce({ actions: { execute }, music: { getPlaylist } } as never);
+		const adapter = new YouTubeAdapter(
+			{ registerArtwork: identity } as never,
+			join(tmpdir(), "nixie-cache-missing"),
+			() => Promise.resolve("SID=show")
+		);
+
+		const page = await adapter.query({ type: "playlist", id: "MPSPPLdaily" });
+
+		expect(getPlaylist).toHaveBeenCalledExactlyOnceWith("VLPLdaily");
+		expect(execute).toHaveBeenCalledExactlyOnceWith("/browse", {
+			browseId: "MPSPPLdaily",
+			client: "YTMUSIC",
+			parse: false,
+		});
+		expect(page.items).toMatchObject([
+			{
+				id: "MPSPPLdaily",
+				title: "The Daily",
+				author: "New York Times Podcasts",
+				description: "This is how the news should sound.",
+			},
+			{ id: "_lg1MZt6Q-I", episode: true, description: "Why bonds are moving.", published: "Sep 15, 2026" },
+		]);
+	});
+
+	it("reads new episodes off the raw rows youtubei.js drops out of their shelf", async () => {
+		const row = {
+			musicMultiRowListItemRenderer: {
+				title: { runs: [{ text: "La Zanzara" }] },
+				onTap: { watchEndpoint: { videoId: "0ri0d1dqoms" } },
+				playbackProgress: {
+					musicPlaybackProgressRenderer: { durationText: { runs: [{ text: " • " }, { text: "1 hr 30 min" }] } },
+				},
+			},
+		};
+		const getPlaylist = vi.fn().mockResolvedValue({
+			contents: [],
+			header: { type: "MusicResponsiveHeader", title: { text: "New Episodes" } },
+		});
+		const execute = vi.fn().mockResolvedValue({
+			data: { contents: { sectionListRenderer: { contents: [{ musicShelfRenderer: { contents: [row] } }] } } },
+		});
+		vi.mocked(Parser.parseArray).mockImplementationOnce((rows) => {
+			expect(rows).toEqual([row]);
+			return [
+				{
+					type: "MusicMultiRowListItem",
+					title: { text: "La Zanzara" },
+					on_tap: {
+						payload: {
+							videoId: "0ri0d1dqoms",
+							watchEndpointMusicSupportedConfigs: {
+								watchEndpointMusicConfig: { musicVideoType: "MUSIC_VIDEO_TYPE_PODCAST_EPISODE" },
+							},
+						},
+					},
+				},
+			] as never;
+		});
+		vi.mocked(Innertube.create).mockResolvedValueOnce({ actions: { execute }, music: { getPlaylist } } as never);
+		const adapter = new YouTubeAdapter(
+			{ registerArtwork: identity } as never,
+			join(tmpdir(), "nixie-cache-missing"),
+			() => Promise.resolve("SID=episodes")
+		);
+
+		const page = await adapter.query({ type: "playlist", id: "VLRDPN" });
+
+		expect(execute).toHaveBeenCalledExactlyOnceWith("/browse", { browseId: "VLRDPN", client: "YTMUSIC", parse: false });
+		expect(page.items).toMatchObject([
+			{ id: "VLRDPN", title: "New episodes" },
+			{ id: "0ri0d1dqoms", episode: true, durationSeconds: 5400 },
+		]);
+	});
+
+	it("reads an episode's length out of upstream's English words", () => {
+		const row = (videoId: string, words: string) => ({
+			musicMultiRowListItemRenderer: {
+				onTap: { watchEndpoint: { videoId } },
+				playbackProgress: { musicPlaybackProgressRenderer: { durationText: { runs: [{ text: words }] } } },
+			},
+		});
+		expect(episodeLengths([row("a", "1 hr 30 min"), row("b", "45 min"), row("c", "2 hr"), row("d", "Played")])).toEqual(
+			new Map([
+				["a", { durationSeconds: 5400 }],
+				["b", { durationSeconds: 2700 }],
+				["c", { durationSeconds: 7200 }],
+			])
+		);
+	});
+
+	it("finds a show's header inside the contents", () => {
+		expect(showHeader({ contents: [{ type: "MusicShelf" }, { type: "MusicResponsiveHeader", title: "x" }] })).toEqual({
+			type: "MusicResponsiveHeader",
+			title: "x",
+		});
 	});
 });
 

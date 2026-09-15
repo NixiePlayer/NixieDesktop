@@ -36,6 +36,8 @@ describe("entity guards", () => {
 	it("labels a mixed search row by what it is", () => {
 		expect([track, album, artist, playlist].map(entityKind)).toEqual(["Song", "Album", "Artist", "Playlist"]);
 		expect(entityKind({ ...album, kind: "Single" })).toBe("Single");
+		expect(entityKind({ ...track, episode: true })).toBe("Episode");
+		expect(entityKind({ id: "MPSPPLdaily", title: "The Daily" })).toBe("Podcast");
 		// A search row carries no length, and "0 tracks" would read as an empty playlist.
 		expect(entitySubtitle({ id: "p2", title: "Best of" })).toBe("");
 	});
@@ -73,6 +75,8 @@ describe("auto-generated playlists", () => {
 			description: "Songs you like in YouTube Music appear here.",
 		});
 		expect(autoPlaylist("VLSE")).toMatchObject({ title: "Episodes for later" });
+		// Upstream states this one's cover itself, so only its name and author are ours.
+		expect(autoPlaylist("VLRDPN")).toEqual({ title: "New episodes", author: "Auto-generated" });
 		expect(entityTitle({ id: "VLLM", title: "Liked Music" })).toBe("Liked music");
 		expect(entitySubtitle({ id: "VLLM", title: "Liked Music" })).toBe("Auto-generated");
 		expect(entityArtwork({ id: "VLSE", title: "Episodes for Later" })).toBe(autoPlaylist("SE")?.artworkUrl);

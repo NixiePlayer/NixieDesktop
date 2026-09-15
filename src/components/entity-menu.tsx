@@ -11,6 +11,7 @@ import {
 	ListStart,
 	MoreHorizontal,
 	Plus,
+	Podcast,
 	Radio,
 	Search,
 	Shuffle,
@@ -49,6 +50,7 @@ import {
 	isArtist,
 	isPlaylist,
 	isPlaylistItem,
+	isPodcast,
 	isTrack,
 	trackAlbumId,
 	toTracks,
@@ -180,7 +182,7 @@ function shareUrl(item: Subject): string {
 	if (isTrack(item)) return `${base}/watch?v=${item.id}`;
 	if (isArtist(item)) return `${base}/channel/${item.id}`;
 	if (isAlbum(item)) return `${base}/browse/${item.id}`;
-	return `${base}/playlist?list=${item.id.replace(/^VL/, "")}`;
+	return `${base}/playlist?list=${item.id.replace(/^(VL|MPSP)/, "")}`;
 }
 
 /**
@@ -218,8 +220,13 @@ function MenuItems({
 	const albumId = track && trackAlbumId(track);
 	const artist = isArtist(item) ? item : (isTrack(item) || isAlbum(item) ? item.artists : []).find((one) => one.id);
 	// Only a release is held in the library. An artist is followed instead, and a song is liked.
-	const savable = isAlbum(item) || isPlaylist(item);
-	const deletable = isPlaylist(item) && !autoPlaylist(item.id);
+	// ponytail: a podcast show offers no save, delete or add-to-playlist. None of those writes has been
+	// seen to accept an `MPSP` id, and a menu promising one would only ever roll back. Verify them live
+	// against a signed-in account before offering any of them.
+	// Annotated so it is a plain boolean: an aliased type guard, negated, narrows the playlist away entirely.
+	const podcast: boolean = isPodcast(item);
+	const savable = (isAlbum(item) || isPlaylist(item)) && !podcast;
+	const deletable = isPlaylist(item) && !autoPlaylist(item.id) && !podcast;
 
 	const shuffle = () =>
 		run("Could not shuffle this", async () => {
@@ -289,7 +296,8 @@ function MenuItems({
 	return (
 		<DropdownMenuContent align="start" side="inline-end" alignOffset={0} sideOffset={0} className="w-56">
 			<DropdownMenuGroup>
-				{!track && !isArtist(item) && (
+				{/* A show runs newest first and an episode out of order is the wrong one, so it never shuffles. */}
+				{!track && !isArtist(item) && !podcast && (
 					<DropdownMenuItem onClick={() => void shuffle()}>
 						<Shuffle />
 						Shuffle play
@@ -325,7 +333,7 @@ function MenuItems({
 				{/* The thumbs stay stateless: reading a rating costs a request per row, so only the player
 				    bar, which shows them, pays for it. Whether the library holds something is free, since
 				    the store already knows what the library pages listed and what this session saved. */}
-				{track && (
+				{track && !track.episode && (
 					<>
 						<DropdownMenuItem onClick={() => void rate(track.id, "like")}>
 							<ThumbsUp />
@@ -351,7 +359,7 @@ function MenuItems({
 				)}
 				{/* An artist is the one thing with no track list of its own worth saving: the page is releases
 				    and a top-songs shelf, and "save the artist to a playlist" means nothing upstream. */}
-				{!isArtist(item) && (
+				{!isArtist(item) && !podcast && (
 					<DropdownMenuSub>
 						<DropdownMenuSubTrigger>
 							<ListPlus />
@@ -379,6 +387,14 @@ function MenuItems({
 				{/* A link inside a menu item is fine where one inside the row is not: the popup is
 				    portaled, so it is nobody's descendant. Both are omitted when upstream named a
 				    release or an artist without identifying one, which leaves nowhere to go. */}
+				{track?.show && (
+					<DropdownMenuItem
+						render={<Link to="/playlist/$id" params={{ id: track.show.id }} search={{ find: undefined }} />}
+					>
+						<Podcast />
+						Go to podcast
+					</DropdownMenuItem>
+				)}
 				{albumId && (
 					<DropdownMenuItem render={<Link to="/album/$id" params={{ id: albumId }} search={{ track: track?.id }} />}>
 						<Disc3 />

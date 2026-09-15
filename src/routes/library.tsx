@@ -4,14 +4,16 @@ import { MediaGrid, PageTitle } from "#/components/media";
 import { Tabs, TabsList, TabsTrigger } from "#/components/ui/tabs";
 import { queryMusic } from "#/lib/api";
 import { markHeld } from "#/lib/library";
-import { isAlbum, isArtist, isPlaylist, isTrack } from "#/shared/entities";
+import type { MusicEntity } from "#/shared/contracts";
+import { isAlbum, isArtist, isPlaylist, isPodcast, isTrack } from "#/shared/entities";
 
 const filters = [
 	{ value: "all", label: "All", match: () => true },
-	{ value: "playlists", label: "Playlists", match: isPlaylist },
+	{ value: "playlists", label: "Playlists", match: (item: MusicEntity) => isPlaylist(item) && !isPodcast(item) },
+	{ value: "podcasts", label: "Podcasts", match: isPodcast },
 	{ value: "albums", label: "Albums", match: isAlbum },
 	{ value: "artists", label: "Artists", match: isArtist },
-	{ value: "songs", label: "Songs", match: isTrack },
+	{ value: "songs", label: "Songs", match: (item: MusicEntity) => isTrack(item) && !item.episode },
 ] as const;
 
 export const Route = createFileRoute("/library")({

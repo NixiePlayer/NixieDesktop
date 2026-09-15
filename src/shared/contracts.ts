@@ -72,6 +72,18 @@ export interface Track {
 	 * survivors off then renumbers everything under the first one dropped.
 	 */
 	rank?: number;
+	/**
+	 * A podcast episode rather than a song. It plays through the same audio path, and it is still a
+	 * `Track` because everything that plays, queues and persists is keyed on the video id alone; the
+	 * flag is what keeps music-only controls (thumbs, lyrics, a music radio) off it.
+	 */
+	episode?: true;
+	/** The show an episode belongs to, where its title links. A browse id (`MPSP…`), opened as a playlist. */
+	show?: { id: RemoteId; title: string };
+	/** An episode's summary, as upstream states it. */
+	description?: string;
+	/** How long ago an episode came out ("19h ago"), upstream's own words. Only ever shown. */
+	published?: string;
 }
 
 export interface Playlist {

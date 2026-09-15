@@ -35,9 +35,13 @@ export function dropHeldPages() {
 	heldFeeds.explore = undefined;
 }
 
-/** Auto-generated, and the browse id a card carries prefixes it again. Nothing else is drawn fresh. */
+/**
+ * Auto-generated, and the browse id a card carries prefixes it again. Nothing else is drawn fresh.
+ * `RDPN` is the exception: it is the newest episodes of every saved show, the same list on every ask
+ * until a show publishes, so holding it would hide a new episode until the app restarts.
+ */
 const mixKey = (request: MusicQuery) =>
-	request.type === "playlist" && !request.continuation && /^(?:VL)?RD/.test(request.id) ? request.id : undefined;
+	request.type === "playlist" && !request.continuation && /^(?:VL)?RD(?!PN$)/.test(request.id) ? request.id : undefined;
 
 /**
  * `fresh` skips that hold, and a walk through every page of a mix passes it: the held page carries

@@ -474,6 +474,16 @@ describe("audio engine", () => {
 		expect(engine.getSnapshot().playback.currentTrack?.id).toBe("r1");
 	});
 
+	it("keeps an episode's radio to episodes", async () => {
+		const episode = (id: string) => ({ ...track(id), episode: true as const });
+		const { engine } = harness({ radio: [track("song"), episode("e2")] });
+		await engine.start();
+		const queue = [episode("e1")];
+		await engine.play(queue[0], queue);
+
+		await vi.waitFor(() => expect(engine.getSnapshot().playback.queue.map((row) => row.id)).toEqual(["e1", "e2"]));
+	});
+
 	it("stops at the end of the queue when autoplay is off, without asking for a radio", async () => {
 		const { engine, audio, query, stored } = harness({ radio: [track("r1")] });
 		stored.settings.autoplay = false;

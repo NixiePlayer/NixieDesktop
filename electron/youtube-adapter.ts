@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { readdir, rm, stat, unlink } from "node:fs/promises";
 import { join } from "node:path";
-import { Innertube, UniversalCache, YTMusic } from "youtubei.js";
+import { Innertube, Parser, UniversalCache, YTMusic, YTNodes } from "youtubei.js";
 import type { AccountSettingEndpoints } from "../src/shared/account-settings";
 import { extractAccountSettings } from "../src/shared/account-settings";
 import type {
@@ -261,6 +261,95 @@ export function monthlyListeners(data: unknown): string | undefined {
 }
 
 /**
+ * Whether a row is a podcast episode, and the show it names when it links one. Upstream states the
+ * first unlocalised in two ways: the watch endpoint's `musicVideoType`, and the title's browse to an
+ * episode page. The show is the one run linking an `MPSP` browse id. Only the row's own byline fields
+ * are searched, never its menu, whose "Go to podcast" links the same id under a label of its own.
+ */
+function episodeFrom(node: UnknownRecord): Pick<Track, "episode" | "show"> {
+	let episode = node.item_type === "non_music_track";
+	walk([node.endpoint, node.on_tap, node.flex_columns], (child) => {
+		if (
+			child.musicVideoType === "MUSIC_VIDEO_TYPE_PODCAST_EPISODE" ||
+			child.pageType === "MUSIC_PAGE_TYPE_NON_MUSIC_AUDIO_TRACK_PAGE"
+		)
+			episode = true;
+	});
+	if (!episode) return {};
+	let show: Track["show"];
+	walk([node.flex_columns, node.subtitle, node.second_title], (child) => {
+		const id = firstString(endpointPayload(child) ?? {}, "browseId");
+		const title = typeof child.text === "string" ? child.text : undefined;
+		if (!show && id?.startsWith("MPSP") && title) show = { id, title };
+	});
+	return { episode: true, show };
+}
+
+/** The "28:29" a row states in its first fixed column, or zero when it states none there. */
+function fixedDuration(node: UnknownRecord): number {
+	const column = Array.isArray(node.fixed_columns) ? node.fixed_columns[0] : undefined;
+	const length = record(column) ? text(column.title) : undefined;
+	return length && /^\d+(?::\d+)+$/.test(length) ? numberValue(length) : 0;
+}
+
+/**
+ * An episode's length as a raw multi-row item states it, which the parse drops: only in the playback
+ * progress beside the row, and only as words ("1 hr 30 min"). The session sets no language, so
+ * upstream answers in English and the words are fixed. A text that does not match states no length.
+ */
+export function episodeLengths(rows: UnknownRecord[]): Map<string, Partial<Track>> {
+	const lengths = new Map<string, Partial<Track>>();
+	for (const row of rows) {
+		let id: string | undefined;
+		let words: string | undefined;
+		walk(row, (node) => {
+			if (!id && typeof node.videoId === "string") id = node.videoId;
+			if (!words && record(node.durationText)) words = text(node.durationText);
+		});
+		const hours = Number(/(\d+)\s*hr/.exec(words ?? "")?.[1] ?? 0);
+		const minutes = Number(/(\d+)\s*min/.exec(words ?? "")?.[1] ?? 0);
+		if (id && (hours || minutes)) lengths.set(id, { durationSeconds: (hours * 60 + minutes) * 60 });
+	}
+	return lengths;
+}
+
+/** What another reading of the same episodes states, merged by video id onto the rows missing it. */
+export function withEpisodeDetails(items: MusicEntity[], details: Map<string, Partial<Track>>): MusicEntity[] {
+	if (!details.size) return items;
+	return items.map((item) => {
+		const found = isTrack(item) ? details.get(item.id) : undefined;
+		if (!isTrack(item) || !found) return item;
+		return {
+			...item,
+			durationSeconds: item.durationSeconds || found.durationSeconds || 0,
+			description: item.description ?? found.description,
+			published: item.published ?? found.published,
+		};
+	});
+}
+
+/** Every raw episode multi-row item in a response, still wrapped the way `Parser` takes a node. */
+export function multiRowNodes(data: unknown): UnknownRecord[] {
+	const rows: UnknownRecord[] = [];
+	walk(data, (node) => {
+		if (record(node.musicMultiRowListItemRenderer)) rows.push(node);
+	});
+	return rows;
+}
+
+/**
+ * A show's page header. It sits inside the contents rather than in the response's own header, so it
+ * is found by type, the same way `exploreTitle` finds a destination's.
+ */
+export function showHeader(contents: unknown): UnknownRecord | undefined {
+	let header: UnknownRecord | undefined;
+	walk(contents, (node) => {
+		if (!header && node.type === "MusicResponsiveHeader") header = node;
+	});
+	return header;
+}
+
+/**
  * Where a chart puts the row, as upstream numbers it. It has to come from the response rather than
  * from the row's position: a row of a kind `extractEntities` has no entity for is dropped on the way
  * here, and counting the survivors off then renumbers everything under the first one dropped.
@@ -489,11 +578,49 @@ export class YouTubeAdapter {
 				};
 			}
 			case "playlist": {
-				const source = await client.music.getPlaylist(request.id);
+				// A podcast show is two requests for one page. `getPlaylist` on its own `MPSP` id answers no
+				// rows at all, while the playlist behind it (`VL` plus the id without `MPSP`) answers parsed
+				// episode rows with their lengths and a working continuation, and no header. The show's own
+				// browse is the only thing stating its title, publisher, description and cover, but its rows
+				// are multi-row items whose length the parse drops and whose continuation is a bare token.
+				const show = request.id.startsWith("MPSP");
+				const registerArtwork = (url: string) => this.#resources.registerArtwork(url);
+				// Episode multi-row items sit inside a `MusicShelf`, which youtubei.js parses as a shelf of
+				// list items only, so the parse drops every one of them. The raw response still carries
+				// them, and parsed one at a time they are the same nodes a Home episode shelf is made of.
+				const episodes = (rows: UnknownRecord[]) =>
+					extractEntities({ contents: Parser.parseArray(rows, YTNodes.MusicMultiRowListItem) }, registerArtwork);
+				const [source, raw] = await Promise.all([
+					client.music.getPlaylist(show ? `VL${request.id.slice(4)}` : request.id),
+					// Raw for that reason: parsed whole, the show's browse states its header and not one row.
+					show
+						? client.actions.execute("/browse", { browseId: request.id, client: "YTMUSIC", parse: false })
+						: undefined,
+				]);
 				const page = this.#page(source);
+				let items = page.items;
+				// "New episodes" (`RDPN`) is nothing but such a shelf, so its parsed playlist reads as empty.
+				// Only an empty page asks again.
+				if (!show && !items.length) {
+					const response = await client.actions.execute("/browse", {
+						browseId: `VL${request.id.replace(/^VL/, "")}`,
+						client: "YTMUSIC",
+						parse: false,
+					});
+					const rows = multiRowNodes(response.data);
+					items = withEpisodeDetails(episodes(rows), episodeLengths(rows));
+				}
+				// The show's own browse is the only reading of its episodes that states their summaries and
+				// ages, and it is already in hand for the header.
+				let header: UnknownRecord | undefined;
+				if (raw) {
+					header = showHeader(unwrapParsed(Parser.parseResponse(raw.data).contents));
+					const details = episodes(multiRowNodes(raw.data)).filter(isTrack);
+					items = withEpisodeDetails(items, new Map(details.map((episode) => [episode.id, episode])));
+				}
 				return {
 					...page,
-					items: withPlaylistHeader(request.id, source, page.items, (url) => this.#resources.registerArtwork(url)),
+					items: withPlaylistHeader(request.id, show ? { header } : source, items, registerArtwork),
 				};
 			}
 		}
@@ -1172,9 +1299,8 @@ export function extractSections(value: unknown, registerArtwork: (url: string) =
  * `#home` mints the parameters into an opaque token, so nothing upstream states about a chip reaches
  * the renderer. The chip a response already answers is marked selected and carries no parameters.
  *
- * The podcasts chip is dropped: Nixie does not play them, so it is a feed of dead rows. It is
- * matched on the label, which is the "podcast" loanword in most locales, since the params behind a
- * chip are an opaque protobuf with nothing stable to test and every chip shares one browse id.
+ * The podcasts chip is kept: its shelves are episodes, which `extractEntities` reads off their
+ * multi-row items and which play like any other row.
  */
 export function extractHomeFilters(
 	value: unknown
@@ -1183,7 +1309,7 @@ export function extractHomeFilters(
 	walk(value, (node) => {
 		if (node.type !== "ChipCloudChip") return;
 		const label = firstString(node, "text");
-		if (!label || /podcast/i.test(label) || filters.some((filter) => filter.label === label)) return;
+		if (!label || filters.some((filter) => filter.label === label)) return;
 		const endpoint = record(node.endpoint) ? node.endpoint : undefined;
 		const payload = endpoint && record(endpoint.payload) ? endpoint.payload : undefined;
 		filters.push({
@@ -1214,8 +1340,13 @@ export function feedContinuation(value: unknown): string | undefined {
  *
  * `skipVideos` drops the `video` kind, which is the music videos, lyric uploads and hour-long mixes
  * a search for an artist does not mean to return. Search and Explore set it, while a feed or a
- * playlist that holds a video means to hold it. Podcast episodes (`non_music_track`) and shows
- * (`podcast_show`) are kept: they are results someone searched for.
+ * playlist that holds a video means to hold it. Podcast episodes and shows are kept: they are
+ * results someone searched for, and the podcasts chip on Home is nothing else.
+ *
+ * Two podcast shapes carry no `id`/`item_type` pair of their own. An episode on a Home shelf is a
+ * `MusicMultiRowListItem`, addressed by the video its tap plays. A show drawn as a card is a
+ * `MusicTwoRowItem`, which youtubei.js types as a video because it knows no podcast page type, so it
+ * is recognised by its `MPSP` browse id instead.
  */
 export function extractEntities(
 	value: unknown,
@@ -1226,12 +1357,21 @@ export function extractEntities(
 	const ids = new Set<string>();
 	walk(value, (node) => {
 		if (items.length >= 100) return;
-		const id = firstString(node, "id");
-		const kind = typeof node.item_type === "string" ? node.item_type : undefined;
+		const multiRow = node.type === "MusicMultiRowListItem";
+		const onTap = multiRow ? endpointPayload({ endpoint: node.on_tap }) : undefined;
+		const id = firstString(node, "id") ?? (onTap && firstString(onTap, "videoId"));
+		const kind = id?.startsWith("MPSP")
+			? "podcast_show"
+			: multiRow
+				? "non_music_track"
+				: typeof node.item_type === "string"
+					? node.item_type
+					: undefined;
 		const title = firstString(node, "title", "name");
 		if (!id || !kind || !title || ids.has(id)) return;
+		const episode = kind === "song" || kind === "video" || kind === "non_music_track" ? episodeFrom(node) : {};
 		// Before the id is claimed, so the same upload reappearing as a real song is still taken.
-		if (skipVideos && kind === "video") return;
+		if (skipVideos && kind === "video" && !episode.episode) return;
 		ids.add(id);
 		const artworkUrl = thumbnail(node);
 		const artwork = artworkUrl ? registerArtwork(artworkUrl) : undefined;
@@ -1259,15 +1399,36 @@ export function extractEntities(
 					id,
 					title,
 					// An album row arrives with no artist at all. Leave it empty rather than inventing one,
-					// so `withAlbumHeader` can fill it from the album the row belongs to.
-					artists: artists.length ? artists : subtitle ? [artistFrom({ name: subtitle })] : [],
+					// so `withAlbumHeader` can fill it from the album the row belongs to. An episode's byline is
+					// its show, unlinked here since the title already links it, and never its subtitle, which
+					// on a Home shelf is a view count and an age.
+					artists: episode.episode
+						? episode.show
+							? [{ id: "", name: episode.show.title }]
+							: []
+						: artists.length
+							? artists
+							: subtitle
+								? [artistFrom({ name: subtitle })]
+								: [],
 					album,
 					albumId: album ? undefined : albumIdFrom(node),
-					durationSeconds: numberValue(record(node.duration) ? node.duration.seconds : node.duration),
+					// An episode row states its length in the fixed column the parse reads for a song and a
+					// video only, so it is read off the column itself when `duration` is missing.
+					durationSeconds:
+						numberValue(record(node.duration) ? node.duration.seconds : node.duration) || fixedDuration(node),
 					artworkUrl: artwork,
 					explicit: explicitFrom(node) || undefined,
 					plays: playsFrom(node),
 					rank: rankFrom(node),
+					...episode,
+					// An episode is read before it is played: a daily show's titles are the same words and a
+					// date, and the summary is what tells one from the next. The age is the last segment of a
+					// multi-row item's subtitle, which on a Home shelf opens with a view count.
+					...(episode.episode && {
+						description: firstString(node, "description"),
+						published: multiRow ? subtitle?.split(" • ").at(-1) : undefined,
+					}),
 				};
 				// A row of an editable playlist is wrapped in the id that addresses it there, which is the
 				// only thing `/playlist` can remove or move. Everywhere else a song is just a song.
@@ -1369,6 +1530,8 @@ export function extractQueueTracks(value: unknown, registerArtwork: (url: string
 			durationSeconds: numberValue(record(node.duration) ? node.duration.seconds : node.duration),
 			artworkUrl: artwork,
 			explicit: explicitFrom(node) || undefined,
+			// A queue row keeps its show only as the byline text above, so an episode here links nowhere.
+			...episodeFrom(node),
 		});
 	});
 	return tracks;
@@ -1466,10 +1629,13 @@ export function withSearchTopResult(
 	let top: MusicEntity;
 	if (videoId) {
 		const runs = record(card.subtitle) && Array.isArray(card.subtitle.runs) ? card.subtitle.runs : [];
+		// A card for an episode is an episode, bylined by its show like every other episode row.
+		const episode = episodeFrom(card);
 		top = {
+			...episode,
 			id,
 			title,
-			artists,
+			artists: episode.show ? [{ id: "", name: episode.show.title }] : artists,
 			albumId: albumIdFrom(card),
 			durationSeconds: runs.map(text).map(numberValue).filter(Boolean).at(-1) ?? 0,
 			artworkUrl: artwork,
@@ -1487,6 +1653,7 @@ export function withSearchTopResult(
 				break;
 			case "MUSIC_PAGE_TYPE_PLAYLIST":
 			case "MUSIC_PAGE_TYPE_PODCAST_SHOW":
+			case "MUSIC_PAGE_TYPE_PODCAST_SHOW_DETAIL_PAGE":
 				top = { id, title, artworkUrl: artwork, author: firstString(card, "subtitle") } satisfies Playlist;
 				break;
 			default:

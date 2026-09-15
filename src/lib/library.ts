@@ -2,7 +2,7 @@ import { useEffect, useSyncExternalStore } from "react";
 import { toast } from "#/components/ui/toast";
 import { queryMusic } from "#/lib/api";
 import type { MusicCommand, MusicEntity, Playlist } from "#/shared/contracts";
-import { isAlbum, isArtist, isPlaylist } from "#/shared/entities";
+import { isAlbum, isArtist, isPlaylist, isPodcast } from "#/shared/entities";
 
 /**
  * What the account holds, and the one place that says so. Same reason the ratings are a store: the
@@ -43,7 +43,8 @@ export function markHeld(items: MusicEntity[]) {
 function readPlaylists() {
 	reading ??= queryMusic({ type: "library", filter: "playlists" })
 		.then((page) => {
-			playlists = page.items.filter(isPlaylist);
+			// A saved show is listed beside the playlists, and it is nowhere to put a song.
+			playlists = page.items.filter((item) => isPlaylist(item) && !isPodcast(item));
 			markHeld(playlists);
 			emit();
 		})

@@ -124,7 +124,14 @@ function validTrack(value: unknown): value is Track {
 		value.durationSeconds <= 86_400 &&
 		optionalString(value.artworkUrl, 4096) &&
 		(value.explicit === undefined || typeof value.explicit === "boolean") &&
-		optionalString(value.plays, 100)
+		optionalString(value.plays, 100) &&
+		(value.episode === undefined || value.episode === true) &&
+		(value.show === undefined ||
+			(record(value.show) &&
+				typeof value.show.id === "string" &&
+				validId(value.show.id) &&
+				value.show.id.startsWith("MPSP") &&
+				boundedString(value.show.title, 300)))
 	);
 }
 

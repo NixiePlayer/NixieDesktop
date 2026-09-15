@@ -72,7 +72,8 @@ function LyricsPane({ active, scrollRef }: { active: boolean; scrollRef: RefObje
 
 	useEffect(() => {
 		setLyrics(undefined);
-		if (!track) return;
+		// No provider holds lyrics for a spoken episode, so asking all three is three requests for nothing.
+		if (!track || track.episode) return;
 		let live = true;
 		void loadLyrics(track).then((value) => {
 			if (live) setLyrics(value ?? null);
@@ -89,6 +90,7 @@ function LyricsPane({ active, scrollRef }: { active: boolean; scrollRef: RefObje
 	}, [active, activeLine, scrollRef]);
 
 	if (!track) return <Empty title="Nothing playing" body="Start a track to see its synced lyrics." />;
+	if (track.episode) return <Empty title="No lyrics" body="Podcast episodes have no lyrics." />;
 	if (lyrics === undefined) return <LyricsSkeleton />;
 	if (lyrics?.instrumental) return <Empty title="Instrumental" body="This track has no lyrics." />;
 	if (!lyrics?.lines.length && !lyrics?.plainLyrics) {

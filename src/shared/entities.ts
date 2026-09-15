@@ -34,6 +34,15 @@ export function isPlaylist(item: MusicEntity): item is Playlist {
 	return "title" in item && !isTrack(item) && !isAlbum(item) && !isPlaylistItem(item);
 }
 
+/**
+ * A podcast show. Upstream addresses one by an `MPSP` browse id, which is the one unlocalised thing
+ * telling it apart from a playlist: it lists, plays and opens exactly like one, and none of a
+ * playlist's writes (delete, add to, save to library) are known to accept it.
+ */
+export function isPodcast(item: MusicEntity): item is Playlist {
+	return isPlaylist(item) && item.id.startsWith("MPSP");
+}
+
 export function trackAlbumId(track: Track): RemoteId | undefined {
 	return track.album?.id ?? track.albumId;
 }
@@ -77,24 +86,19 @@ export function entityArtwork(item: MusicEntity): string | undefined {
 }
 
 /**
- * The two playlists every account holds and nobody made. Upstream draws no cover for either and names
- * no author, so both are keyed off the one stable, unlocalised thing they carry: the browse id, `LM`
- * for liked music and `SE` for saved episodes, which a browse response prefixes with `VL`.
+ * The playlists every account holds and nobody made, keyed off the one stable, unlocalised thing they
+ * carry: the browse id, `LM` for liked music, `SE` for saved episodes and `RDPN` for the newest
+ * episodes of every saved show, which a browse response prefixes with `VL`. None of them can be
+ * edited, saved to or deleted, which is what every caller tests this for.
  *
- * Their high-resolution covers use the same restricted artwork protocol as every upstream image.
+ * Upstream draws no cover for the first two, so theirs are the high-resolution ones YouTube Music
+ * ships, through the same restricted artwork protocol as every upstream image. `RDPN` states its own.
  */
 export function autoPlaylist(
 	id: RemoteId
-): { artworkUrl: string; author: string; title: string; description?: string } | undefined {
-	const key = id.replace(/^VL/, "");
-	const cover = autoCovers[key];
-	if (!cover) return;
-	return {
-		artworkUrl: cover,
-		author: "Auto-generated",
-		title: key === "LM" ? "Liked music" : "Episodes for later",
-		description: key === "LM" ? "Songs you like in YouTube Music appear here." : undefined,
-	};
+): { artworkUrl?: string; author: string; title: string; description?: string } | undefined {
+	const auto = autoPlaylists[id.replace(/^VL/, "")];
+	return auto && { author: "Auto-generated", ...auto };
 }
 
 function artworkProxy(url: string) {
@@ -102,9 +106,17 @@ function artworkProxy(url: string) {
 	return `nixie://app/artwork/${id}`;
 }
 
-const autoCovers: Record<string, string> = {
-	LM: artworkProxy("https://www.gstatic.com/youtube/media/ytm/images/pbg/liked-songs-delhi-1200.png"),
-	SE: artworkProxy("https://www.gstatic.com/youtube/media/ytm/images/pbg/podcast-queue-delhi-1200.png"),
+const autoPlaylists: Record<string, { artworkUrl?: string; title: string; description?: string }> = {
+	LM: {
+		title: "Liked music",
+		artworkUrl: artworkProxy("https://www.gstatic.com/youtube/media/ytm/images/pbg/liked-songs-delhi-1200.png"),
+		description: "Songs you like in YouTube Music appear here.",
+	},
+	SE: {
+		title: "Episodes for later",
+		artworkUrl: artworkProxy("https://www.gstatic.com/youtube/media/ytm/images/pbg/podcast-queue-delhi-1200.png"),
+	},
+	RDPN: { title: "New episodes" },
 };
 
 export function artistNames(artists: Artist[]): string {
@@ -173,10 +185,11 @@ export function byPopularity(albums: Album[], ranked: MusicEntity[]): Album[] {
  * release it is when upstream told us, since "Single" and "EP" are what that page will call itself.
  */
 export function entityKind(item: MusicEntity): string {
-	if (isPlaylistItem(item) || isTrack(item)) return "Song";
+	const track = isPlaylistItem(item) ? item.track : isTrack(item) ? item : undefined;
+	if (track) return track.episode ? "Episode" : "Song";
 	if (isAlbum(item)) return item.kind ?? "Album";
 	if (isArtist(item)) return "Artist";
-	return "Playlist";
+	return isPodcast(item) ? "Podcast" : "Playlist";
 }
 
 /**
