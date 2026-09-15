@@ -137,10 +137,12 @@ function ExploreFrame({
  * the search says which, and a grid is the nearer of the two.
  */
 function ExplorePending() {
-	const { browseId } = Route.useSearch();
-	return (
-		<div className="flex flex-col gap-10">
-			<Skeleton className="h-9 w-48" />
+	const { browseId, params } = Route.useSearch();
+	// A region picked on a chart is a browse of its own, so the page it leaves is gone by the time this
+	// draws. The title and the picker it was just used in are held, lit on the region being fetched.
+	const region = lastCharts?.regions.find((item) => item.browseId === browseId && item.params === params);
+	const skeleton = (
+		<>
 			{browseId ? (
 				<div className="flex flex-col gap-4">
 					<Skeleton className="h-7 w-48" />
@@ -171,9 +173,33 @@ function ExplorePending() {
 					<ShelfSkeleton />
 				</>
 			)}
+		</>
+	);
+	// The landing is always called "Explore", so only a destination waits for its name.
+	if (!browseId) return <ExploreFrame title="Explore">{skeleton}</ExploreFrame>;
+	if (lastCharts && region)
+		return (
+			<ExploreFrame
+				title={lastCharts.title}
+				action={
+					<RegionPicker
+						regions={lastCharts.regions.map((item) => ({ ...item, selected: item === region || undefined }))}
+					/>
+				}
+			>
+				{skeleton}
+			</ExploreFrame>
+		);
+	return (
+		<div className="flex flex-col gap-10">
+			<Skeleton className="h-9 w-48" />
+			{skeleton}
 		</div>
 	);
 }
+
+/** The title and regions of the last chart drawn, for the pending state of the next region. */
+let lastCharts: { title: string; regions: BrowseTarget[] } | undefined;
 
 function Shortcuts({ items }: { items: BrowseTarget[] }) {
 	if (!items.length) return null;
@@ -459,6 +485,7 @@ function ExplorePage() {
 	// A destination names itself in the response's own header. A page that states none falls back to
 	// its lead section, which then goes unheaded rather than printing the same words twice.
 	const title = destination ? (explore.title ?? sections[0]?.title ?? "Explore") : "Explore";
+	if (explore.regions?.length) lastCharts = { title, regions: explore.regions };
 
 	return (
 		<ExploreFrame

@@ -55,13 +55,62 @@ export const Route = createFileRoute("/search")({
 				: undefined,
 		};
 	},
+	pendingComponent: SearchPending,
 	component: SearchPage,
 });
+
+/**
+ * The title and the tabs, drawn by the page and by its pending state alike. Neither depends on the
+ * answer, and a tab tapped into a filter the cache does not hold used to throw both out for the global
+ * grid skeleton, taking away the row the reader had just tapped and the only place to tap next.
+ */
+function SearchHeader() {
+	const { q, filter } = Route.useSearch();
+	const navigate = useNavigate({ from: Route.fullPath });
+	return (
+		<>
+			<PageTitle>{q ? `Results for ${q}` : "Search"}</PageTitle>
+			<Tabs
+				value={filter}
+				onValueChange={(value) => void navigate({ search: { q, filter: value as SearchFilter } })}
+				className="pb-6"
+			>
+				<TabsList variant="line">
+					{filters.map((value) => (
+						<TabsTrigger key={value} value={value}>
+							{value[0]?.toUpperCase()}
+							{value.slice(1)}
+						</TabsTrigger>
+					))}
+				</TabsList>
+			</Tabs>
+		</>
+	);
+}
+
+/** Rows rather than the global grid: every tab of this page resolves into a list. */
+function SearchPending() {
+	return (
+		<div>
+			<SearchHeader />
+			<div className="flex flex-col gap-2">
+				{Array.from({ length: 8 }, (_, index) => (
+					<div key={index} className="flex items-center gap-3 py-1">
+						<Skeleton className="size-12 shrink-0 rounded-md" />
+						<div className="flex flex-1 flex-col gap-2">
+							<Skeleton className="h-4 w-1/3" />
+							<Skeleton className="h-3 w-1/5" />
+						</div>
+					</div>
+				))}
+			</div>
+		</div>
+	);
+}
 
 function SearchPage() {
 	const { q, filter } = Route.useSearch();
 	const { items, artist } = Route.useLoaderData();
-	const navigate = useNavigate({ from: Route.fullPath });
 	const context: QueueContext = { type: "search", title: `Results for ${q}` };
 	// Only the unfiltered search is ranked across kinds, and `withSearchTopResult` puts the one
 	// YouTube Music is most confident about at the head of the page. A filtered tab is a plain list.
@@ -79,22 +128,7 @@ function SearchPage() {
 		// each open without the window changing size, so `lg` still promised two columns in a column
 		// with room for one, and the top result's text was squeezed out of existence.
 		<div className="@container">
-			<PageTitle>{q ? `Results for ${q}` : "Search"}</PageTitle>
-
-			<Tabs
-				value={filter}
-				onValueChange={(value) => void navigate({ search: { q, filter: value as SearchFilter } })}
-				className="pb-6"
-			>
-				<TabsList variant="line">
-					{filters.map((value) => (
-						<TabsTrigger key={value} value={value}>
-							{value[0]?.toUpperCase()}
-							{value.slice(1)}
-						</TabsTrigger>
-					))}
-				</TabsList>
-			</Tabs>
+			<SearchHeader />
 
 			{q && items.length ? (
 				<div className="flex flex-col gap-10">

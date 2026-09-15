@@ -2,7 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { Play, X } from "lucide-react";
 import { type RefObject, useEffect, useMemo, useRef, useState } from "react";
 import { formatDuration } from "#/lib/format";
-import { loadLyrics } from "#/lib/lyrics";
+import { heldLyrics, loadLyrics } from "#/lib/lyrics";
 import { cn } from "#/lib/utils";
 import { usePlayback, usePlaybackPosition, usePlayer } from "#/player";
 import type { LyricsResult, QueueContext } from "#/shared/contracts";
@@ -71,9 +71,10 @@ function LyricsPane({ active, scrollRef }: { active: boolean; scrollRef: RefObje
 	}, [lyrics, position]);
 
 	useEffect(() => {
-		setLyrics(undefined);
+		// A held answer is drawn on this tick, so a track already looked up never passes through the skeleton.
+		setLyrics(track && heldLyrics.get(track.id));
 		// No provider holds lyrics for a spoken episode, so asking all three is three requests for nothing.
-		if (!track || track.episode) return;
+		if (!track || track.episode || heldLyrics.has(track.id)) return;
 		let live = true;
 		void loadLyrics(track).then((value) => {
 			if (live) setLyrics(value ?? null);

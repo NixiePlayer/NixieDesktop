@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { MediaGrid, PageTitle } from "#/components/media";
+import { Skeleton } from "#/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "#/components/ui/tabs";
 import { queryMusic } from "#/lib/api";
 import { markHeld } from "#/lib/library";
@@ -24,8 +25,45 @@ export const Route = createFileRoute("/library")({
 		markHeld(library.items);
 		return { library };
 	},
+	pendingComponent: LibraryPending,
 	component: LibraryPage,
 });
+
+/** The title and the tabs depend on nothing the loader answers, so they are drawn in both states. */
+function LibraryHeader({ filter, onFilter }: { filter: string; onFilter?: (value: string) => void }) {
+	return (
+		<>
+			<PageTitle>Library</PageTitle>
+			<Tabs value={filter} onValueChange={onFilter} className="pb-6">
+				<TabsList variant="line">
+					{filters.map((item) => (
+						<TabsTrigger key={item.value} value={item.value}>
+							{item.label}
+						</TabsTrigger>
+					))}
+				</TabsList>
+			</Tabs>
+		</>
+	);
+}
+
+// ponytail: the tabs filter in the renderer, so a tap here while loading is not remembered.
+function LibraryPending() {
+	return (
+		<div>
+			<LibraryHeader filter="all" />
+			<div className="grid grid-cols-[repeat(auto-fill,minmax(9.5rem,1fr))] gap-x-4 gap-y-6">
+				{Array.from({ length: 12 }, (_, index) => (
+					<div key={index} className="flex flex-col gap-3">
+						<Skeleton className="aspect-square w-full rounded-lg" />
+						<Skeleton className="h-4 w-3/4" />
+						<Skeleton className="h-3 w-1/2" />
+					</div>
+				))}
+			</div>
+		</div>
+	);
+}
 
 function LibraryPage() {
 	const { library } = Route.useLoaderData();
@@ -35,16 +73,7 @@ function LibraryPage() {
 
 	return (
 		<div>
-			<PageTitle>Library</PageTitle>
-			<Tabs value={filter} onValueChange={setFilter} className="pb-6">
-				<TabsList variant="line">
-					{filters.map((item) => (
-						<TabsTrigger key={item.value} value={item.value}>
-							{item.label}
-						</TabsTrigger>
-					))}
-				</TabsList>
-			</Tabs>
+			<LibraryHeader filter={filter} onFilter={setFilter} />
 			{visible.length ? (
 				<MediaGrid items={visible} context={{ type: "library", title: active.label }} />
 			) : (

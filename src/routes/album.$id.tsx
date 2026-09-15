@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Play } from "lucide-react";
 import { EntityMenu } from "#/components/entity-menu";
-import { ArtistLinks, DetailHeader, ExplicitBadge, TrackList } from "#/components/media";
+import { ArtistLinks, DetailHeader, DetailSkeleton, ExplicitBadge, TrackList } from "#/components/media";
 import { Button } from "#/components/ui/button";
 import { queryMusic } from "#/lib/api";
 import { formatTotalDuration, plural } from "#/lib/format";
@@ -13,6 +13,7 @@ export const Route = createFileRoute("/album/$id")({
 	// fetches, so it is no `loaderDep`.
 	validateSearch: (search) => ({ track: typeof search.track === "string" ? search.track : undefined }),
 	loader: ({ params }) => queryMusic({ type: "album", id: params.id }),
+	pendingComponent: DetailSkeleton,
 	component: AlbumPage,
 });
 

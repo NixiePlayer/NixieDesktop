@@ -708,6 +708,32 @@ export function DetailHeader({
 	);
 }
 
+/**
+ * An album or a playlist waiting for its answer, at `DetailHeader`'s and a track row's measurements.
+ * The global pending state is a grid of covers, which resolved into a header over a list and moved
+ * everything under the pointer on the swap.
+ */
+export function DetailSkeleton() {
+	return (
+		<div>
+			<div className="flex items-end gap-6 pb-8">
+				<Skeleton className="size-44 shrink-0 rounded-lg" />
+				<div className="flex min-w-0 flex-1 flex-col gap-3 pb-1">
+					<Skeleton className="h-3 w-16" />
+					<Skeleton className="h-8 w-2/5" />
+					<Skeleton className="h-4 w-1/4" />
+					<Skeleton className="mt-2 h-8 w-24" />
+				</div>
+			</div>
+			<div className="flex flex-col gap-3 px-2">
+				{Array.from({ length: 10 }, (_, index) => (
+					<Skeleton key={index} className="h-10 w-full" />
+				))}
+			</div>
+		</div>
+	);
+}
+
 export function PageTitle({ children }: { children: React.ReactNode }) {
 	return <h1 className="pb-6 text-2xl font-bold tracking-tight">{children}</h1>;
 }

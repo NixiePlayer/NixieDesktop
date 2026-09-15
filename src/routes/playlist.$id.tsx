@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { Link2, MoveDown, MoveUp, Play, Trash2, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { EntityMenu } from "#/components/entity-menu";
-import { DetailHeader, TrackList } from "#/components/media";
+import { DetailHeader, DetailSkeleton, TrackList } from "#/components/media";
 import { EditPlaylistDialog, PrivacyLabel } from "#/components/playlist-dialog";
 import { Button } from "#/components/ui/button";
 import { DropdownMenuItem } from "#/components/ui/dropdown-menu";
@@ -18,6 +18,7 @@ import { autoPlaylist, isPlaylist, isPlaylistItem, isTrack } from "#/shared/enti
 export const Route = createFileRoute("/playlist/$id")({
 	validateSearch: (search) => ({ find: search.find === true || undefined }),
 	loader: ({ params }) => queryMusic({ type: "playlist", id: params.id }),
+	pendingComponent: DetailSkeleton,
 	component: PlaylistPage,
 });
 

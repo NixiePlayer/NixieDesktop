@@ -632,7 +632,10 @@ describe("home shelves", () => {
 
 		const page = await adapter.query({ type: "home" });
 		const token = page.filters?.[0]?.token;
-		await adapter.query({ type: "home", filter: token });
+		const filtered = await adapter.query({ type: "home", filter: token });
+		// The router caches a filtered feed under its token, so every response has to restate the same
+		// one for the same chip, or each tap is a cache miss.
+		expect(filtered.filters?.[0]?.token).toBe(token);
 		// A chip has to survive being tabbed away from and back to, so its token is not spent.
 		await adapter.query({ type: "home", filter: token });
 
@@ -680,7 +683,8 @@ describe("home shelves", () => {
 		const adapter = homeAdapter(execute, "SID=cap");
 
 		// 201 chips and a continuation is two mints past the cap, so the two oldest are dropped and the
-		// newest is not. Every query mints the whole cloud again, hence the order of these two.
+		// newest is not. An evicted chip is minted a new token by the next response, so the old one stays
+		// unknown, hence the order of these two.
 		const page = await adapter.query({ type: "home" });
 		const evicted = page.filters?.[0]?.token;
 		const kept = page.filters?.at(-1)?.token;

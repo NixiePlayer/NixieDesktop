@@ -24,6 +24,14 @@ const MIX_LIMIT = 8;
 export const heldFeeds: { home?: Page<MusicEntity>; explore?: Page<MusicEntity> } = {};
 
 /**
+ * The auth answer every query checks first, asked once rather than per query. `auth:state` is not a
+ * lookup: main re-reads the cookies, asks YouTube for the account and probes the entitlement, which is
+ * two InnerTube round trips paid ahead of every page, preload, suggestion and scroll. `__root` sends
+ * every change of status or account through `dropHeldPages`, which is what forgets it.
+ */
+let authState: Promise<boolean> | undefined;
+
+/**
  * Everything answered under a session or an account that has since been replaced. `router.invalidate()`
  * reaches the pages the router holds, and these are the pages it does not: a region, a Restricted Mode
  * or a linked account is fixed when the InnerTube session is built, so a feed drawn under the old one
@@ -31,6 +39,7 @@ export const heldFeeds: { home?: Page<MusicEntity>; explore?: Page<MusicEntity> 
  */
 export function dropHeldPages() {
 	mixes.clear();
+	authState = undefined;
 	heldFeeds.home = undefined;
 	heldFeeds.explore = undefined;
 }
@@ -52,8 +61,15 @@ export async function queryMusic(request: MusicQuery, fresh = false): Promise<Pa
 	if (!bridge) return { items: [] };
 	// Route loaders still run while the sign-in gate is on screen, so an empty page
 	// beats an upstream failure that would swap the gate for an error boundary.
-	const auth = await bridge.auth.state();
-	if (auth.status !== "authenticated") return { items: [] };
+	// A failed check is not an answer, so it is asked again by the next query rather than replayed.
+	authState ??= bridge.auth.state().then(
+		(auth) => auth.status === "authenticated",
+		() => {
+			authState = undefined;
+			return false;
+		}
+	);
+	if (!(await authState)) return { items: [] };
 	const key = fresh ? undefined : mixKey(request);
 	if (!key) return bridge.music.query(request);
 	let held = mixes.get(key);

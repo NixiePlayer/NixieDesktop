@@ -1013,6 +1013,19 @@ export class YouTubeAdapter {
 	}
 
 	#mintHome(value: { browseId: string; params?: string; continuation?: string }) {
+		// A chip keeps the token it was first minted under. The router caches a filtered feed by that
+		// token, and every response restates every chip, so a fresh token per response made each tap a
+		// cache miss and refetched a feed the reader had opened seconds before. It is moved to the back
+		// so the eviction below takes continuations, which are spent, before a chip still on screen.
+		// ponytail: linear scan over at most 200 entries per chip.
+		if (!value.continuation) {
+			for (const [token, held] of this.#homeTokens) {
+				if (held.continuation || held.browseId !== value.browseId || held.params !== value.params) continue;
+				this.#homeTokens.delete(token);
+				this.#homeTokens.set(token, held);
+				return token;
+			}
+		}
 		const token = randomBytes(18).toString("base64url");
 		this.#homeTokens.set(token, value);
 		if (this.#homeTokens.size > 200) {
