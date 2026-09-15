@@ -44,7 +44,14 @@ import {
 	validateState,
 	validateTrack,
 } from "../src/shared/validation";
-import { BROWSER_BUNDLE_IDS, type ImportedCookie, listBrowserAccounts, readYouTubeCookies } from "./browser-cookies";
+import {
+	BROWSER_BUNDLE_IDS,
+	browserDataRefused,
+	DATA_ACCESS_REFUSED,
+	type ImportedCookie,
+	listBrowserAccounts,
+	readYouTubeCookies,
+} from "./browser-cookies";
 import { configureRestrictedEvaluator, evaluateRestricted } from "./decipher";
 import { LocalLogger } from "./logger";
 import { LyricsClient } from "./lyrics";
@@ -172,6 +179,22 @@ function linkPath() {
 }
 
 /**
+ * macOS refuses an app nobody allowed every other app's data, so a session read off a browser profile
+ * cannot be kept fresh and stops playing within minutes of Google rotating it. A link through the
+ * extension reads nothing off disk and is never blocked. Asked by `auth:state` rather than inside
+ * `authState`, which `linkSession` also runs before the link it is about to write exists, so an
+ * extension link would be refused over a disk read it never makes.
+ */
+async function dataAccessBlocked() {
+	const link: unknown = await readFile(linkPath(), "utf8").then(
+		(raw) => JSON.parse(raw) as unknown,
+		() => undefined
+	);
+	const extension = typeof link === "object" && link !== null && (link as { source?: unknown }).source === "extension";
+	return !extension && (await browserDataRefused());
+}
+
+/**
  * The cover as a native image, fetched through the protocol's own host check rather than beside it.
  * macOS draws it as the notification's content image, which is the thumbnail on its trailing edge.
  */
@@ -266,6 +289,7 @@ let sessionEpoch = 0;
 // session is cleared as PRIVACY.md promises rather than kept for as long as the app runs.
 const EXTENSION_GRACE_MS = 5 * 60_000;
 let lastExtensionSeenAt = Date.now();
+let lastBrowserRefreshFailure: string | undefined;
 
 async function writeCookies(cookies: ImportedCookie[]) {
 	const authSession = session.fromPartition(authPartition);
@@ -335,7 +359,26 @@ async function refreshLinkedCookies() {
 			await write([]);
 			throw error;
 		}
-		if (link.source !== "extension") return write(await readYouTubeCookies(link));
+		if (link.source !== "extension") {
+			const cookies = await readYouTubeCookies(link).catch((error: unknown) => {
+				// Once per reason rather than once a minute. A system error's message names the file it
+				// failed on, so only its code is written; the module's own messages are fixed strings.
+				const code = (error as { code?: unknown }).code;
+				const reason = typeof code === "string" ? code : error instanceof Error ? error.message : "unknown";
+				if (reason !== lastBrowserRefreshFailure) {
+					void logger.write("warn", `browser cookie refresh failed: ${reason}`);
+					// The shell is already up and would go on looking signed in while every stream is refused, so
+					// the permission screen replaces it the moment macOS starts refusing, not at the next launch.
+					if (reason === DATA_ACCESS_REFUSED && mainWindow && !mainWindow.isDestroyed()) {
+						mainWindow.webContents.send("auth:state", { status: "data-refused" } satisfies AuthState);
+					}
+				}
+				lastBrowserRefreshFailure = reason;
+				throw error;
+			});
+			lastBrowserRefreshFailure = undefined;
+			return write(cookies);
+		}
 		const connected = nativeHost.connections().some((connection) => connection.installId === link.installId);
 		const gone = !connected && Date.now() - lastExtensionSeenAt > EXTENSION_GRACE_MS;
 		try {
@@ -678,7 +721,9 @@ function checkForUpdates() {
 }
 
 function registerIpc() {
-	handle("auth:state", () => authState());
+	handle("auth:state", async () =>
+		(await dataAccessBlocked()) ? ({ status: "data-refused" } satisfies AuthState) : authState()
+	);
 	handle("auth:browsers", async () => {
 		const accounts = await listBrowserAccounts(app.getApplicationNameForProtocol("https://"));
 		return Promise.all(accounts.map(async (account) => ({ ...account, icon: await browserIcon(account.browser) })));
@@ -788,6 +833,19 @@ function registerIpc() {
 		autoUpdater.quitAndInstall();
 	});
 
+	// A fixed pane, never a URL the renderer names. Full Disk Access is the grant that covers another
+	// app's data, which is what the browser profiles are to macOS.
+	handle("app:privacy-settings", async () => {
+		if (process.platform !== "darwin") return;
+		await shell.openExternal("x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles");
+	});
+	// macOS applies a Full Disk Access grant only to a process started after it, so the permission screen
+	// restarts rather than checking again. `app.exit` skips `before-quit`, so the session is saved here.
+	handle("app:relaunch", async () => {
+		await stateStore.save(stateStore.snapshot).catch(() => {});
+		app.relaunch();
+		app.exit(0);
+	});
 	handle("app:info", () => ({
 		version: app.getVersion(),
 		electron: process.versions.electron,

@@ -1,7 +1,7 @@
 import { createRootRoute, rootRouteId, useRouter } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
 import { AppShell } from "#/components/app-shell";
-import { PremiumRequiredView, SignInView } from "#/components/sign-in";
+import { DataAccessView, PremiumRequiredView, SignInView } from "#/components/sign-in";
 import { Button } from "#/components/ui/button";
 import { Toaster } from "#/components/ui/toast";
 import { TooltipProvider } from "#/components/ui/tooltip";
@@ -26,6 +26,8 @@ export const Route = createRootRoute({
 function RootComponent() {
 	// Undefined until the first auth answer arrives, so the shell never flashes before the gate.
 	const [auth, setAuth] = useState<AuthState>();
+	// Set when the reader leaves the permission screen for the extension, which needs no permission.
+	const [useLink, setUseLink] = useState(false);
 	const router = useRouter();
 
 	// Loaders already ran against the signed-out bridge and cached empty pages, so every auth
@@ -78,6 +80,10 @@ function RootComponent() {
 						// A real session that holds no subscription. Not the sign-in view: nothing failed there,
 						// and there is nothing on it to press that would change the answer.
 						<PremiumRequiredView onSignedOut={changeAuth} />
+					) : auth.status === "data-refused" && !useLink ? (
+						// Ahead of the sign-in view, whose browser list macOS leaves empty, and in place of a shell
+						// that would look signed in and play nothing.
+						<DataAccessView onUseLink={() => setUseLink(true)} />
 					) : (
 						<SignInView onSignedIn={changeAuth} />
 					))}

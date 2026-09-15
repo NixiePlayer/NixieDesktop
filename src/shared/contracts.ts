@@ -221,8 +221,11 @@ export interface AuthState {
 	 * `unentitled` is a session YouTube recognises but that holds no Music Premium subscription. It is
 	 * its own status and not an error, since it is the account that is wrong for Nixie rather than
 	 * the sign-in, and the only way out of it is another account or a subscription.
+	 *
+	 * `data-refused` is macOS refusing Nixie the browser profiles, which a session read off disk needs
+	 * every few minutes to stay playable. Only a permission granted in System Settings changes it.
 	 */
-	status: "signed-out" | "signing-in" | "authenticated" | "expired" | "unentitled";
+	status: "signed-out" | "signing-in" | "authenticated" | "expired" | "unentitled" | "data-refused";
 	accountName?: string;
 	avatarUrl?: string;
 }
@@ -456,6 +459,10 @@ export interface NixieBridge {
 		info(): Promise<AppInfo>;
 		/** A value, not a call: the shell paints its window-control padding before an await could answer. */
 		platform: NixiePlatform;
+		/** Opens the macOS Full Disk Access pane. Does nothing on any other platform. */
+		openPrivacySettings(): Promise<void>;
+		/** Restarts the app, which is when macOS applies a permission granted while it ran. */
+		relaunch(): Promise<void>;
 	};
 	update: {
 		/** The state as main holds it now, for a page that mounted after the events. */

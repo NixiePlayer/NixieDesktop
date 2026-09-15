@@ -101,6 +101,8 @@ const bridge: NixieBridge = {
 	app: {
 		info: () => ipcRenderer.invoke("app:info"),
 		platform,
+		openPrivacySettings: () => ipcRenderer.invoke("app:privacy-settings"),
+		relaunch: () => ipcRenderer.invoke("app:relaunch"),
 	},
 	update: {
 		state: () => ipcRenderer.invoke("update:state"),

@@ -2,8 +2,10 @@ import { createCipheriv, createHash, randomBytes } from "node:crypto";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+	accessRefusal,
 	type ChromiumRow,
 	cookieExpiry,
+	DATA_ACCESS_REFUSED,
 	decryptCbc,
 	decryptChromiumRows,
 	decryptGcm,
@@ -213,6 +215,19 @@ describe("windowsWrappedKey", () => {
 
 	it("refuses a key that does not hold a string", () => {
 		expect(() => windowsWrappedKey(localState(5))).toThrow(/no cookie encryption key/);
+	});
+});
+
+describe("accessRefusal", () => {
+	it("names the macOS permission when another app's data is refused, which used to read as no profile", () => {
+		expect(accessRefusal(Object.assign(new Error("x"), { code: "EPERM" }), "darwin")).toBe(DATA_ACCESS_REFUSED);
+		expect(accessRefusal(Object.assign(new Error("x"), { code: "EACCES" }), "darwin")).toBe(DATA_ACCESS_REFUSED);
+	});
+
+	it("leaves a missing file and every other platform's EPERM alone", () => {
+		expect(accessRefusal(Object.assign(new Error("x"), { code: "ENOENT" }), "darwin")).toBeUndefined();
+		expect(accessRefusal(Object.assign(new Error("x"), { code: "EPERM" }), "win32")).toBeUndefined();
+		expect(accessRefusal(undefined, "darwin")).toBeUndefined();
 	});
 });
 

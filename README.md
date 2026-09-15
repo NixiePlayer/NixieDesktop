@@ -231,7 +231,11 @@ on Linux (see [Install](#install)).
 Two smaller things worth knowing. On Windows, a browser that is running holds its cookie
 file locked, so a profile can be missing from the list until you quit that browser (the
 extension has no such problem). And on macOS the first read asks for your Keychain
-password, which is macOS asking whether Nixie may read that browser's key.
+password, which is macOS asking whether Nixie may read that browser's key. Recent macOS
+versions also keep one app out of another app's data until you allow it: when that blocks
+the read, Nixie opens on a screen asking you to turn it on under System Settings, Privacy &
+Security, Full Disk Access, and to restart it. Nixie Link reads nothing off disk and needs
+neither.
 
 Nixie reaches YouTube through the private interface the YouTube Music apps use, which
 Google does not publish or support. Nothing about you leaves this device to anyone else,

@@ -89,6 +89,45 @@ export const BROWSER_BUNDLE_IDS: Record<string, string> = {
 };
 
 const CHROMIUM_PROFILE = /^(?:Default|Profile \d{1,3})$/;
+
+/**
+ * macOS guards every other app's data directory, listing and reading alike, and refuses it with
+ * `EPERM` to an app nobody has allowed. That refusal used to read as a browser with no profiles, so
+ * the minute's refresh failed as "Unsupported browser profile" with nothing logged, the partition kept
+ * a session Google had already rotated, and playback surfaced it as a 403 on the stream. Only macOS
+ * gets this message: a Windows `EPERM` is far more likely a running browser holding its store.
+ */
+export const DATA_ACCESS_REFUSED =
+	"macOS refused Nixie access to the browser's data. Allow Nixie in System Settings, Privacy & Security, Full Disk Access, then restart Nixie";
+
+export function accessRefusal(error: unknown, platform = process.platform) {
+	const code = (error as { code?: unknown } | undefined)?.code;
+	return platform === "darwin" && (code === "EPERM" || code === "EACCES") ? DATA_ACCESS_REFUSED : undefined;
+}
+
+/**
+ * Whether macOS refuses this app every browser's data, which no row, no retry and no Keychain answer
+ * gets past. macOS decides it per app rather than per browser, so one refused root is the answer for
+ * all of them, and a browser that is not installed answers `ENOENT`, which is not a refusal.
+ */
+export async function browserDataRefused() {
+	if (process.platform !== "darwin") return false;
+	const roots = [...CHROMIUM_BROWSERS.map(chromiumRoot), firefoxRoot()];
+	const refused = await Promise.all(
+		roots.map((root) =>
+			readdir(root).then(
+				() => false,
+				(error: unknown) => Boolean(accessRefusal(error))
+			)
+		)
+	);
+	return refused.includes(true);
+}
+
+function rethrowRefusal(error: unknown): never {
+	const refusal = accessRefusal(error);
+	throw refusal ? new Error(refusal) : error;
+}
 const FIREFOX_DEFAULT_PROFILE = /^default(?:-release)?$/;
 
 interface ProfileLocation extends BrowserAccount {
@@ -245,7 +284,7 @@ async function withCookieDatabase<T>(path: string, read: (database: DatabaseSync
 	const copy = join(dir, "db");
 	let database: DatabaseSync | undefined;
 	try {
-		await copyFile(path, copy);
+		await copyFile(path, copy).catch(rethrowRefusal);
 		// Recent writes can still be sitting in the write-ahead log.
 		await copyFile(`${path}-wal`, `${copy}-wal`).catch(() => undefined);
 		database = new DatabaseSync(copy, { readOnly: true });
@@ -598,7 +637,18 @@ export async function readYouTubeCookies(account: BrowserAccount): Promise<Impor
 	const location = (await locateProfiles()).find(
 		(candidate) => candidate.browser === account.browser && candidate.profile === account.profile
 	);
-	if (!location) throw new Error("Unsupported browser profile");
+	if (!location) {
+		// `locateProfiles` lists what it can and skips the rest, so a root macOS refused looks like an
+		// absent profile. The linked browser's root is asked once more to tell the two apart.
+		const browser = CHROMIUM_BROWSERS.find((candidate) => candidate.name === account.browser);
+		const root = browser ? chromiumRoot(browser) : account.browser === "Firefox" ? firefoxRoot() : undefined;
+		if (root) {
+			await readdir(root).catch((error: unknown) => {
+				if (accessRefusal(error)) rethrowRefusal(error);
+			});
+		}
+		throw new Error("Unsupported browser profile");
+	}
 
 	if (!location.chromium) {
 		const rows = await withCookieDatabase(location.cookiePath, (database) =>

@@ -447,3 +447,63 @@ export function PremiumRequiredView({ onSignedOut }: { onSignedOut: (auth: AuthS
 		</div>
 	);
 }
+
+/**
+ * What a Mac that has not allowed Nixie gets instead of the app. macOS refuses it every other app's
+ * data, so the browser profile the session lives in cannot be re-read, and a session that is not
+ * re-read is rotated out from under playback within minutes: the app looks signed in and plays
+ * nothing. Full Disk Access is the grant that covers it, and macOS applies it only to a process
+ * started afterwards, which is why the second button restarts rather than checking again. The
+ * extension reads nothing off disk, so it is the way round for anyone who would rather not grant it,
+ * and the disclosure of what the grant reaches is stated beside it rather than left to System Settings.
+ */
+export function DataAccessView({ onUseLink }: { onUseLink: () => void }) {
+	const [busy, setBusy] = useState(false);
+
+	return (
+		<div className="bg-background relative flex h-full">
+			{/* No top bar here either, so this strip is what keeps the frameless window draggable. */}
+			<div className="drag-region absolute inset-x-0 top-0 z-10 h-14" />
+			<HeroPanel />
+			<main className="flex min-h-0 flex-1 items-center justify-center overflow-y-auto px-6 py-14">
+				<div className="flex w-full max-w-sm flex-col gap-6">
+					<div className="flex flex-col gap-3">
+						<img src={MARK} alt="" className="size-11 rounded-xl lg:hidden" />
+						<h1 className="text-2xl font-bold tracking-tight">Allow Nixie to read your browser</h1>
+						<p className="text-muted-foreground text-sm">
+							Nixie stays signed in by reading the YouTube session saved in your browser, and reads it again every few
+							minutes because Google keeps replacing it. macOS is blocking that read, so nothing can play until you
+							allow it.
+						</p>
+						<ol className="text-muted-foreground list-decimal space-y-1 pl-5 text-sm">
+							<li>Open System Settings, then Privacy &amp; Security, then Full Disk Access.</li>
+							<li>Turn on Nixie.</li>
+							<li>Restart Nixie.</li>
+						</ol>
+					</div>
+					<div className="flex flex-wrap gap-2">
+						<Button onClick={() => void window.nixie?.app.openPrivacySettings()}>Open System Settings</Button>
+						<Button
+							variant="outline"
+							disabled={busy}
+							onClick={() => {
+								setBusy(true);
+								void window.nixie?.app.relaunch().finally(() => setBusy(false));
+							}}
+						>
+							Restart Nixie
+						</Button>
+					</div>
+					<p className="text-muted-foreground text-sm">
+						Full Disk Access lets Nixie read files other apps keep, not only your browser's. If you would rather not
+						allow that,{" "}
+						<button type="button" onClick={onUseLink} className="text-foreground underline underline-offset-4">
+							connect through Nixie Link
+						</button>
+						, which reads the session through the browser instead.
+					</p>
+				</div>
+			</main>
+		</div>
+	);
+}
