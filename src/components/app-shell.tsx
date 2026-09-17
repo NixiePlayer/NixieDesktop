@@ -18,6 +18,7 @@ import { heldSuggestions, queryMusic, rememberSearch } from "#/lib/api";
 import { useMessages } from "#/lib/i18n";
 import { usePlaylists } from "#/lib/library";
 import { isMac } from "#/lib/platform";
+import { swipeAbortDuration, swipeOffset, type SwipeHint, useHistoryEdges, useSwipeNavigation } from "#/lib/swipe-nav";
 import { useUpdateState } from "#/lib/updates";
 import { cn } from "#/lib/utils";
 import { usePlayback, usePlayer, useSystemIntegration } from "#/player";
@@ -88,6 +89,7 @@ export function AppShell({ auth, onAuthChange }: { auth: AuthState; onAuthChange
 	const [panel, setPanel] = useState<PanelTab | undefined>();
 	const searchRef = useRef<HTMLInputElement>(null);
 	const wide = useRailLabels();
+	const swipe = useSwipeNavigation();
 	const engine = usePlayer();
 	useSystemIntegration();
 
@@ -137,13 +139,64 @@ export function AppShell({ auth, onAuthChange }: { auth: AuthState; onAuthChange
 				searchRef={searchRef}
 			/>
 			<NavRail open={navOpen && (wide || !panel)} />
-			<main id="main-scrollable-area" className="overflow-y-auto">
-				<div className="w-full px-6 py-6">
-					<Outlet />
-				</div>
-			</main>
+			{/* Clip the swipe arrow to the page column, excluding the rail and Now panel. */}
+			<div className="relative min-h-0">
+				<main id="main-scrollable-area" className="h-full overflow-y-auto">
+					<div className="w-full px-6 py-6">
+						<Outlet />
+					</div>
+				</main>
+				<SwipeArrow hint={swipe} />
+			</div>
 			<NowPanel tab={panel} onTabChange={setPanel} onClose={() => setPanel(undefined)} />
 			<PlayerBar panel={panel} onPanelChange={setPanel} />
+		</div>
+	);
+}
+
+function SwipeArrow({ hint }: { hint: SwipeHint | undefined }) {
+	if (!hint) return null;
+	const back = hint.direction === -1;
+	const offset = hint.phase === "aborting" ? 0 : swipeOffset(hint.progress);
+	const duration = hint.phase === "completing" ? 200 : swipeAbortDuration(hint.progress);
+	const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+	return (
+		<div aria-hidden className="pointer-events-none absolute inset-0 z-40 overflow-hidden">
+			<div
+				className={cn("absolute top-1/2 size-24", back ? "-left-17" : "-right-17")}
+				style={{
+					opacity: hint.phase === "completing" ? 0 : 1,
+					transform: `translateY(-50%) translateX(${(back ? 1 : -1) * offset}px)`,
+					transition: reduceMotion
+						? "none"
+						: hint.phase === "aborting"
+							? `transform ${duration}ms cubic-bezier(0.4, 0, 0.2, 1)`
+							: hint.phase === "completing"
+								? "opacity 200ms cubic-bezier(0.4, 0, 0.2, 1)"
+								: undefined,
+				}}
+			>
+				<div
+					className="bg-primary/30 absolute top-1/2 left-1/2 rounded-full"
+					style={{
+						width: hint.phase === "completing" ? 96 : 80,
+						height: hint.phase === "completing" ? 96 : 80,
+						transform: `translate(-50%, -50%) scale(${hint.phase === "aborting" ? 0.5 : 0.5 + Math.min(1, hint.progress) * 0.5})`,
+						transition:
+							reduceMotion || hint.phase === "tracking"
+								? undefined
+								: `width ${duration}ms cubic-bezier(0.4, 0, 0.2, 1), height ${duration}ms cubic-bezier(0.4, 0, 0.2, 1), transform ${duration}ms cubic-bezier(0.4, 0, 0.2, 1)`,
+					}}
+				/>
+				<div
+					className={cn(
+						"absolute left-1/2 top-1/2 flex size-10 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full shadow-[0_2px_8px_rgb(0_0_0/0.3)]",
+						hint.armed ? "bg-primary text-primary-foreground" : "bg-background text-primary"
+					)}
+				>
+					{back ? <ChevronLeft className="size-5" /> : <ChevronRight className="size-5" />}
+				</div>
+			</div>
 		</div>
 	);
 }
@@ -161,6 +214,7 @@ function TopBar({
 }) {
 	const router = useRouter();
 	const m = useMessages();
+	const edges = useHistoryEdges();
 
 	return (
 		<header className="drag-region window-controls-inset border-border col-span-3 flex items-center gap-2 border-b">
@@ -171,10 +225,22 @@ function TopBar({
 				<Button variant="ghost" size="icon-sm" aria-label={m.shell.toggleNavigation} onClick={onToggleNav}>
 					<PanelLeft />
 				</Button>
-				<Button variant="ghost" size="icon-sm" aria-label={m.shell.goBack} onClick={() => router.history.back()}>
+				<Button
+					variant="ghost"
+					size="icon-sm"
+					aria-label={m.shell.goBack}
+					disabled={!edges.back}
+					onClick={() => router.history.back()}
+				>
 					<ChevronLeft />
 				</Button>
-				<Button variant="ghost" size="icon-sm" aria-label={m.shell.goForward} onClick={() => router.history.forward()}>
+				<Button
+					variant="ghost"
+					size="icon-sm"
+					aria-label={m.shell.goForward}
+					disabled={!edges.forward}
+					onClick={() => router.history.forward()}
+				>
 					<ChevronRight />
 				</Button>
 			</div>

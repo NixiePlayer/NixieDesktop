@@ -6,8 +6,7 @@ Thanks for looking. Bug reports, fixes and features are all welcome.
 
 Open an issue first for anything beyond a small fix.
 
-Nixie has opinions, and most of them are written down in [AGENTS.md](AGENTS.md) with the
-reasoning attached. A fair number of the obvious approaches in this codebase were tried and
+Nixie has opinions, and most of them are written down in [AGENTS.md](AGENTS.md). A fair number of the obvious approaches in this codebase were tried and
 do not work: the YouTube client that returns streams with no URL, the wrapper that throws
 on today's response, the handoff driven off the `ended` event that arrives too late. A pull
 request that reverts one of those without knowing it costs you a weekend and me an awkward
@@ -20,10 +19,12 @@ Small and obvious fixes need no ceremony. Send them.
 See [Development](README.md#development) in the README. Short version: Node 24, pnpm
 12.3.4, then `pnpm install && pnpm dev`.
 
-macOS, Windows and Linux all work for development. On macOS you also want the Xcode command
-line tools, since `scripts/dev-app-name.mjs` uses `plutil`, `sips` and `codesign` to rename
-and re-sign the development Electron bundle; off macOS that script is a no-op and there is
-nothing extra to install. Line endings are LF everywhere, which `.gitattributes` enforces on
+macOS, Windows and Linux all work for development. On macOS the Xcode command line tools
+and the Node distribution headers are required. `scripts/build-native.mjs` builds the
+small AppKit trackpad bridge for Intel and Apple Silicon using Node-API.
+`scripts/dev-app-name.mjs` renames and re-signs the development Electron bundle.
+Both scripts are no-ops off macOS; no extra tools are needed there.
+Trackpad navigation uses native contact phases on macOS, not speed or idle-time guesses. Line endings are LF everywhere, which `.gitattributes` enforces on
 checkout: oxfmt is LF-only, so a CRLF working copy fails `pnpm fmt` on every file at once.
 
 Building an installable app is one command per platform, and each has to run on the platform
@@ -40,7 +41,7 @@ warning. That is expected: the hooks are the macOS notarization steps.
 
 A development run does not register the Nixie Link native host with the browser unless
 `NIXIE_LINK_DEV=1` is set, since the packaged app and a development run register the same
-host name and the last one to start takes it from the other; `AGENTS.md` has the reasoning.
+host name and the last one to start takes it from the other.
 
 ## The rules
 
@@ -139,9 +140,6 @@ One rule about `src/shared/` worth stating on its own: anything in there crosses
 boundary, so it has to be serializable and pure. No Electron imports, no DOM, no upstream
 parser objects. Entity narrowing lives in `src/shared/entities.ts` rather than in the
 components that render entities.
-
-Before editing routes or the router, run the matching TanStack Intent command listed at the
-top of [AGENTS.md](AGENTS.md).
 
 ## Pull requests
 
