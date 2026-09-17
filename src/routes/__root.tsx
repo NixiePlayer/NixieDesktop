@@ -1,6 +1,7 @@
 import { createRootRoute, rootRouteId, useRouter } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
 import { AppShell } from "#/components/app-shell";
+import { DiagnosticReport } from "#/components/diagnostic-report";
 import { DataAccessView, PremiumRequiredView, SignInView } from "#/components/sign-in";
 import { Button } from "#/components/ui/button";
 import { Toaster } from "#/components/ui/toast";
@@ -25,6 +26,7 @@ function RootError({ error, reset }: { error: Error; reset: () => void }) {
 			<h1 className="text-2xl font-bold">{m.signin.somethingWentWrong}</h1>
 			<p className="text-muted-foreground text-sm">{error.message}</p>
 			<Button onClick={reset}>{m.common.tryAgain}</Button>
+			<DiagnosticReport />
 		</div>
 	);
 }
@@ -59,7 +61,7 @@ function RootComponent() {
 	useEffect(() => {
 		const bridge = window.nixie;
 		if (!bridge) return setAuth({ status: "signed-out" });
-		void bridge.auth.state().then(setAuth);
+		void bridge.auth.state().then(setAuth, () => setAuth({ status: "signed-out" }));
 		void bridge.local.load().then((state) => {
 			applyTheme(state.settings.theme);
 			applyLanguage(state.settings.language);

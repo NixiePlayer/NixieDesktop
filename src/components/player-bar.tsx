@@ -21,6 +21,7 @@ import { useMessages } from "#/lib/i18n";
 import { nextRating, rate, useRating } from "#/lib/rating";
 import { usePlayback, usePlaybackPosition, usePlayer } from "#/player";
 import type { Track } from "#/shared/contracts";
+import { DiagnosticReport } from "./diagnostic-report";
 import { EntityContextMenu, TrackMenu } from "./entity-menu";
 import { Artwork, TrackLink } from "./media";
 import type { PanelTab } from "./now-panel";
@@ -237,7 +238,10 @@ export function PlayerBar({
 		<footer className="border-border bg-background relative col-span-3 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-6 border-t px-4">
 			<SeekBar />
 
-			<NowPlaying track={track} failure={failure} />
+			<div className="flex min-w-0 items-center gap-2">
+				<NowPlaying track={track} failure={failure} />
+				{failure && <DiagnosticReport compact />}
+			</div>
 
 			<div className="flex items-center gap-2">
 				<span className="text-muted-foreground w-10 text-right text-xs tabular-nums">{formatDuration(position)}</span>

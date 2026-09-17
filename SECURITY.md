@@ -2,7 +2,9 @@
 
 ## Reporting
 
-Do not open public issues containing cookies, signed media URLs, diagnostics, or account data. Send a minimal reproduction to the project maintainers through the repository's private security advisory feature.
+Report security vulnerabilities through the repository's private security advisory feature, with a minimal reproduction. Never put cookies, signed media URLs, raw logs, or account data in a public issue.
+
+For ordinary app failures, the in-app Error report contains only fixed diagnostic categories and app and system information. Review it before copying it into a public issue. It excludes legacy logs and never submits an issue automatically.
 
 ## Local security model
 

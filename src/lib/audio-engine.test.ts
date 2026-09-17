@@ -54,6 +54,7 @@ interface Harness {
 	resolve: ReturnType<typeof vi.fn>;
 	position: ReturnType<typeof vi.fn>;
 	notify: ReturnType<typeof vi.fn>;
+	rendererError: ReturnType<typeof vi.fn>;
 	command: ReturnType<typeof vi.fn>;
 	query: ReturnType<typeof vi.fn>;
 	saved: PersistedState[];
@@ -69,6 +70,7 @@ function harness(
 	const saved: PersistedState[] = [];
 	const position = vi.fn();
 	const notify = vi.fn(async () => {});
+	const rendererError = vi.fn(async () => {});
 	const stored = defaultState();
 	let created = 0;
 
@@ -90,6 +92,7 @@ function harness(
 	});
 	const bridge = {
 		local: {
+			rendererError,
 			load: async () => structuredClone(stored),
 			save: async (state: PersistedState) => {
 				saved.push(state);
@@ -146,6 +149,7 @@ function harness(
 	});
 
 	return {
+		rendererError,
 		engine: createAudioEngine(deps),
 		audio,
 		gains,
@@ -214,16 +218,21 @@ describe("audio engine", () => {
 	});
 
 	it("reports a confirmed start, and nothing when the start failed", async () => {
-		const { engine, command, resolve } = harness();
+		const { engine, command, resolve, rendererError } = harness();
 		await engine.start();
 		await engine.play(track("t1"), [track("t1")]);
 		expect(command).toHaveBeenCalledExactlyOnceWith({ type: "history", trackId: "t1", positionSeconds: 0 });
 
 		command.mockClear();
-		resolve.mockRejectedValueOnce(new Error("no stream"));
+		resolve.mockRejectedValueOnce(new TypeError("private URL and track name", { cause: { code: "ECONNRESET" } }));
 		await engine.play(track("t2"), [track("t2")]);
 		expect(engine.getSnapshot().playback.status).toBe("error");
 		expect(command).not.toHaveBeenCalled();
+		expect(rendererError).toHaveBeenCalledExactlyOnceWith("playback", {
+			name: "TypeError",
+			code: "ECONNRESET",
+			status: undefined,
+		});
 	});
 
 	it("reports the outgoing track's final position before the next one starts", async () => {

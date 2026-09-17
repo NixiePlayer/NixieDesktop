@@ -7,6 +7,7 @@ import { Switch } from "#/components/ui/switch";
 import { toast } from "#/components/ui/toast";
 import { messages, useMessages } from "#/lib/i18n";
 import type { AccountSetting, AccountSettingKey } from "#/shared/contracts";
+import { DiagnosticReport } from "./diagnostic-report";
 
 /** The one link that stands in for every switch this section could not draw. */
 export function OpenYouTubeMusicSettings({ children }: { children?: string }) {
@@ -109,6 +110,7 @@ export function AccountSettingsUnavailable({ onRetry }: { onRetry: () => void })
 					{m.common.tryAgain}
 				</Button>
 				<OpenYouTubeMusicSettings />
+				<DiagnosticReport />
 			</div>
 		</div>
 	);

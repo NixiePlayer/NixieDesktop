@@ -13,6 +13,7 @@ import {
 	Trash2,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { DiagnosticReport } from "#/components/diagnostic-report";
 import { PageTitle } from "#/components/media";
 import {
 	AccountSettingsSkeleton,
@@ -53,8 +54,6 @@ const tabs = [
 	{ value: "privacy", icon: Shield },
 	{ value: "about", icon: Info },
 ] as const;
-
-const REPOSITORY = "https://github.com/NixiePlayer/NixieDesktop";
 
 /** Leaving the region to upstream is a choice of its own, so it is an option rather than an absence. */
 const AUTOMATIC_REGION = "auto";
@@ -420,12 +419,6 @@ function SettingsPage() {
 	};
 
 	const settingsOf = account.state.status === "ready" ? account.state.settings : [];
-	const issueUrl = `${REPOSITORY}/issues/new?${new URLSearchParams({
-		title: "",
-		body: info
-			? `\n\n---\nNixie ${info.version} · ${info.os} · ${info.arch} · Electron ${info.electron} · Chromium ${info.chrome}`
-			: "",
-	})}`;
 
 	return (
 		// Every breakpoint here is the column's own width, not the window's: this page shares the row
@@ -673,7 +666,14 @@ function SettingsPage() {
 								label={s.privacy.diagnostics.label}
 								description={s.privacy.diagnostics.description}
 								control={
-									<Button variant="outline" onClick={() => void window.nixie?.local.exportDiagnostics()}>
+									<Button
+										variant="outline"
+										onClick={() =>
+											void window.nixie?.local
+												.exportDiagnostics()
+												.catch(() => toast.add({ title: m.common.diagnostics.failed, type: "error" }))
+										}
+									>
 										<Download data-icon="inline-start" />
 										{s.privacy.diagnostics.action}
 									</Button>
@@ -745,8 +745,8 @@ function SettingsPage() {
 								}
 							/>
 							<UpdateSetting />
-							<LinkRow
-								href={issueUrl}
+							<Setting
+								control={<DiagnosticReport />}
 								label={s.about.reportIssue.label}
 								description={s.about.reportIssue.description}
 							/>

@@ -97,6 +97,9 @@ const bridge: NixieBridge = {
 		save: (state: PersistedState) => ipcRenderer.invoke("local:save", state),
 		clear: (selection) => ipcRenderer.invoke("local:clear", selection),
 		exportDiagnostics: () => ipcRenderer.invoke("local:export-diagnostics"),
+		diagnostics: () => ipcRenderer.invoke("local:diagnostics"),
+		reportIssue: () => ipcRenderer.invoke("local:report-issue"),
+		rendererError: (kind, error) => ipcRenderer.invoke("local:renderer-error", kind, error),
 		document: (name: BundledDocument) => ipcRenderer.invoke("local:document", name),
 	},
 	app: {

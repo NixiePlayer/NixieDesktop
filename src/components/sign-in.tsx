@@ -5,6 +5,7 @@ import markProd from "#/assets/logo.png";
 import { useMessages } from "#/lib/i18n";
 import { platform } from "#/lib/platform";
 import type { AuthState, BrowserAccount, ExtensionSource } from "#/shared/contracts";
+import { DiagnosticReport } from "./diagnostic-report";
 import { Button } from "./ui/button";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "./ui/field";
 import { Input } from "./ui/input";
@@ -270,8 +271,8 @@ export function SignInView({ onSignedIn }: { onSignedIn: (auth: AuthState) => vo
 			{/* No top bar here, so this strip is what keeps the frameless window draggable. */}
 			<div className="drag-region absolute inset-x-0 top-0 z-10 h-14" />
 			<HeroPanel />
-			<main className="flex min-h-0 flex-1 items-center justify-center overflow-y-auto px-6 py-14">
-				<div className="flex w-full max-w-sm flex-col gap-6">
+			<main className="flex min-h-0 flex-1 items-start justify-center overflow-y-auto px-6 py-14">
+				<div className="my-auto flex w-full max-w-sm flex-col gap-6">
 					<div className="flex flex-col gap-3">
 						<img src={MARK} alt="" className="size-11 rounded-xl lg:hidden" />
 						<h1 className="text-2xl font-bold tracking-tight">{m.signin.title}</h1>
@@ -374,6 +375,7 @@ export function SignInView({ onSignedIn }: { onSignedIn: (auth: AuthState) => vo
 					 * unofficial interface rather than the trademark, since that is the part carrying real risk
 					 * to the account being linked, and it is the one thing no other screen says.
 					 */}
+					<DiagnosticReport />
 					<p className="text-muted-foreground border-border border-t pt-4 text-xs">{m.signin.disclaimer}</p>
 				</div>
 			</main>
@@ -399,8 +401,8 @@ export function PremiumRequiredView({ onSignedOut }: { onSignedOut: (auth: AuthS
 			{/* No top bar here either, so this strip is what keeps the frameless window draggable. */}
 			<div className="drag-region absolute inset-x-0 top-0 z-10 h-14" />
 			<HeroPanel />
-			<main className="flex min-h-0 flex-1 items-center justify-center overflow-y-auto px-6 py-14">
-				<div className="flex w-full max-w-sm flex-col gap-6">
+			<main className="flex min-h-0 flex-1 items-start justify-center overflow-y-auto px-6 py-14">
+				<div className="my-auto flex w-full max-w-sm flex-col gap-6">
 					<div className="flex flex-col gap-3">
 						<img src={MARK} alt="" className="size-11 rounded-xl lg:hidden" />
 						<h1 className="text-2xl font-bold tracking-tight">{m.signin.premium.title}</h1>
@@ -429,6 +431,7 @@ export function PremiumRequiredView({ onSignedOut }: { onSignedOut: (auth: AuthS
 					>
 						{m.signin.premium.openYouTubeMusic}
 					</a>
+					<DiagnosticReport />
 				</div>
 			</main>
 		</div>
@@ -453,8 +456,8 @@ export function DataAccessView({ onUseLink }: { onUseLink: () => void }) {
 			{/* No top bar here either, so this strip is what keeps the frameless window draggable. */}
 			<div className="drag-region absolute inset-x-0 top-0 z-10 h-14" />
 			<HeroPanel />
-			<main className="flex min-h-0 flex-1 items-center justify-center overflow-y-auto px-6 py-14">
-				<div className="flex w-full max-w-sm flex-col gap-6">
+			<main className="flex min-h-0 flex-1 items-start justify-center overflow-y-auto px-6 py-14">
+				<div className="my-auto flex w-full max-w-sm flex-col gap-6">
 					<div className="flex flex-col gap-3">
 						<img src={MARK} alt="" className="size-11 rounded-xl lg:hidden" />
 						<h1 className="text-2xl font-bold tracking-tight">{m.signin.dataAccess.title}</h1>
@@ -487,6 +490,7 @@ export function DataAccessView({ onUseLink }: { onUseLink: () => void }) {
 						</button>
 						{m.signin.dataAccess.linkAfter}
 					</p>
+					<DiagnosticReport />
 				</div>
 			</main>
 		</div>

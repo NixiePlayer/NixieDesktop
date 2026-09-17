@@ -48,9 +48,14 @@ const COLLABORATION_PARAMS = "KAE%3D";
  * episodes", and both read those rows raw instead (`multiRowNodes`), so that one refusal is expected
  * and says nothing. Anything else is still worth a line, naming the class and never its data.
  */
-export function onParserError(error: Parser.ParserError) {
+export function onParserError(error: Parser.ParserError, report: (message: string) => void = console.warn) {
 	if (error.error_type === "typecheck" && error.classname === "MusicMultiRowListItem") return;
-	console.warn(`[YOUTUBEJS][Parser]: ${error.error_type} ${error.classname}`);
+	// The class may originate in an unknown upstream node. Only known parser classes are named.
+	const name = Object.hasOwn(YTNodes, error.classname) ? error.classname : "unknown node";
+	const type = ["typecheck", "parse", "class_not_found", "class_changed"].includes(error.error_type)
+		? error.error_type
+		: "unsupported";
+	report(`[YOUTUBEJS][Parser]: ${type} ${name}`);
 }
 Parser.setParserErrorHandler(onParserError);
 
@@ -882,9 +887,11 @@ export class YouTubeAdapter {
 	 */
 	async entitled(): Promise<boolean | undefined> {
 		const client = await this.#getClient();
-		const response = await client.actions
-			.execute("/player", { videoId: ENTITLEMENT_PROBE_ID, client: "YTMUSIC", parse: false })
-			.catch(() => undefined);
+		const response = await client.actions.execute("/player", {
+			videoId: ENTITLEMENT_PROBE_ID,
+			client: "YTMUSIC",
+			parse: false,
+		});
 		return readEntitlement(response?.data);
 	}
 
@@ -916,12 +923,12 @@ export class YouTubeAdapter {
 	 * with a 500. `account/get_setting` under `YTMUSIC` is what the web player itself asks and it
 	 * returns all of them in one response, so there is nothing to page through and nothing to assert.
 	 *
-	 * Answers empty rather than throwing: this is one section of the settings page, and the page has
-	 * to render without it. The endpoints are kept here so a later write can replay them.
+	 * Main records failures and answers an empty section. The endpoints are kept here so a later
+	 * write can replay them.
 	 */
 	async accountSettings(): Promise<AccountSetting[]> {
 		const client = await this.#getClient();
-		const response = await client.actions.execute("account/get_setting", { client: "YTMUSIC" }).catch(() => undefined);
+		const response = await client.actions.execute("account/get_setting", { client: "YTMUSIC" });
 		const { settings, endpoints } = extractAccountSettings(response?.data);
 		this.#settingEndpoints.clear();
 		for (const [key, value] of endpoints) this.#settingEndpoints.set(key, value);

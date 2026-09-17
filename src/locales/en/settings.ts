@@ -119,7 +119,7 @@ export const settings = {
 		versionCopied: "Version copied",
 		reportIssue: {
 			label: "Report an issue",
-			description: "Opens a new issue on GitHub with this build's version already filled in.",
+			description: "Review and copy recent errors, or open a GitHub issue with app and system information.",
 		},
 		disclaimer:
 			"Nixie is an independent, unofficial client and is not affiliated with, endorsed by, or sponsored by Google or YouTube. YouTube and YouTube Music are trademarks of Google LLC. It is not a YouTube Music product and does not reproduce or imitate one: it plays what the account you linked can already play, and it stores no media of its own.",

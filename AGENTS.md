@@ -59,7 +59,7 @@ Unofficial YouTube Music desktop client for macOS, Windows and Linux. Electron m
 ## Security and privacy
 
 - Never disable sandboxing, context isolation, CSP, sender validation or `webSecurity` to work around upstream.
-- Never log cookies, signed URLs, parser objects, arbitrary URLs, filesystem paths or lyric text.
+- Never log cookies, signed URLs, parser objects, arbitrary URLs, filesystem paths or lyric text. Unknown errors go through `LocalLogger.failure`; `write` takes fixed descriptions and counts only.
 - The renderer gets plain DTOs, opaque tokens and `nixie:` URLs only. Parser objects, cookies, signed URLs and feedback tokens stay in main. Images go through `registerArtwork`; allowed hosts are in `media-protocol.ts`.
 - Never build a filesystem path from renderer input. Validate IPC payloads in main; bundled documents are read from a fixed allowlist.
 - Path containment checks must also refuse `isAbsolute(relative(...))` (Windows cross-drive).

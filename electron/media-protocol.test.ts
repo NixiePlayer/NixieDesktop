@@ -113,3 +113,18 @@ describe("remote media", () => {
 		expect(response.headers.get("content-range")).toBe("bytes */10");
 	});
 });
+
+it("records transport failures without the signed URL and preserves the rejection", async () => {
+	const error = new TypeError("https://private.test/?signature=secret", { cause: { code: "ECONNRESET" } });
+	vi.mocked(net.fetch).mockRejectedValueOnce(error);
+	const log = vi.fn();
+	const registry = new SecureResourceRegistry({ log });
+	const url = registry.registerMedia({
+		url: "https://example.test/audio",
+		contentLength: 10,
+		fingerprint: { itag: 251, mimeType: "audio/webm", codec: "opus", bitrate: 128000, durationMs: 1000 },
+	});
+	const id = new URL(url).pathname.split("/").at(-1)!;
+	await expect(registry.handleMedia(new Request(url), id)).rejects.toBe(error);
+	expect(log).toHaveBeenCalledExactlyOnceWith("media fetch failed: TypeError / ECONNRESET");
+});

@@ -2,6 +2,16 @@
 
 Thanks for looking. Bug reports, fixes and features are all welcome.
 
+## Reporting an app failure
+
+Use **Error report** on the sign-in screen, beside a failure, or in **Settings > About**.
+Review the report, then copy it or open a GitHub issue. The issue action copies the full
+report; paste it into the draft and describe how to repeat the problem. Nothing is submitted
+automatically. Security vulnerabilities still go through the private process in [SECURITY.md](SECURITY.md).
+
+For new error paths, use the logging contract in [AGENTS.md](AGENTS.md). Add a regression test
+that puts private data in the error and checks that the report excludes it.
+
 ## Before you write code
 
 Open an issue first for anything beyond a small fix.

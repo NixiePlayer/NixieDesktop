@@ -8,6 +8,7 @@ import { promisify } from "node:util";
 import {
 	app,
 	BrowserWindow,
+	clipboard,
 	dialog,
 	ipcMain,
 	Menu,
@@ -24,6 +25,7 @@ import {
 // Destructured from the default export rather than imported by name: electron-updater is CommonJS,
 // and a named import of it from an ES module resolves to nothing at runtime.
 import electronUpdater from "electron-updater";
+import { Parser } from "youtubei.js";
 import type {
 	AudioQuality,
 	AuthState,
@@ -34,6 +36,7 @@ import type {
 	UpdateState,
 } from "../src/shared/contracts";
 import type { LinkedAccount } from "../src/shared/contracts";
+import { diagnosticIssueUrl, diagnosticReport } from "../src/shared/diagnostics";
 import { artistNames } from "../src/shared/entities";
 import { messagesFor, resolveLanguage } from "../src/shared/i18n";
 import {
@@ -62,7 +65,7 @@ import { SecureResourceRegistry } from "./media-protocol";
 import { EXTENSION_ID, NATIVE_HOST_NAME, registerNativeHost } from "./native-host-register";
 import { NativeHostServer } from "./native-host-server";
 import { StateStore } from "./state-store";
-import { YouTubeAdapter } from "./youtube-adapter";
+import { onParserError, YouTubeAdapter } from "./youtube-adapter";
 
 const authPartition = "persist:nixie-auth";
 // Exact hostnames, so `youtube.com` does not stand in for `www.youtube.com`. A link to a host that
@@ -172,7 +175,12 @@ function trusted(event: IpcMainInvokeEvent) {
 function handle(channel: string, listener: (event: IpcMainInvokeEvent, ...args: unknown[]) => unknown) {
 	ipcMain.handle(channel, async (event, ...args) => {
 		trusted(event);
-		return listener(event, ...args);
+		try {
+			return await listener(event, ...args);
+		} catch (error) {
+			await logger.failure(channel, error);
+			throw error;
+		}
 	});
 }
 
@@ -273,9 +281,9 @@ async function notifyTrackChange(track: Track) {
 	notification.on("show", () => {
 		notificationsRefused = false;
 	});
-	notification.on("failed", (_event, error) => {
+	notification.on("failed", () => {
 		notificationsRefused = true;
-		void logger.write("warn", `notification refused: ${error}`);
+		void logger.write("warn", "notification refused");
 	});
 	dismissNotification();
 	notification.show();
@@ -311,7 +319,7 @@ async function writeCookies(cookies: ImportedCookie[]) {
 				expirationDate: cookie.expirationDate,
 			})
 			// One cookie the store will not take is not worth failing the import: authState decides.
-			.catch(() => undefined);
+			.catch((error: unknown) => logger.failure("session import: browser value refused", error, "warn"));
 	}
 }
 
@@ -369,7 +377,7 @@ async function refreshLinkedCookies() {
 				const code = (error as { code?: unknown }).code;
 				const reason = typeof code === "string" ? code : error instanceof Error ? error.message : "unknown";
 				if (reason !== lastBrowserRefreshFailure) {
-					void logger.write("warn", `browser cookie refresh failed: ${reason}`);
+					void logger.failure("browser session refresh", error, "warn");
 					// The shell is already up and would go on looking signed in while every stream is refused, so
 					// the permission screen replaces it the moment macOS starts refusing, not at the next launch.
 					if (reason === DATA_ACCESS_REFUSED && mainWindow && !mainWindow.isDestroyed()) {
@@ -393,10 +401,7 @@ async function refreshLinkedCookies() {
 		} catch (error) {
 			// Every message on this branch is a fixed string from the host server or safeStorage: no path,
 			// no cookie, no token.
-			void logger.write(
-				"warn",
-				`extension cookie refresh failed: ${error instanceof Error ? error.message : "unknown"}`
-			);
+			void logger.failure("extension session refresh", error, "warn");
 			// A browser that has not reconnected yet is not a refusal: at a cold start the extension comes
 			// back on its own alarm, and the partition keeps what the last pull wrote until it does. Every
 			// other failure (a timeout, a bad proof, a disconnect mid-pull, a payload that will not decrypt)
@@ -439,13 +444,17 @@ async function authState(): Promise<AuthState> {
 	// not describe is still an account, and the menu falls back to naming the service.
 	const [account, entitled] = await Promise.all([
 		youtube.account().catch(async (error: unknown) => {
-			await logger.write("error", `account lookup failed: ${error instanceof Error ? error.message : "unknown"}`);
+			await logger.failure("account lookup", error);
 		}),
 		youtube.entitled().catch(async (error: unknown) => {
-			await logger.write("warn", `entitlement check failed: ${error instanceof Error ? error.message : "unknown"}`);
+			await logger.failure("entitlement check", error, "warn");
 			return undefined;
 		}),
 	]);
+	await logger.write(
+		"info",
+		`session check: account ${account ? "available" : "unavailable"}; Premium ${entitled === undefined ? "unknown" : entitled}`
+	);
 	if (entitled === false) return { status: "unentitled" };
 	return {
 		status: "authenticated",
@@ -488,7 +497,12 @@ async function linkSession(cookies: ImportedCookie[], link: LinkedAccount) {
 
 async function importFromBrowser(account: unknown) {
 	validateBrowserAccount(account);
+	await logger.write(
+		"info",
+		`session import: browser ${Object.hasOwn(BROWSER_BUNDLE_IDS, account.browser) ? account.browser : "unknown"}`
+	);
 	const cookies = await readYouTubeCookies(account);
+	await logger.write("info", `session import: ${cookies.length} values read`);
 	return linkSession(cookies, { source: "browser", browser: account.browser, profile: account.profile });
 }
 
@@ -508,6 +522,7 @@ async function importFromExtension(installId: unknown, pairingSecret: unknown) {
 	if (!source) throw new Error("That browser is no longer connected");
 	// Before the pull: a platform that cannot hold the secret refuses here, without asking the browser
 	// for cookies that would only be thrown away.
+	await logger.write("info", "session import: extension");
 	const pairingKey = protectPairingSecret(pairingSecret);
 	const cookies = await nativeHost.pull(installId, pairingSecret);
 	return linkSession(cookies, { source: "extension", installId, browser: source.browser, pairingKey });
@@ -562,7 +577,7 @@ function createAdapter() {
 	);
 	// Floating on purpose: whatever asked for a new adapter must not wait on YouTube.
 	void adapter.warm().catch((error: unknown) => {
-		void logger.write("error", `InnerTube warm-up failed: ${error instanceof Error ? error.message : "unknown"}`);
+		void logger.failure("InnerTube warm-up", error);
 	});
 	return adapter;
 }
@@ -570,8 +585,7 @@ function createAdapter() {
 // The reason, never the message: a node fs or net error carries the failing path, which the log must
 // not (AGENTS.md). `EADDRINUSE`, `EACCES` and the like are enough to say what went wrong.
 function logHostFailure(step: string, error: unknown) {
-	const reason = error && typeof error === "object" && "code" in error ? String(error.code) : "unknown";
-	void logger.write("error", `native host ${step} failed: ${reason}`);
+	void logger.failure(`native host ${step}`, error);
 }
 
 /**
@@ -705,7 +719,7 @@ function configureUpdater() {
 	);
 	autoUpdater.on("update-downloaded", (info) => setUpdateState({ status: "ready", version: info.version }));
 	autoUpdater.on("error", (error: Error) => {
-		void logger.write("error", `update check failed: ${error.message}`);
+		void logger.failure("update check", error);
 		setUpdateState({ status: "error" });
 	});
 	checkForUpdates();
@@ -744,9 +758,17 @@ function registerIpc() {
 		return authState();
 	});
 
-	handle("music:query", (_event, request) => {
+	handle("music:query", async (_event, request) => {
 		validateMusicQuery(request);
-		return youtube.query(request);
+		try {
+			const page = await youtube.query(request);
+			if (request.type === "home" && !request.continuation && !page.items.length && !page.sections?.length)
+				await logger.write("warn", "music:query home: empty response");
+			return page;
+		} catch (error) {
+			await logger.failure(`music:query ${request.type}`, error);
+			throw error;
+		}
 	});
 	handle("music:command", (_event, request) => {
 		validateMusicCommand(request);
@@ -765,8 +787,7 @@ function registerIpc() {
 		try {
 			return await youtube.rating(trackId);
 		} catch (error) {
-			const reason = error instanceof Error ? error.message : "Unknown rating failure";
-			await logger.write("warn", `music:rating failed: ${reason}`);
+			await logger.failure("music:rating", error, "warn");
 			return undefined;
 		}
 	});
@@ -774,24 +795,19 @@ function registerIpc() {
 		// One section of the settings page, so a failure costs that section and nothing else. The page
 		// shows a link out to YouTube Music in its place.
 		try {
-			return await youtube.accountSettings();
+			const settings = await youtube.accountSettings();
+			if (!settings.length) await logger.write("warn", "music:account-settings: no supported settings in response");
+			return settings;
 		} catch (error) {
-			const reason = error instanceof Error ? error.message : "Unknown settings failure";
-			await logger.write("warn", `music:account-settings failed: ${reason}`);
+			await logger.failure("music:account-settings", error, "warn");
 			return [];
 		}
 	});
 	handle("player:resolve", async (_event, trackId, quality) => {
 		if (typeof trackId !== "string" || !/^[\w-]{1,256}$/.test(trackId)) throw new TypeError("Invalid track ID");
 		if (!["low", "normal", "high"].includes(String(quality))) throw new TypeError("Invalid audio quality");
-		try {
-			const result = await youtube.resolve(trackId, quality as AudioQuality);
-			return { url: result.url, fingerprint: result.fingerprint, integratedLufs: result.integratedLufs };
-		} catch (error) {
-			const reason = error instanceof Error ? error.message : "Unknown resolve failure";
-			await logger.write("error", `player:resolve failed: ${reason}`);
-			throw error;
-		}
+		const result = await youtube.resolve(trackId, quality as AudioQuality);
+		return { url: result.url, fingerprint: result.fingerprint, integratedLufs: result.integratedLufs };
 	});
 	ipcMain.on("player:position", (_event, positionSeconds) => stateStore.setPlaybackPosition(positionSeconds));
 	handle("player:notify", (_event, track) => {
@@ -854,13 +870,41 @@ function registerIpc() {
 		app.relaunch();
 		app.exit(0);
 	});
-	handle("app:info", () => ({
+	handle("app:info", appInfo);
+	handle("local:diagnostics", buildDiagnosticReport);
+	handle("local:report-issue", async () => {
+		const report = await buildDiagnosticReport();
+		clipboard.writeText(report);
+		await shell.openExternal(diagnosticIssueUrl(report));
+	});
+	handle("local:renderer-error", (_event, kind, error) => {
+		if (kind !== "error" && kind !== "unhandledrejection" && kind !== "react" && kind !== "playback")
+			throw new TypeError("Invalid diagnostic event");
+		return logger.failure(`renderer ${kind}`, error);
+	});
+}
+
+function appInfo() {
+	return {
 		version: app.getVersion(),
 		electron: process.versions.electron,
 		chrome: process.versions.chrome,
 		os: `${OS_NAMES[process.platform] ?? process.platform} ${release()}`,
 		arch: process.arch,
-	}));
+	};
+}
+
+async function buildDiagnosticReport() {
+	let connection = "none";
+	try {
+		const link: unknown = JSON.parse(await readFile(linkPath(), "utf8"));
+		validateLinkedAccount(link);
+		connection = `${link.source ?? "browser"} / ${Object.hasOwn(BROWSER_BUNDLE_IDS, link.browser) ? link.browser : "other"}`;
+	} catch {
+		// No profile identifiers or pairing data enter the report, including on a failed read.
+	}
+	const details = `Build: ${app.isPackaged ? "packaged" : "development"}; language: ${appLanguage()}; connection: ${connection}`;
+	return diagnosticReport(appInfo(), details, await logger.recent());
 }
 
 async function exportDiagnostics() {
@@ -869,8 +913,7 @@ async function exportDiagnostics() {
 		filters: [{ name: "Log", extensions: ["log"] }],
 	});
 	if (result.canceled || !result.filePath) return;
-	await logger.export(result.filePath);
-	return result.filePath;
+	await writeFile(result.filePath, await buildDiagnosticReport(), { mode: 0o600 });
 }
 
 function registerAppProtocol() {
@@ -1046,6 +1089,12 @@ async function createWindow() {
 		if (target.protocol === "https:" && externalHosts.has(target.hostname)) void shell.openExternal(url);
 		return { action: "deny" };
 	});
+	mainWindow.webContents.on("render-process-gone", (_event, details) => {
+		void logger.write("error", `renderer process stopped: exit code ${details.exitCode}`);
+	});
+	mainWindow.webContents.on("did-fail-load", (_event, code, _description, _url, isMainFrame) => {
+		if (isMainFrame && code !== -3) void logger.write("error", `renderer load failed: code ${code}`);
+	});
 	const gestureWindow = mainWindow;
 	const sendGesture = (gesture: ScrollGesture) => {
 		if (!gestureWindow.isDestroyed() && !gestureWindow.webContents.isDestroyed())
@@ -1136,6 +1185,19 @@ void app
 		void rm(join(app.getPath("userData"), "downloads"), { recursive: true, force: true });
 		stateStore = new StateStore(app.getPath("userData"));
 		logger = new LocalLogger(app.getPath("userData"));
+		await logger.write("info", `Application starting: ${app.getVersion()}; ${process.platform}; ${process.arch}`);
+		process.on("unhandledRejection", (error) => {
+			void logger.failure("main unhandled rejection", error);
+		});
+		// Observe fatal errors without changing Node's exit behavior.
+		process.on("uncaughtExceptionMonitor", (error) => {
+			void logger.failure("main uncaught exception", error);
+		});
+		Parser.setParserErrorHandler((error) =>
+			onParserError(error, (message) => {
+				void logger.write("warn", message);
+			})
+		);
 		await stateStore.load();
 		configureRestrictedEvaluator();
 		// Before the adapter: its warm-up refreshes the cookies, and the refresh asks the host server.
@@ -1166,7 +1228,7 @@ void app
 		nativeTheme.on("updated", syncTitleBarOverlay);
 	})
 	.catch((error: unknown) => {
-		void logger?.write("error", error instanceof Error ? error.message : "Application startup failed");
+		void logger?.failure("Application startup", error);
 		// The store may be what failed to load, so an unread setting falls back to the system's languages.
 		const m = messagesFor(
 			resolveLanguage(stateStore?.snapshot.settings.language, app.getPreferredSystemLanguages())

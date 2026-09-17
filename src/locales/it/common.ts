@@ -1,6 +1,20 @@
 import type { common as en } from "../en/common";
 
 export const common: typeof en = {
+	diagnostics: {
+		title: "Report degli errori",
+		description:
+			"Controlla gli errori recenti e le informazioni sull'app e sul sistema. Non include nomi degli account, cookie, URL, percorsi di file o messaggi di errore originali. Nulla viene inviato automaticamente.",
+		loading: "Caricamento del report...",
+		copy: "Copia report",
+		copied: "Report copiato.",
+		openIssue: "Apri issue su GitHub",
+		issueOpened: "Report copiato e GitHub aperto. Incolla il report nella issue prima di inviarla.",
+		pasteHint: "L'apertura di una issue copia il report completo. Incollalo su GitHub e descrivi il problema.",
+		failed: "Operazione non riuscita. Riprova oppure seleziona e copia il testo del report.",
+		refresh: "Aggiorna",
+		loadFailed: "Nixie non ha caricato questa pagina. Riprova o condividi un report degli errori.",
+	},
 	song: "Brano",
 	songs: "Brani",
 	album: "Album",
