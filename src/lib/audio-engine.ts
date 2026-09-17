@@ -8,6 +8,7 @@ import {
 	type Track,
 } from "#/shared/contracts";
 import { defaultState } from "#/shared/defaults";
+import { diagnosticError } from "#/shared/diagnostics";
 import { isTrack } from "#/shared/entities";
 import { dbToLinear, normalizationGainDb, normalizationTargets, volumeGain } from "#/shared/normalization";
 import { nextQueueIndex } from "#/shared/queue";
@@ -131,6 +132,12 @@ export function createAudioEngine(deps: AudioEngineDeps = {}): AudioEngine {
 		emit();
 	}
 
+	function reportFailure(error: unknown) {
+		void getBridge()
+			?.local?.rendererError?.("playback", diagnosticError(error))
+			.catch(() => undefined);
+	}
+
 	function setPosition(value: number) {
 		position = value;
 		getBridge()?.player.position?.(value);
@@ -203,6 +210,12 @@ export function createAudioEngine(deps: AudioEngineDeps = {}): AudioEngine {
 			}
 			// MediaError codes are the only detail the element gives up, and 4 (SRC_NOT_SUPPORTED)
 			// is what an upstream rejection looks like from here.
+			reportFailure({
+				name: "MediaError",
+				code: ["", "MEDIA_ERR_ABORTED", "MEDIA_ERR_NETWORK", "MEDIA_ERR_DECODE", "MEDIA_ERR_SRC_NOT_SUPPORTED"][
+					element.error?.code ?? 0
+				],
+			});
 			set({ status: "error", errorMessage: messages().shell.mediaError(element.error?.code ?? 0) });
 		});
 		element.addEventListener("durationchange", () => {
@@ -379,6 +392,7 @@ export function createAudioEngine(deps: AudioEngineDeps = {}): AudioEngine {
 			generation += 1;
 			preloaded = undefined;
 			clearDeck();
+			reportFailure({ name: "TimeoutError" });
 			set({ status: "error", positionSeconds: 0, errorMessage: messages().shell.playbackTimeout });
 		}, PLAY_START_TIMEOUT_MS);
 	}
@@ -445,6 +459,7 @@ export function createAudioEngine(deps: AudioEngineDeps = {}): AudioEngine {
 				set({ status: "playing" });
 			} catch (error) {
 				if (token !== generation) return;
+				reportFailure(error);
 				const reason = error instanceof Error ? `${error.name}: ${error.message}` : messages().shell.unknownFailure;
 				set({ status: "error", errorMessage: reason });
 			} finally {
@@ -515,7 +530,7 @@ export function createAudioEngine(deps: AudioEngineDeps = {}): AudioEngine {
 			// Swallowing this is what made playback failures undiagnosable, so the reason is kept.
 			if (token !== generation) return;
 			const reason = error instanceof Error ? `${error.name}: ${error.message}` : messages().shell.unknownFailure;
-			console.error("[nixie] play failed", error);
+			reportFailure(error);
 			set({ status: "error", errorMessage: reason });
 		} finally {
 			if (token === generation) clearLoadingTimeout();

@@ -33,7 +33,7 @@ vi.mock("youtubei.js", () => ({
 	Innertube: { create: vi.fn(() => Promise.resolve({})) },
 	Parser: { parseArray: vi.fn(() => []), parseResponse: vi.fn(() => ({})), setParserErrorHandler: vi.fn() },
 	UniversalCache: vi.fn(),
-	YTNodes: { MusicMultiRowListItem: class {} },
+	YTNodes: { MusicMultiRowListItem: class {}, Grid: Object },
 }));
 
 const paths: string[] = [];
@@ -1253,6 +1253,9 @@ describe("parser errors", () => {
 		expect(warn).not.toHaveBeenCalled();
 		onParserError({ error_type: "typecheck", classname: "Grid", classdata, expected: "x" });
 		expect(warn).toHaveBeenCalledExactlyOnceWith("[YOUTUBEJS][Parser]: typecheck Grid");
+		const report = vi.fn();
+		onParserError({ error_type: "typecheck", classname: "secret", classdata, expected: "x" }, report);
+		expect(report).toHaveBeenCalledExactlyOnceWith("[YOUTUBEJS][Parser]: typecheck unknown node");
 		warn.mockRestore();
 	});
 });
@@ -1895,5 +1898,16 @@ describe("premium entitlement", () => {
 		expect(readEntitlement({})).toBeUndefined();
 		expect(readEntitlement(response([]))).toBeUndefined();
 		expect(readEntitlement(response([{ itag: 137, mimeType: 'video/mp4; codecs="avc1"' }]))).toBeUndefined();
+	});
+});
+
+describe("diagnosable upstream failures", () => {
+	it("lets main record account-settings and Premium probe failures instead of returning empty success", async () => {
+		const error = new Error("Request failed with status code 403");
+		const execute = vi.fn().mockRejectedValue(error);
+		vi.mocked(Innertube.create).mockResolvedValue({ actions: { execute } } as unknown as Innertube);
+		const adapter = new YouTubeAdapter({ registerArtwork: identity } as never, "unused", async () => "session");
+		await expect(adapter.accountSettings()).rejects.toBe(error);
+		await expect(adapter.entitled()).rejects.toBe(error);
 	});
 });

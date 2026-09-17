@@ -120,7 +120,8 @@ export const settings: typeof en = {
 		versionCopied: "Versione copiata",
 		reportIssue: {
 			label: "Segnala un problema",
-			description: "Apre una nuova segnalazione su GitHub con la versione di questa build già compilata.",
+			description:
+				"Controlla e copia gli errori recenti, oppure apri una issue su GitHub con le informazioni sull'app e sul sistema.",
 		},
 		disclaimer:
 			"Nixie è un client indipendente e non ufficiale e non è affiliato, approvato o sponsorizzato da Google o YouTube. YouTube e YouTube Music sono marchi di Google LLC. Non è un prodotto YouTube Music e non ne riproduce né ne imita uno: riproduce ciò che l'account che hai collegato può già riprodurre e non memorizza alcun contenuto multimediale proprio.",

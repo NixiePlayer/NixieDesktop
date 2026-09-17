@@ -1,33 +1,54 @@
-import { appendFile, mkdir, readdir, readFile, rename, stat, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, readFile, rename, stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
-
-const sensitive = /(cookie|authorization|googlevideo|signature|lyrics|media bytes)/gi;
+import { diagnosticReason } from "../src/shared/diagnostics";
 
 export class LocalLogger {
 	readonly #path: string;
+	#writing = Promise.resolve();
+	#pending = 0;
+	#recent: string[] = [];
+	#diskFailed = false;
 
 	constructor(userDataPath: string) {
-		this.#path = join(userDataPath, "logs", "nixie.log");
+		// Do not include legacy logs, which could contain raw upstream error messages.
+		this.#path = join(userDataPath, "logs", "diagnostics.log");
 	}
 
-	async write(level: "info" | "warn" | "error", message: string) {
-		const safe = message.replaceAll(sensitive, "[redacted]").replaceAll(/https?:\/\/\S+/g, "[url]");
-		// Errors also go to the terminal, so a `pnpm dev` session shows the failure without
-		// exporting diagnostics first. The redacted string is the only thing that leaves here.
-		if (level === "error") console.error(`[nixie] ${safe}`);
-		await mkdir(dirname(this.#path), { recursive: true });
-		await this.#rotate();
-		await appendFile(this.#path, `${new Date().toISOString()} ${level.toUpperCase()} ${safe}\n`, { mode: 0o600 });
+	failure(context: string, error: unknown, level: "warn" | "error" = "error") {
+		return this.write(level, `${context}: ${diagnosticReason(error)}`);
 	}
 
-	async export(destination: string) {
-		const files = await readdir(dirname(this.#path)).catch(() => []);
-		const content = await Promise.all(
-			files
-				.filter((name) => name.startsWith("nixie.log"))
-				.map((name) => readFile(join(dirname(this.#path), name), "utf8"))
+	/** Callers supply fixed descriptions and counts only, never upstream text or request arguments. */
+	write(level: "info" | "warn" | "error", message: string) {
+		const line = `${new Date().toISOString()} ${level.toUpperCase()} ${message}\n`;
+		this.#recent.push(line);
+		this.#recent = this.#recent.slice(-100);
+		if (level === "error") console.error(`[nixie] ${message}`);
+		// ponytail: cap pending disk writes during an error storm; the last 100 remain in memory.
+		if (this.#pending >= 100) return this.#writing;
+		this.#pending++;
+		this.#writing = this.#writing.then(async () => {
+			try {
+				await mkdir(dirname(this.#path), { recursive: true });
+				await this.#rotate();
+				await appendFile(this.#path, line, { mode: 0o600 });
+			} catch {
+				// A read-only or full disk must not change the operation being diagnosed.
+				this.#diskFailed = true;
+			} finally {
+				this.#pending--;
+			}
+		});
+		return this.#writing;
+	}
+
+	async recent() {
+		await this.#writing;
+		if (this.#diskFailed) return `Log file unavailable; current session only.\n${this.#recent.join("")}`;
+		const files = await Promise.all(
+			[`${this.#path}.1`, this.#path].map((path) => readFile(path, "utf8").catch(() => ""))
 		);
-		await writeFile(destination, content.join("\n"), { mode: 0o600 });
+		return files.join("").trim().split("\n").slice(-100).join("\n");
 	}
 
 	async #rotate() {
@@ -35,8 +56,6 @@ export class LocalLogger {
 			.then((value) => value.size)
 			.catch(() => 0);
 		if (size < 1_000_000) return;
-		await rename(`${this.#path}.2`, `${this.#path}.3`).catch(() => undefined);
-		await rename(`${this.#path}.1`, `${this.#path}.2`).catch(() => undefined);
-		await rename(this.#path, `${this.#path}.1`).catch(() => undefined);
+		await rename(this.#path, `${this.#path}.1`);
 	}
 }

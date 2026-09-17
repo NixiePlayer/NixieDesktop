@@ -484,7 +484,13 @@ export interface NixieBridge {
 		load(): Promise<PersistedState>;
 		save(state: PersistedState): Promise<void>;
 		clear(selection: "session" | "all"): Promise<void>;
-		exportDiagnostics(): Promise<string | undefined>;
+		exportDiagnostics(): Promise<void>;
+		diagnostics(): Promise<string>;
+		reportIssue(): Promise<void>;
+		rendererError(
+			kind: "error" | "unhandledrejection" | "react" | "playback",
+			error: { name: string; code?: string; status?: number }
+		): Promise<void>;
 		/** One of the documents shipped in the bundle, read by name from a fixed set. */
 		document(name: BundledDocument): Promise<string>;
 	};

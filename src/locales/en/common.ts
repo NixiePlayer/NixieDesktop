@@ -1,5 +1,19 @@
 /** Words more than one part of the app needs. Area-specific wording lives in that area's own file. */
 export const common = {
+	diagnostics: {
+		title: "Error report",
+		description:
+			"Review recent errors and app and system information. No account names, cookies, URLs, file paths, or raw error messages are included. Nothing is sent automatically.",
+		loading: "Loading report...",
+		copy: "Copy report",
+		copied: "Report copied.",
+		openIssue: "Open GitHub issue",
+		issueOpened: "Report copied and GitHub opened. Paste the report into the issue before you submit it.",
+		pasteHint: "Opening an issue copies the full report. Paste it into GitHub and describe what happened.",
+		failed: "This action failed. Try again, or select and copy the report text.",
+		refresh: "Refresh",
+		loadFailed: "Nixie could not load this page. Try again or share an error report.",
+	},
 	song: "Song",
 	songs: "Songs",
 	album: "Album",

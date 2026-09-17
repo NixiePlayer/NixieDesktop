@@ -1,6 +1,7 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { Play } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { DiagnosticReport } from "#/components/diagnostic-report";
 import {
 	Artwork,
 	BrowseAction,
@@ -78,7 +79,11 @@ export const Route = createFileRoute("/")({
 		const held = deps.chip ? undefined : heldFeeds.home;
 		if (held) heldFeeds.home = undefined;
 		const page =
-			held ?? (await queryMusic({ type: "home", filter: deps.chip }).catch((): Page<MusicEntity> => ({ items: [] })));
+			held ??
+			(await queryMusic({ type: "home", filter: deps.chip }).catch((): Page<MusicEntity> & { failed: boolean } => ({
+				items: [],
+				failed: true,
+			})));
 		// Held for the pending state, which is a match of its own and so has no loader data at all.
 		if (page.filters?.length) lastFilters = page.filters;
 		fetchedAt = Date.now();
@@ -324,7 +329,24 @@ function HomePage() {
 		return () => observer.disconnect();
 	}, [next, key, m]);
 
-	if (!first) return <p className="text-muted-foreground text-sm">{m.pages.home.empty}</p>;
+	if (!first)
+		return (
+			<div className="flex flex-col items-start gap-4">
+				<p role={"failed" in page ? "alert" : undefined} className="text-muted-foreground text-sm">
+					{"failed" in page ? m.common.diagnostics.loadFailed : m.pages.home.empty}
+				</p>
+				<div className="flex flex-wrap gap-2">
+					<Button
+						variant="outline"
+						size="sm"
+						onClick={() => void router.invalidate({ filter: (match) => match.routeId === "/" })}
+					>
+						{m.common.tryAgain}
+					</Button>
+					<DiagnosticReport />
+				</div>
+			</div>
+		);
 
 	const firstQueue = toTracks(first.items);
 	const firstContext = { type: "home" as const, title: first.title };

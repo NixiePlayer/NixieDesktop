@@ -10,12 +10,19 @@ import "./lib/platform";
 // And for its side effect: it resolves the mirrored language before the first render, so the window
 // never opens in one language and redraws in the other once the state file answers.
 import "./lib/i18n";
+import { reportRendererError } from "./lib/diagnostics";
 import { router } from "./router";
+
+window.addEventListener("error", (event) => reportRendererError("error", event.error));
+window.addEventListener("unhandledrejection", (event) => reportRendererError("unhandledrejection", event.reason));
 
 const rootElement = document.getElementById("app")!;
 
 if (!rootElement.innerHTML) {
-	const root = ReactDOM.createRoot(rootElement);
+	const root = ReactDOM.createRoot(rootElement, {
+		onCaughtError: (error) => reportRendererError("react", error),
+		onUncaughtError: (error) => reportRendererError("react", error),
+	});
 	root.render(
 		<StrictMode>
 			<RouterProvider router={router} />

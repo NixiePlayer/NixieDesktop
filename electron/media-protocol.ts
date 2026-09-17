@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { net } from "electron";
 import { MEDIA_ID_LIFETIME_MS, type AudioVariantFingerprint } from "../src/shared/contracts";
+import { diagnosticReason } from "../src/shared/diagnostics";
 import { parseByteRange, type ByteRange } from "../src/shared/range";
 
 interface MediaTarget {
@@ -100,10 +101,15 @@ export class SecureResourceRegistry {
 		if (!target.url) return this.#refuse(request, 404);
 		const url = new URL(target.url);
 		if (range) url.searchParams.set("range", `${range.start}-${range.end}`);
-		const upstream = await net.fetch(url.toString(), {
-			signal: request.signal,
-			headers: { "cache-control": "no-store" },
-		});
+		const upstream = await net
+			.fetch(url.toString(), {
+				signal: request.signal,
+				headers: { "cache-control": "no-store" },
+			})
+			.catch((error: unknown) => {
+				if (!request.signal.aborted) this.#log(`media fetch failed: ${diagnosticReason(error)}`);
+				throw error;
+			});
 		if (!upstream.ok) {
 			this.#log(`media fetch rejected: ${upstream.status} itag ${target.fingerprint.itag}`);
 			await upstream.body?.cancel().catch(() => undefined);
