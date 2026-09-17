@@ -1,5 +1,6 @@
 import { createCipheriv, createHash, randomBytes } from "node:crypto";
 import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it } from "vitest";
 import {
 	accessRefusal,
@@ -10,6 +11,7 @@ import {
 	decryptChromiumRows,
 	decryptGcm,
 	firefoxRoot,
+	readFirefoxCookies,
 	isAppBound,
 	linuxStorageKey,
 	linuxStorageKeys,
@@ -320,5 +322,37 @@ describe("profileIdentity", () => {
 			accountEmail: undefined,
 			picture: undefined,
 		});
+	});
+});
+
+describe("Firefox cookie jars", () => {
+	it("imports only the live regular YouTube session, never container or partition cookies", () => {
+		const database = new DatabaseSync(":memory:");
+		try {
+			database.exec(
+				"CREATE TABLE moz_cookies (host TEXT, name TEXT, value TEXT, path TEXT, isSecure INTEGER, isHttpOnly INTEGER, expiry INTEGER, originAttributes TEXT)"
+			);
+			const insert = database.prepare("INSERT INTO moz_cookies VALUES (?, 'SAPISID', ?, '/', 1, 1, ?, ?)");
+			const future = Math.floor(Date.now() / 1000) + 3600;
+			insert.run(".youtube.com", "regular", future, "");
+			insert.run(".youtube.com", "container", future, "^userContextId=1");
+			insert.run(".youtube.com", "partition", future, "^partitionKey=%28https%2Cother.test%29");
+			insert.run(".youtube.com", "expired", 1, "");
+			insert.run(".notyoutube.com", "unrelated", future, "");
+			insert.run("youtube.com.attacker.test", "attacker", future, "");
+			insert.run("music.youtube.com", "", future, "");
+			insert.run("music.youtube.com", "session", 0, "");
+			const cookies = readFirefoxCookies(database);
+			expect(cookies.map((cookie) => cookie.value)).toEqual(["regular", "session"]);
+			expect(cookies[0]).toMatchObject({
+				domain: ".youtube.com",
+				secure: true,
+				httpOnly: true,
+				expirationDate: future,
+			});
+			expect(cookies[1]?.expirationDate).toBeUndefined();
+		} finally {
+			database.close();
+		}
 	});
 });

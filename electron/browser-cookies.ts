@@ -553,6 +553,26 @@ export function decryptChromiumRows(rows: ChromiumRow[], { scheme, keyFor }: Sto
 	return cookies;
 }
 
+// Separate Firefox cookie jars must never overwrite each other in Electron's single jar.
+// Containers and third-party partitions require a separate profile selection UI, not a merge.
+const FIREFOX_SESSION =
+	"(host = 'youtube.com' OR host LIKE '%.youtube.com') AND originAttributes = '' AND (expiry = 0 OR expiry > unixepoch()) AND value <> ''";
+
+export function readFirefoxCookies(database: DatabaseSync): ImportedCookie[] {
+	const rows = database
+		.prepare(`SELECT host, name, value, path, isSecure, isHttpOnly, expiry FROM moz_cookies WHERE ${FIREFOX_SESSION}`)
+		.all();
+	return (rows as unknown as FirefoxRow[]).map((row) => ({
+		name: row.name,
+		value: row.value,
+		domain: row.host,
+		path: row.path,
+		secure: Boolean(row.isSecure),
+		httpOnly: Boolean(row.isHttpOnly),
+		expirationDate: row.expiry > 0 ? row.expiry : undefined,
+	}));
+}
+
 const SIGNED_IN = {
 	chromium: "SELECT 1 AS held FROM cookies WHERE host_key LIKE '%youtube.com' AND name = 'SAPISID' LIMIT 1",
 	// Windows is the one platform that can hold a session it cannot read, so the row is asked what
@@ -560,7 +580,7 @@ const SIGNED_IN = {
 	// three of them raises no prompt and touches no key: this runs for every profile on every listing.
 	windows:
 		"SELECT substr(encrypted_value, 1, 3) AS scheme FROM cookies WHERE host_key LIKE '%youtube.com' AND name = 'SAPISID' LIMIT 1",
-	firefox: "SELECT 1 AS held FROM moz_cookies WHERE host LIKE '%youtube.com' AND name = 'SAPISID' LIMIT 1",
+	firefox: `SELECT 1 AS held FROM moz_cookies WHERE ${FIREFOX_SESSION} AND name = 'SAPISID' LIMIT 1`,
 };
 
 /**
@@ -651,25 +671,7 @@ export async function readYouTubeCookies(account: BrowserAccount): Promise<Impor
 	}
 
 	if (!location.chromium) {
-		const rows = await withCookieDatabase(location.cookiePath, (database) =>
-			database
-				.prepare(
-					"SELECT host, name, value, path, isSecure, isHttpOnly, expiry FROM moz_cookies WHERE host LIKE '%youtube.com'"
-				)
-				.all()
-		);
-		return (rows as unknown as FirefoxRow[])
-			.filter((row) => row.value)
-			.map((row) => ({
-				name: row.name,
-				value: row.value,
-				domain: row.host,
-				path: row.path,
-				secure: Boolean(row.isSecure),
-				httpOnly: Boolean(row.isHttpOnly),
-				// Firefox already stores seconds from the epoch, and 0 means a session cookie.
-				expirationDate: row.expiry > 0 ? row.expiry : undefined,
-			}));
+		return withCookieDatabase(location.cookiePath, readFirefoxCookies);
 	}
 
 	const held = await storageKey(location.chromium, location.root);
