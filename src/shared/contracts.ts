@@ -1,6 +1,13 @@
 import type { AccountSetting, AccountSettingKey } from "./account-settings";
 import type { LanguageSetting } from "./i18n";
 
+/** Contact samples use one ordered stream so release cannot overtake the final delta. */
+export interface ScrollGesture {
+	phase: "begin" | "update" | "end" | "cancel";
+	/** Available on macOS, before Chromium adds momentum or delays scroll end. */
+	sample?: { deltaX: number; deltaY: number; at: number; x: number; y: number };
+}
+
 export type { AccountSetting, AccountSettingKey };
 
 export type RemoteId = string;
@@ -489,6 +496,8 @@ export interface NixieBridge {
 		openPrivacySettings(): Promise<void>;
 		/** Restarts the app, which is when macOS applies a permission granted while it ran. */
 		relaunch(): Promise<void>;
+		/** Native trackpad contact boundaries, which DOM wheel events do not expose. */
+		onScrollGesture(listener: (gesture: ScrollGesture) => void): () => void;
 	};
 	update: {
 		/** The state as main holds it now, for a page that mounted after the events. */

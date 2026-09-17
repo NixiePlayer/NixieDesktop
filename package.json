@@ -21,11 +21,11 @@
 		"#/*": "./src/*"
 	},
 	"scripts": {
-		"dev": "node scripts/dev-app-name.mjs && vite dev --port 3000",
+		"dev": "node scripts/build-native.mjs && node scripts/dev-app-name.mjs && vite dev --port 3000",
 		"postinstall": "node scripts/dev-app-name.mjs && pnpm licenses:write",
 		"generate-routes": "tsr generate",
 		"licenses:write": "node scripts/licenses.mjs",
-		"build": "pnpm licenses:write && vite build",
+		"build": "node scripts/build-native.mjs && pnpm licenses:write && vite build",
 		"package:mac": "pnpm build && electron-builder --mac --dir -c.mac.identity=- --publish never",
 		"package:win": "pnpm build && electron-builder --win --x64 --publish never",
 		"package:linux": "pnpm build && electron-builder --linux --x64 --publish never",
@@ -91,12 +91,16 @@
 			"releaseType": "draft"
 		},
 		"asar": true,
+		"asarUnpack": [
+			"dist-native/*.node"
+		],
 		"directories": {
 			"output": "release"
 		},
 		"files": [
 			"dist/**",
 			"dist-electron/**",
+			"dist-native/**",
 			"package.json",
 			"LICENSE",
 			"PRIVACY.md",

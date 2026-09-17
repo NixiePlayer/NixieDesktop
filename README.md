@@ -278,9 +278,9 @@ feature, no priority and no entitlement to anything on YouTube.
 - **Node 24** and **pnpm 12.3.4**, both exactly. `engines` is strict and `.node-version`
   is there for anyone using a version manager.
 - **macOS, Windows or Linux.** All three work, and `pnpm check` runs on Ubuntu and Windows
-  in CI. On macOS you also want the Xcode command line tools (`xcode-select --install`),
-  since the dev setup script uses `plutil`, `sips` and `codesign` there; off macOS that
-  script does nothing and there is no setup step of its own.
+  in CI. On macOS you also need the Xcode command line tools (`xcode-select --install`)
+  and the headers included with Node. They build the small native trackpad bridge and
+  prepare the development app. These steps do nothing on Windows and Linux.
 
 You do not need an Apple Developer account to build and run the app. That is only for
 producing signed, notarized macOS releases, and [docs/signing.md](docs/signing.md) covers
@@ -353,9 +353,8 @@ do.
 | `scripts/` | Dev setup and release hooks |
 | `build/` | Icons that electron-builder packages |
 
-[AGENTS.md](AGENTS.md) is the architecture document. It is long, but it records why things
-are the way they are, including several places where the obvious approach is the broken
-one. Read the section covering whatever you are about to touch.
+[AGENTS.md](AGENTS.md) is the architecture and conventions guide, including several places
+where the obvious approach is the broken one. Read it before touching the code.
 
 ## Contributing
 

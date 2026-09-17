@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { createRequire } from "node:module";
 import { release } from "node:os";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -28,6 +29,7 @@ import type {
 	AuthState,
 	ExtensionSource,
 	PersistedState,
+	ScrollGesture,
 	Track,
 	UpdateState,
 } from "../src/shared/contracts";
@@ -1044,6 +1046,52 @@ async function createWindow() {
 		if (target.protocol === "https:" && externalHosts.has(target.hostname)) void shell.openExternal(url);
 		return { action: "deny" };
 	});
+	const gestureWindow = mainWindow;
+	const sendGesture = (gesture: ScrollGesture) => {
+		if (!gestureWindow.isDestroyed() && !gestureWindow.webContents.isDestroyed())
+			gestureWindow.webContents.send("app:scroll-gesture", gesture);
+	};
+	if (process.platform === "darwin") {
+		// Electron's input-event omits AppKit's contact and momentum phases. Read them
+		// locally, for this window only, without global input monitoring or permissions.
+		const native: {
+			start(
+				handle: Buffer,
+				listener: (sample: NonNullable<ScrollGesture["sample"]> & Pick<ScrollGesture, "phase">) => void
+			): void;
+			stop(): void;
+		} = createRequire(import.meta.url)(join(app.getAppPath(), "dist-native/scroll-gesture.node"));
+		native.start(gestureWindow.getNativeWindowHandle(), ({ phase, ...sample }) => {
+			const zoom = gestureWindow.webContents.getZoomFactor();
+			sendGesture({
+				phase,
+				sample: {
+					...sample,
+					x: sample.x / zoom,
+					y: sample.y / zoom,
+					deltaX: sample.deltaX / zoom,
+					deltaY: sample.deltaY / zoom,
+				},
+			});
+		});
+		gestureWindow.once("closed", () => native.stop());
+	} else {
+		gestureWindow.webContents.on("input-event", (_event, input) => {
+			switch (input.type) {
+				case "gestureScrollBegin":
+					sendGesture({ phase: "begin" });
+					break;
+				case "gestureScrollEnd":
+				case "gestureFlingStart":
+					sendGesture({ phase: "end" });
+					break;
+				case "gestureFlingCancel":
+					sendGesture({ phase: "cancel" });
+					break;
+			}
+		});
+	}
+	gestureWindow.on("blur", () => sendGesture({ phase: "cancel" }));
 	mainWindow.webContents.on("will-navigate", (event, url) => {
 		const current = mainWindow?.webContents.getURL();
 		if (!current || new URL(url).origin !== new URL(current).origin) event.preventDefault();

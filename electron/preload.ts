@@ -11,6 +11,7 @@ import type {
 	NixieBridge,
 	NixiePlatform,
 	PersistedState,
+	ScrollGesture,
 	Track,
 	UpdateState,
 } from "../src/shared/contracts";
@@ -103,6 +104,11 @@ const bridge: NixieBridge = {
 		platform,
 		openPrivacySettings: () => ipcRenderer.invoke("app:privacy-settings"),
 		relaunch: () => ipcRenderer.invoke("app:relaunch"),
+		onScrollGesture: (listener) => {
+			const handler = (_event: unknown, gesture: ScrollGesture) => listener(gesture);
+			ipcRenderer.on("app:scroll-gesture", handler);
+			return () => ipcRenderer.off("app:scroll-gesture", handler);
+		},
 	},
 	update: {
 		state: () => ipcRenderer.invoke("update:state"),
