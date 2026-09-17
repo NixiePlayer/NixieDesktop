@@ -3,7 +3,7 @@ import type { signin as en } from "../en/signin";
 export const signin: typeof en = {
 	heroTitle: "Un vero player per la tua musica.",
 	heroBody:
-		"Le tue playlist, i tuoi album e la tua raccolta in un player desktop nativo. Niente schede del browser, niente pubblicità, riproduzione senza pause.",
+		"Le tue playlist, i tuoi album e la tua raccolta in un player desktop nativo. Niente schede del browser, niente pubblicità.",
 	continueWith: (name, detail) => (detail ? `Continua con ${name}, ${detail}` : `Continua con ${name}`),
 	extensionTitle: "Collega Chrome, Edge, Brave o Vivaldi",
 	notSignedInTo: "Accesso non effettuato su",

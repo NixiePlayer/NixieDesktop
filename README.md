@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/banner.png" alt="Nixie: a desktop client for YouTube Music, with gapless playback, loudness normalization and synced lyrics." width="100%">
+  <img src="docs/banner.png" alt="Nixie: a desktop client for YouTube Music, with loudness normalization and synced lyrics." width="100%">
 </p>
 
 <p align="center">
@@ -12,8 +12,8 @@
 </p>
 
 Nixie is a desktop client for YouTube Music. It plays your account's music through a
-native app instead of a browser tab: gapless playback, loudness normalization you can
-actually set, time-synced lyrics, and a session that comes back exactly where you left it.
+native app instead of a browser tab: loudness normalization you can actually set,
+time-synced lyrics, and a session that comes back exactly where you left it.
 
 It is an independent project. There is no Nixie account, no backend and no telemetry.
 Everything it knows stays on your computer.
@@ -141,8 +141,6 @@ Now Playing in Control Center. It is a desktop app, not a web page in a frame.
 
 **Playback**
 
-- Gapless playback with two audio decks. The handoff is armed before the boundary rather
-  than triggered when a track ends, so joins are seamless even on a minimized window.
 - Loudness normalization at -19, -14 or -11 LUFS, or off.
 - A volume slider that behaves like your ears do, not like a gain multiplier.
 - Queue with play next, add to queue, reorder and remove. Repeat off, all or one. Shuffle.

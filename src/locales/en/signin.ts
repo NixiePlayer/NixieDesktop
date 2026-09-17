@@ -1,7 +1,7 @@
 /** The sign-in view and the two screens that stand in for the app: its wording is the app's disclosure. */
 export const signin = {
 	heroTitle: "A real player for your music.",
-	heroBody: "Your playlists, albums and library, in a native desktop player. No browser tab, no ads, gapless.",
+	heroBody: "Your playlists, albums and library, in a native desktop player. No browser tab, no ads.",
 	continueWith: (name: string, detail?: string) =>
 		detail ? `Continue with ${name}, ${detail}` : `Continue with ${name}`,
 	extensionTitle: "Connect Chrome, Edge, Brave or Vivaldi",
