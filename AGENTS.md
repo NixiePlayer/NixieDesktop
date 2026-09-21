@@ -106,7 +106,6 @@ Releases are cut by the maintainer. "Release a new patch/minor/major version" me
 4. `git diff v<version> HEAD --stat` must be empty; otherwise `pnpm release:retag`.
 5. Report version, notes and diff result, then **stop and ask**.
 6. Only on explicit go-ahead: `pnpm release:push`. The pushed tag runs `.github/workflows/release.yml` and the version is final from then on.
-7. `gh run watch`, then confirm the tag has exactly one published release with twelve files (7 macOS, 3 Windows, 2 Linux). Verify the Apple Silicon DMG with `spctl -a -vvv -t open --context context:primary-signature` and `xcrun stapler validate`, then the app inside with `spctl -a -vvv -t exec` and `xcrun stapler validate`.
 
 - Every build passes `--publish never`; only the workflow's `publish` job writes to GitHub Releases.
 - Do not rename the macOS ZIPs: the updater picks the architecture by the `arm64` substring in the URL. `scripts/finish-dmgs.mjs` renames, notarizes and staples the DMGs.
