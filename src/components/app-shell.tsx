@@ -91,6 +91,8 @@ export function AppShell({ auth, onAuthChange }: { auth: AuthState; onAuthChange
 	const wide = useRailLabels();
 	const swipe = useSwipeNavigation();
 	const engine = usePlayer();
+	const router = useRouter();
+	const navigate = useNavigate();
 	useSystemIntegration();
 
 	useEffect(() => {
@@ -102,6 +104,20 @@ export function AppShell({ auth, onAuthChange }: { auth: AuthState; onAuthChange
 				event.preventDefault();
 				searchRef.current?.focus();
 				searchRef.current?.select();
+				return;
+			}
+			if (accelerator && event.key === ",") {
+				event.preventDefault();
+				void navigate({ to: "/settings" });
+				return;
+			}
+			// History follows the platform's browser keys: Cmd+[ and Cmd+] on macOS, Alt+Arrow elsewhere.
+			const back = isMac ? event.metaKey && event.key === "[" : event.altKey && event.key === "ArrowLeft";
+			const forward = isMac ? event.metaKey && event.key === "]" : event.altKey && event.key === "ArrowRight";
+			if (back || forward) {
+				event.preventDefault();
+				if (back) router.history.back();
+				else router.history.forward();
 				return;
 			}
 			const target = event.target as HTMLElement | null;
@@ -128,7 +144,7 @@ export function AppShell({ auth, onAuthChange }: { auth: AuthState; onAuthChange
 		};
 		window.addEventListener("keydown", onKeyDown, true);
 		return () => window.removeEventListener("keydown", onKeyDown, true);
-	}, [engine]);
+	}, [engine, navigate, router]);
 
 	return (
 		<div className="bg-background grid h-full grid-cols-[auto_minmax(0,1fr)_auto] grid-rows-[3.5rem_minmax(0,1fr)_4.5rem]">

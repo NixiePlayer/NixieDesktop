@@ -1002,9 +1002,54 @@ function installMenu() {
 					{ label: m.common.previous, accelerator: "CmdOrCtrl+Left", click: () => send("previous") },
 				],
 			},
-			{ role: "windowMenu" },
+			{
+				role: "viewMenu",
+				submenu: [
+					{ role: "resetZoom" },
+					{ role: "zoomIn" },
+					{ role: "zoomOut" },
+					{ type: "separator" },
+					{ role: "togglefullscreen" },
+				],
+			},
+			// The stock macOS window menu has no Close, so Cmd+W did nothing. Close goes through the
+			// window's `close` handler, which hides rather than destroys, like every macOS music player.
+			{
+				role: "windowMenu",
+				submenu: [
+					{ role: "minimize" },
+					{ role: "zoom" },
+					{ type: "separator" },
+					{ role: "close" },
+					{ type: "separator" },
+					{ role: "front" },
+				],
+			},
 		])
 	);
+}
+
+// Off macOS there is no menu to carry accelerators, so the window's standard keys are read here, before
+// the page sees them: F11 toggles full screen and Ctrl+Plus, Minus and 0 zoom, matching the macOS View
+// menu. Ctrl+W and Ctrl+Q are Linux only (GNOME and KDE convention); Windows closes with Alt+F4, and a
+// Ctrl+W there would quit the player on a key meant for closing a tab. The window manager keeps the rest.
+function installWindowKeys(window: BrowserWindow) {
+	if (process.platform === "darwin") return;
+	window.webContents.on("before-input-event", (event, input) => {
+		if (input.type !== "keyDown") return;
+		const contents = window.webContents;
+		const key = input.key.toLowerCase();
+		const control = input.control && !input.alt && !input.meta;
+		const linux = process.platform === "linux";
+		if (input.key === "F11" && !input.control && !input.alt) window.setFullScreen(!window.isFullScreen());
+		else if (linux && control && !input.shift && key === "w") window.close();
+		else if (linux && control && !input.shift && key === "q") app.quit();
+		else if (control && (key === "=" || key === "+")) contents.setZoomLevel(contents.getZoomLevel() + 0.5);
+		else if (control && (key === "-" || key === "_")) contents.setZoomLevel(contents.getZoomLevel() - 0.5);
+		else if (control && key === "0") contents.setZoomLevel(0);
+		else return;
+		event.preventDefault();
+	});
 }
 
 async function verifyRestrictedEvaluator() {
@@ -1145,6 +1190,7 @@ async function createWindow() {
 		const current = mainWindow?.webContents.getURL();
 		if (!current || new URL(url).origin !== new URL(current).origin) event.preventDefault();
 	});
+	installWindowKeys(mainWindow);
 	mainWindow.once("ready-to-show", () => mainWindow?.show());
 	mainWindow.on("close", (event) => {
 		const bounds = mainWindow?.getBounds();
