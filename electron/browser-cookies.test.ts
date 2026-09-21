@@ -342,8 +342,12 @@ describe("Firefox cookie jars", () => {
 			insert.run("youtube.com.attacker.test", "attacker", future, "");
 			insert.run("music.youtube.com", "", future, "");
 			insert.run("music.youtube.com", "session", 0, "");
+			// Recent Firefox stores milliseconds.
+			insert.run(".youtube.com", "milliseconds", future * 1000, "");
+			insert.run(".youtube.com", "expired milliseconds", (future - 7200) * 1000, "");
 			const cookies = readFirefoxCookies(database);
-			expect(cookies.map((cookie) => cookie.value)).toEqual(["regular", "session"]);
+			expect(cookies.map((cookie) => cookie.value)).toEqual(["regular", "session", "milliseconds"]);
+			expect(cookies[2]?.expirationDate).toBe(future);
 			expect(cookies[0]).toMatchObject({
 				domain: ".youtube.com",
 				secure: true,

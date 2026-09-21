@@ -555,12 +555,18 @@ export function decryptChromiumRows(rows: ChromiumRow[], { scheme, keyFor }: Sto
 
 // Separate Firefox cookie jars must never overwrite each other in Electron's single jar.
 // Containers and third-party partitions require a separate profile selection UI, not a merge.
-const FIREFOX_SESSION =
-	"(host = 'youtube.com' OR host LIKE '%.youtube.com') AND originAttributes = '' AND (expiry = 0 OR expiry > unixepoch()) AND value <> ''";
+// Recent Firefox stores `expiry` in milliseconds, older releases in seconds. Read as seconds, every expired row that
+// Firefox has not purged yet passes as live: YouTube's short-lived `ST-*` cookies then pile into one
+// Cookie header that Google refuses with HTTP 413. No expiry in seconds reaches 1e11 (year 5138),
+// so the magnitude tells the two schemas apart per row.
+const FIREFOX_EXPIRY = "(CASE WHEN expiry > 100000000000 THEN expiry / 1000 ELSE expiry END)";
+const FIREFOX_SESSION = `(host = 'youtube.com' OR host LIKE '%.youtube.com') AND originAttributes = '' AND (expiry = 0 OR ${FIREFOX_EXPIRY} > unixepoch()) AND value <> ''`;
 
 export function readFirefoxCookies(database: DatabaseSync): ImportedCookie[] {
 	const rows = database
-		.prepare(`SELECT host, name, value, path, isSecure, isHttpOnly, expiry FROM moz_cookies WHERE ${FIREFOX_SESSION}`)
+		.prepare(
+			`SELECT host, name, value, path, isSecure, isHttpOnly, ${FIREFOX_EXPIRY} AS expiry FROM moz_cookies WHERE ${FIREFOX_SESSION}`
+		)
 		.all();
 	return (rows as unknown as FirefoxRow[]).map((row) => ({
 		name: row.name,
