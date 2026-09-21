@@ -66,10 +66,17 @@ export interface DiagnosticError {
 export function diagnosticError(error: unknown): DiagnosticError {
 	const value = error && typeof error === "object" ? (error as Record<string, unknown>) : {};
 	const cause = value.cause && typeof value.cause === "object" ? (value.cause as Record<string, unknown>) : {};
-	const code = [value.code, cause.code].find((candidate) => typeof candidate === "string" && errorCodes.has(candidate));
+	const code = [value.code, cause.code].find(
+		(candidate) =>
+			typeof candidate === "string" && (errorCodes.has(candidate) || /^ERR_UPDATER_[A-Z_]+$/.test(candidate))
+	);
+	// electron-updater wraps its HTTP failures as `HttpError: 504` inside the message and keeps `statusCode`.
 	const status =
 		value.status ??
-		(typeof value.message === "string" ? Number(/\bstatus code ([45]\d{2})\b/.exec(value.message)?.[1]) : undefined);
+		value.statusCode ??
+		(typeof value.message === "string"
+			? Number(/\b(?:status code|HttpError:) ([45]\d{2})\b/.exec(value.message)?.[1])
+			: undefined);
 	return {
 		name: typeof value.name === "string" && errorNames.has(value.name) ? value.name : "Error",
 		code: typeof code === "string" ? code : undefined,

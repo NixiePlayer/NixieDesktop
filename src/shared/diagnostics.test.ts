@@ -36,6 +36,16 @@ describe("safe diagnostics", () => {
 		expect(diagnosticReason(new Error("That profile is not signed in to YouTube"))).toBe("Error / notSignedIn");
 		expect(diagnosticReason({ name: "MediaError", code: "MEDIA_ERR_NETWORK" })).toBe("MediaError / MEDIA_ERR_NETWORK");
 	});
+	it("keeps the updater code and HTTP status without the feed URL", () => {
+		const error = Object.assign(
+			new Error(
+				"Cannot parse releases feed: Unable to find latest version on GitHub (https://github.com/x): HttpError: 504"
+			),
+			{ code: "ERR_UPDATER_INVALID_RELEASE_FEED" }
+		);
+		expect(diagnosticReason(error)).toBe("Error / ERR_UPDATER_INVALID_RELEASE_FEED / HTTP 504");
+		expect(diagnosticReason({ name: "HttpError", statusCode: 404 })).toBe("Error / HTTP 404");
+	});
 	it("includes system information but keeps the full log out of the issue URL", () => {
 		const report = diagnosticReport(
 			info,
