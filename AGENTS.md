@@ -79,6 +79,7 @@ Unofficial YouTube Music desktop client for macOS, Windows and Linux. Electron m
 - Account setting writes replay the upstream payload verbatim; never derive the body from state.
 - Mix (`RD…`) pages are held once per session in `api.ts` because upstream draws a new mix per request.
 - `electron-updater` is imported as a default export and destructured (CommonJS).
+- The update feed is the `generic` provider on `releases/latest/download`, not `github`: that provider reads the rendered release page, which GitHub answers with a cached 504 for minutes after a release.
 - `scripts/dev-app-name.mjs` renames and re-signs the dev Electron bundle; without the ad-hoc signature macOS refuses every notification.
 
 ## Architecture notes

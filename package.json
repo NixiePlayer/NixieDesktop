@@ -87,8 +87,8 @@
 		"appId": "com.theedoran.nixiedesktop",
 		"productName": "Nixie",
 		"publish": {
-			"provider": "github",
-			"releaseType": "draft"
+			"provider": "generic",
+			"url": "https://github.com/NixiePlayer/NixieDesktop/releases/latest/download"
 		},
 		"asar": true,
 		"asarUnpack": [
