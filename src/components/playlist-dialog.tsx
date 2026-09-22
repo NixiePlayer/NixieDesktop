@@ -4,6 +4,7 @@ import { useMessages } from "#/lib/i18n";
 import { invalidatePages } from "#/lib/invalidate";
 import { addPlaylist } from "#/lib/library";
 import type { Playlist, PlaylistPrivacy } from "#/shared/contracts";
+import { emptyPlaylistArtwork } from "#/shared/entities";
 import type { Messages } from "#/shared/i18n";
 import { Button } from "./ui/button";
 import {
@@ -132,6 +133,7 @@ export function NewPlaylistDialog({
 									id: result.id ? `VL${result.id}` : title,
 									title,
 									description: description || undefined,
+									artworkUrl: emptyPlaylistArtwork,
 									privacy,
 									itemCount: 0,
 								};

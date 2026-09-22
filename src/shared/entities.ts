@@ -115,6 +115,14 @@ function artworkProxy(url: string) {
 	return `nixie://app/artwork/${id}`;
 }
 
+/**
+ * The cover upstream lists an empty playlist with. The create endpoint answers with an id and nothing
+ * to draw, so a playlist made here wears this until the library is read again.
+ */
+export const emptyPlaylistArtwork = artworkProxy(
+	"https://www.gstatic.com/youtube/media/ytm/images/pbg/playlist-empty-state-@576.png"
+);
+
 // The wording is a key into the dictionary rather than a string, so the same playlist reads in the
 // language the app is drawn in wherever it is named.
 const autoPlaylists: Record<
