@@ -8,6 +8,7 @@ export const main: typeof en = {
 	errors: {
 		unentitled: "Quell'account non ha un abbonamento YouTube Music Premium, che è necessario per usare Nixie",
 		notSignedIn: "In quel profilo non è stato effettuato l'accesso a YouTube",
+		signInClosed: "Quell'accesso non è più aperto. Ricomincia.",
 		secureStorage: "L'archiviazione sicura non è disponibile su questo computer",
 		unlockKeyringToPair: "Sblocca un portachiavi di sistema prima di associare l'estensione",
 		browserGone: "Quel browser non è più collegato",

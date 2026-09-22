@@ -35,13 +35,14 @@ import type {
 	Track,
 	UpdateState,
 } from "../src/shared/contracts";
-import type { LinkedAccount } from "../src/shared/contracts";
+import type { GoogleAccount, LinkedAccount } from "../src/shared/contracts";
 import { diagnosticIssueUrl, diagnosticReport } from "../src/shared/diagnostics";
 import { artistNames } from "../src/shared/entities";
 import { messagesFor, resolveLanguage } from "../src/shared/i18n";
 import {
 	validateBrowserAccount,
 	validateDocumentName,
+	validateAuthUser,
 	validateInstallId,
 	validateLinkedAccount,
 	validateMusicCommand,
@@ -295,6 +296,13 @@ let refreshInFlight: Promise<void> | undefined;
 // Bumped by every `clearSession`. A refresh captures it when it starts and writes nothing once it has
 // moved: its cookies belong to a session that was signed out or replaced while it was on the wire.
 let sessionEpoch = 0;
+/** Which of the linked browser's Google accounts InnerTube speaks as, as the link names it. */
+let authUser = 0;
+/**
+ * A sign-in waiting on the reader to pick one of the browser's accounts. The cookies wait here, not in
+ * the partition, so nothing looks signed in until an account is chosen and has passed the checks.
+ */
+let pendingSignIn: { cookies: ImportedCookie[]; link: LinkedAccount; accounts: GoogleAccount[] } | undefined;
 // A linked extension is not gone the moment it is not connected: at a cold start it reconnects on its
 // own alarm, a minute or more later. Unseen for this long it is treated as removed, and the copied
 // session is cleared as PRIVACY.md promises rather than kept for as long as the app runs.
@@ -337,6 +345,8 @@ async function clearSession() {
 	await rm(linkPath(), { force: true });
 	sessionEpoch += 1;
 	refreshedAt = Date.now();
+	authUser = 0;
+	pendingSignIn = undefined;
 }
 
 /**
@@ -366,6 +376,7 @@ async function refreshLinkedCookies() {
 		try {
 			link = JSON.parse(await readFile(linkPath(), "utf8"));
 			validateLinkedAccount(link);
+			authUser = link.authUser ?? 0;
 		} catch (error) {
 			await write([]);
 			throw error;
@@ -476,12 +487,27 @@ async function authState(): Promise<AuthState> {
  * attempt starts from nothing. The two callers differ only in where the cookies came from and what
  * `source` the link records.
  */
-async function linkSession(cookies: ImportedCookie[], link: LinkedAccount) {
+async function linkSession(cookies: ImportedCookie[], link: LinkedAccount): Promise<AuthState> {
 	const authSession = session.fromPartition(authPartition);
 	await clearSession();
 	await writeCookies(cookies);
 	try {
+		authUser = link.authUser ?? 0;
 		youtube = createAdapter();
+		// Nixie must not guess which account a browser signed in to several means: the first is only the
+		// browser's default. A failed lookup reads as one account, which is the sign-in as it always was.
+		if (link.authUser === undefined) {
+			const accounts = await youtube.accounts().catch(async (error: unknown) => {
+				await logger.failure("account list", error, "warn");
+				return [];
+			});
+			if (accounts.length > 1) {
+				await logger.write("info", `session import: ${accounts.length} accounts to choose from`);
+				await clearSession();
+				pendingSignIn = { cookies, link, accounts };
+				return { status: "choose-account", accounts };
+			}
+		}
 		const state = await authState();
 		if (state.status === "unentitled") {
 			throw new Error("That account has no YouTube Music Premium subscription, which Nixie requires");
@@ -504,6 +530,15 @@ async function importFromBrowser(account: unknown) {
 	const cookies = await readYouTubeCookies(account);
 	await logger.write("info", `session import: ${cookies.length} values read`);
 	return linkSession(cookies, { source: "browser", browser: account.browser, profile: account.profile });
+}
+
+/** The second half of a sign-in that stopped at `choose-account`, for the account the reader picked. */
+async function chooseAccount(index: unknown) {
+	validateAuthUser(index);
+	const pending = pendingSignIn;
+	if (!pending?.accounts.some((account) => account.index === index))
+		throw new Error("That sign-in is no longer open. Please start again.");
+	return linkSession(pending.cookies, { ...pending.link, authUser: index });
 }
 
 /** The extension's counterpart of importFromBrowser: pull the profile's cookies through the host. */
@@ -573,6 +608,7 @@ function createAdapter() {
 			region: stateStore.snapshot.settings.region,
 			restricted: stateStore.snapshot.settings.restricted,
 			language: appLanguage(),
+			accountIndex: authUser,
 		})
 	);
 	// Floating on purpose: whatever asked for a new adapter must not wait on YouTube.
@@ -747,6 +783,7 @@ function registerIpc() {
 		return Promise.all(accounts.map(async (account) => ({ ...account, icon: await browserIcon(account.browser) })));
 	});
 	handle("auth:import-browser", (_event, account) => importFromBrowser(account).catch(readableError));
+	handle("auth:choose-account", (_event, index) => chooseAccount(index).catch(readableError));
 	handle("auth:extension-sources", () => nativeHost.connections());
 	handle("auth:link-extension", (_event, installId, pairingSecret) =>
 		importFromExtension(installId, pairingSecret).catch(readableError)

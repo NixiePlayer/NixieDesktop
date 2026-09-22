@@ -28,6 +28,10 @@ export const signin = {
 	noBrowserBefore: "No signed-in browser found. Sign in at",
 	noBrowserAfter: "in Chrome, Brave, Edge, Vivaldi, or Firefox, then check again.",
 	checkAgain: "Check again",
+	chooseTitle: "Choose an account",
+	chooseIntro:
+		"This browser is signed in to more than one Google account. Choose the one Nixie uses. To change it later, sign out and sign in again.",
+	back: "Back",
 	disclaimer:
 		"Nixie is an independent, unofficial client and is not affiliated with, endorsed by, or sponsored by Google or YouTube. YouTube and YouTube Music are trademarks of Google LLC. Nixie plays only what the account you link can already play, and your use of that account stays subject to YouTube's terms. It reaches YouTube through the private interface the YouTube Music apps use, which YouTube does not publish or support, so the account you link carries whatever risk that brings.",
 	premium: {

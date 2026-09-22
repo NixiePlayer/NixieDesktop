@@ -14,6 +14,7 @@ import type {
 	BrowseTarget,
 	ExploreData,
 	ExploreSection,
+	GoogleAccount,
 	MusicCommand,
 	MusicEntity,
 	MusicQuery,
@@ -31,7 +32,7 @@ import type { SecureResourceRegistry } from "./media-protocol";
 
 type UnknownRecord = Record<string, unknown>;
 /** What a session is built for besides its cookies. The language is the one upstream answers in. */
-type SessionOptions = { region?: string; restricted?: boolean; language?: Language };
+type SessionOptions = { region?: string; restricted?: boolean; language?: Language; accountIndex?: number };
 type Continuable = { has_continuation?: boolean; getContinuation?: () => Promise<unknown> };
 
 /**
@@ -929,6 +930,41 @@ export class YouTubeAdapter {
 	}
 
 	/**
+	 * Every Google account the copied cookies are signed in to, in the browser's own order. Each index
+	 * is asked who it is, the way youtube.com's account switcher asks, until one answers signed out or
+	 * repeats an account already seen (upstream answers an index past the end either way). Throwaway
+	 * sessions without a player, since only the one account menu request goes out on each.
+	 */
+	async accounts(): Promise<GoogleAccount[]> {
+		const cookie = await this.#getCookieHeader();
+		const lang = (await this.#getSessionOptions()).language ?? "en";
+		const accounts: GoogleAccount[] = [];
+		const seen = new Set<string>();
+		for (let index = 0; index < 10; index++) {
+			const client = await Innertube.create({
+				cookie,
+				cache: new UniversalCache(true, this.#cachePath),
+				lang,
+				account_index: index,
+				retrieve_player: false,
+			});
+			const items = await client.account.getInfo(true).catch(() => []);
+			const selected = items.find((item) => item.is_selected);
+			const photo = selected?.account_photo.at(-1)?.url;
+			// ponytail: name and photo URL tell accounts apart; two with both equal would read as the end.
+			const key = `${selected?.account_name.text}|${photo}`;
+			if (!selected || seen.has(key)) break;
+			seen.add(key);
+			accounts.push({
+				index,
+				name: selected.account_name.text ?? "",
+				avatarUrl: photo ? this.#resources.registerArtwork(photo) : undefined,
+			});
+		}
+		return accounts;
+	}
+
+	/**
 	 * The settings the account holds, which apply to every device signed in to it.
 	 *
 	 * Raw, and not through `account.getSettings()`, which browses `SPaccount_overview` on the WEB
@@ -1099,7 +1135,7 @@ export class YouTubeAdapter {
 		// old value. Compared as one string so a single check covers all of them.
 		const session = await this.#getSessionOptions();
 		const language = session.language ?? "en";
-		const key = `${session.region ?? ""}|${session.restricted ? "1" : ""}|${language}`;
+		const key = `${session.region ?? ""}|${session.restricted ? "1" : ""}|${language}|${session.accountIndex ?? 0}`;
 		if ((!this.#client && !this.#building) || cookie !== this.#cookie || key !== this.#sessionKey) {
 			this.#cookie = cookie;
 			this.#sessionKey = key;
@@ -1112,6 +1148,9 @@ export class YouTubeAdapter {
 					// Always stated, never left unset: a session restored from the cache keeps the `hl` it was
 					// saved with unless `lang` overrides it, so going back to English needs "en" said out loud.
 					lang: language,
+					// Sent as `X-Goog-AuthUser` on every request, the header youtube.com itself uses to pick
+					// among the Google accounts a browser holds.
+					account_index: session.accountIndex,
 				})
 			);
 			this.#building = build;

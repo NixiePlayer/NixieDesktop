@@ -1767,6 +1767,50 @@ describe("account", () => {
 	});
 });
 
+describe("accounts", () => {
+	it("lists each signed-in Google account until an index repeats one", async () => {
+		const person = (name: string) => ({
+			getInfo: () =>
+				Promise.resolve([
+					{ is_selected: false, account_name: { text: "Brand" }, account_photo: [] },
+					{
+						is_selected: true,
+						account_name: { text: name },
+						account_photo: [{ url: `https://example.test/${name}.jpg` }],
+					},
+				]),
+		});
+		const create = vi.mocked(Innertube.create);
+		create.mockClear();
+		for (const account of [person("Home"), person("Work"), person("Home")]) {
+			create.mockResolvedValueOnce({ account } as never);
+		}
+		const adapter = new YouTubeAdapter(
+			{ registerArtwork: (url: string) => `nixie://app/artwork/${url}` } as never,
+			join(tmpdir(), "nixie-cache-missing"),
+			() => Promise.resolve("SAPISID=first")
+		);
+		expect(await adapter.accounts()).toEqual([
+			{ index: 0, name: "Home", avatarUrl: "nixie://app/artwork/https://example.test/Home.jpg" },
+			{ index: 1, name: "Work", avatarUrl: "nixie://app/artwork/https://example.test/Work.jpg" },
+		]);
+		expect(create.mock.calls.map((call) => call[0]?.account_index)).toEqual([0, 1, 2]);
+	});
+
+	it("stops at the first index that answers signed out", async () => {
+		const create = vi.mocked(Innertube.create);
+		create.mockClear();
+		create.mockResolvedValueOnce({
+			account: { getInfo: () => Promise.reject(new Error("401")) },
+		} as never);
+		const adapter = new YouTubeAdapter({} as never, join(tmpdir(), "nixie-cache-missing"), () =>
+			Promise.resolve("SAPISID=first")
+		);
+		expect(await adapter.accounts()).toEqual([]);
+		expect(create).toHaveBeenCalledOnce();
+	});
+});
+
 describe("watch-next extraction", () => {
 	/** A radio queue as the parser hands it back: `PlaylistPanelVideo`s, addressed by `video_id`. */
 	const panel = {

@@ -29,6 +29,10 @@ export const signin: typeof en = {
 	noBrowserBefore: "Nessun browser con accesso effettuato. Accedi a",
 	noBrowserAfter: "in Chrome, Brave, Edge, Vivaldi o Firefox, poi controlla di nuovo.",
 	checkAgain: "Controlla di nuovo",
+	chooseTitle: "Scegli un account",
+	chooseIntro:
+		"In questo browser hai effettuato l'accesso a più di un account Google. Scegli quello che Nixie deve usare. Per cambiarlo in seguito, esci e accedi di nuovo.",
+	back: "Indietro",
 	disclaimer:
 		"Nixie è un client indipendente e non ufficiale, e non è affiliato, approvato o sponsorizzato da Google o YouTube. YouTube e YouTube Music sono marchi di Google LLC. Nixie riproduce solo ciò che l'account che colleghi può già riprodurre, e l'uso di quell'account resta soggetto ai termini di YouTube. Nixie comunica con YouTube tramite l'interfaccia privata usata dalle app di YouTube Music, che YouTube non pubblica né supporta, quindi qualsiasi conseguenza ricade sull'account che colleghi.",
 	premium: {

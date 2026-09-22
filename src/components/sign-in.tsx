@@ -4,7 +4,7 @@ import markDev from "#/assets/logo-dev.png";
 import markProd from "#/assets/logo.png";
 import { useMessages } from "#/lib/i18n";
 import { platform } from "#/lib/platform";
-import type { AuthState, BrowserAccount, ExtensionSource } from "#/shared/contracts";
+import type { AuthState, BrowserAccount, ExtensionSource, GoogleAccount } from "#/shared/contracts";
 import { DiagnosticReport } from "./diagnostic-report";
 import { Button } from "./ui/button";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "./ui/field";
@@ -89,6 +89,36 @@ function AccountRow({
 				<span className="truncate text-sm font-medium">{name}</span>
 				{detail && <span className="text-muted-foreground truncate text-xs">{detail}</span>}
 			</span>
+			<ChevronRight className="text-muted-foreground ml-auto size-4 shrink-0" />
+		</button>
+	);
+}
+
+/** One of the Google accounts a browser holds, offered when that browser holds more than one. */
+function GoogleAccountRow({
+	account,
+	disabled,
+	onSelect,
+}: {
+	account: GoogleAccount;
+	disabled: boolean;
+	onSelect: () => void;
+}) {
+	const m = useMessages();
+	return (
+		<button
+			type="button"
+			disabled={disabled}
+			onClick={onSelect}
+			aria-label={m.signin.continueWith(account.name)}
+			className="border-border bg-card hover:bg-accent flex items-center gap-3 rounded-xl border p-3 text-left transition-colors disabled:pointer-events-none disabled:opacity-60"
+		>
+			{account.avatarUrl ? (
+				<img src={account.avatarUrl} alt="" className="size-8 shrink-0 rounded-full object-cover" />
+			) : (
+				<span className="bg-muted size-8 shrink-0 rounded-full" />
+			)}
+			<span className="truncate text-sm font-medium">{account.name}</span>
 			<ChevronRight className="text-muted-foreground ml-auto size-4 shrink-0" />
 		</button>
 	);
@@ -229,6 +259,8 @@ export function SignInView({ onSignedIn }: { onSignedIn: (auth: AuthState) => vo
 	// Undefined until detection answers, so the empty state never renders over a running scan.
 	const [accounts, setAccounts] = useState<BrowserAccount[] | undefined>(undefined);
 	const [sources, setSources] = useState<ExtensionSource[]>([]);
+	// Set when the browser just picked holds several Google accounts: the view asks which one instead.
+	const [choices, setChoices] = useState<GoogleAccount[] | undefined>(undefined);
 
 	const findAccounts = useCallback(() => {
 		setAccounts(undefined);
@@ -255,6 +287,7 @@ export function SignInView({ onSignedIn }: { onSignedIn: (auth: AuthState) => vo
 		setBusy(true);
 		void work
 			.then((state) => {
+				if (state.status === "choose-account") return setChoices(state.accounts);
 				if (state.status !== "authenticated") return setError(m.signin.didNotSignIn);
 				onSignedIn(state);
 			})
@@ -275,8 +308,8 @@ export function SignInView({ onSignedIn }: { onSignedIn: (auth: AuthState) => vo
 				<div className="my-auto flex w-full max-w-sm flex-col gap-6">
 					<div className="flex flex-col gap-3">
 						<img src={MARK} alt="" className="size-11 rounded-xl lg:hidden" />
-						<h1 className="text-2xl font-bold tracking-tight">{m.signin.title}</h1>
-						<p className="text-muted-foreground text-sm">{m.signin.intro}</p>
+						<h1 className="text-2xl font-bold tracking-tight">{choices ? m.signin.chooseTitle : m.signin.title}</h1>
+						<p className="text-muted-foreground text-sm">{choices ? m.signin.chooseIntro : m.signin.intro}</p>
 					</div>
 
 					{error && (
@@ -285,87 +318,115 @@ export function SignInView({ onSignedIn }: { onSignedIn: (auth: AuthState) => vo
 						</p>
 					)}
 
-					{/* Windows Chrome, Edge, Brave and Vivaldi encrypt their cookies in a way only the browser
-					    itself can read, so the extension is the primary path there and sits above the disk list,
-					    which reaches only Firefox. */}
-					{platform === "win32" && (
-						<ExtensionBlock
-							sources={sources}
-							disabled={busy}
-							onLink={(installId, pairingSecret) => run(window.nixie?.auth.linkExtension(installId, pairingSecret))}
-						/>
-					)}
-
-					{accounts === undefined ? (
-						<div className="flex flex-col gap-2">
-							{[0, 1].map((row) => (
-								<div key={row} className="border-border flex items-center gap-3 rounded-xl border p-3">
-									<Skeleton className="size-8" />
-									<div className="flex flex-col gap-1.5">
-										<Skeleton className="h-3.5 w-28" />
-										<Skeleton className="h-3 w-40" />
-									</div>
-								</div>
-							))}
-						</div>
-					) : accounts.length > 0 ? (
+					{choices ? (
 						<div className="flex flex-col gap-3">
 							<div className="flex flex-col gap-2">
-								{accounts.map((account) => (
-									<AccountRow
-										key={`${account.browser}-${account.profile}`}
+								{choices.map((account) => (
+									<GoogleAccountRow
+										key={account.index}
 										account={account}
 										disabled={busy}
-										onSelect={() => run(window.nixie?.auth.importFromBrowser(account))}
+										onSelect={() => run(window.nixie?.auth.chooseAccount(account.index))}
 									/>
 								))}
 							</div>
-							<p className="text-muted-foreground text-sm">{m.signin.accountsNote}</p>
-						</div>
-					) : (
-						<div className="border-border flex flex-col items-start gap-3 rounded-xl border border-dashed p-4">
-							<p className="text-muted-foreground text-sm">
-								{platform === "win32" ? (
-									<>
-										{m.signin.noFirefoxBefore}{" "}
-										<a
-											href="https://music.youtube.com"
-											target="_blank"
-											rel="noreferrer"
-											className="text-foreground underline underline-offset-4"
-										>
-											music.youtube.com
-										</a>{" "}
-										{m.signin.noFirefoxAfter}
-									</>
-								) : (
-									<>
-										{m.signin.noBrowserBefore}{" "}
-										<a
-											href="https://music.youtube.com"
-											target="_blank"
-											rel="noreferrer"
-											className="text-foreground underline underline-offset-4"
-										>
-											music.youtube.com
-										</a>{" "}
-										{m.signin.noBrowserAfter}
-									</>
-								)}
-							</p>
-							<Button variant="outline" size="sm" onClick={findAccounts}>
-								{m.signin.checkAgain}
+							<Button
+								variant="outline"
+								disabled={busy}
+								className="self-start"
+								onClick={() => {
+									setError("");
+									setChoices(undefined);
+								}}
+							>
+								{m.signin.back}
 							</Button>
 						</div>
-					)}
+					) : (
+						<>
+							{/* Windows Chrome, Edge, Brave and Vivaldi encrypt their cookies in a way only the browser
+					    itself can read, so the extension is the primary path there and sits above the disk list,
+					    which reaches only Firefox. */}
+							{platform === "win32" && (
+								<ExtensionBlock
+									sources={sources}
+									disabled={busy}
+									onLink={(installId, pairingSecret) => run(window.nixie?.auth.linkExtension(installId, pairingSecret))}
+								/>
+							)}
 
-					{/* Elsewhere the disk read handles every browser, so the extension is the secondary path. */}
-					{platform !== "win32" && (
-						<ExtensionBlock
-							sources={sources}
-							disabled={busy}
-							onLink={(installId, pairingSecret) => run(window.nixie?.auth.linkExtension(installId, pairingSecret))}
-						/>
+							{accounts === undefined ? (
+								<div className="flex flex-col gap-2">
+									{[0, 1].map((row) => (
+										<div key={row} className="border-border flex items-center gap-3 rounded-xl border p-3">
+											<Skeleton className="size-8" />
+											<div className="flex flex-col gap-1.5">
+												<Skeleton className="h-3.5 w-28" />
+												<Skeleton className="h-3 w-40" />
+											</div>
+										</div>
+									))}
+								</div>
+							) : accounts.length > 0 ? (
+								<div className="flex flex-col gap-3">
+									<div className="flex flex-col gap-2">
+										{accounts.map((account) => (
+											<AccountRow
+												key={`${account.browser}-${account.profile}`}
+												account={account}
+												disabled={busy}
+												onSelect={() => run(window.nixie?.auth.importFromBrowser(account))}
+											/>
+										))}
+									</div>
+									<p className="text-muted-foreground text-sm">{m.signin.accountsNote}</p>
+								</div>
+							) : (
+								<div className="border-border flex flex-col items-start gap-3 rounded-xl border border-dashed p-4">
+									<p className="text-muted-foreground text-sm">
+										{platform === "win32" ? (
+											<>
+												{m.signin.noFirefoxBefore}{" "}
+												<a
+													href="https://music.youtube.com"
+													target="_blank"
+													rel="noreferrer"
+													className="text-foreground underline underline-offset-4"
+												>
+													music.youtube.com
+												</a>{" "}
+												{m.signin.noFirefoxAfter}
+											</>
+										) : (
+											<>
+												{m.signin.noBrowserBefore}{" "}
+												<a
+													href="https://music.youtube.com"
+													target="_blank"
+													rel="noreferrer"
+													className="text-foreground underline underline-offset-4"
+												>
+													music.youtube.com
+												</a>{" "}
+												{m.signin.noBrowserAfter}
+											</>
+										)}
+									</p>
+									<Button variant="outline" size="sm" onClick={findAccounts}>
+										{m.signin.checkAgain}
+									</Button>
+								</div>
+							)}
+
+							{/* Elsewhere the disk read handles every browser, so the extension is the secondary path. */}
+							{platform !== "win32" && (
+								<ExtensionBlock
+									sources={sources}
+									disabled={busy}
+									onLink={(installId, pairingSecret) => run(window.nixie?.auth.linkExtension(installId, pairingSecret))}
+								/>
+							)}
+						</>
 					)}
 
 					{/*

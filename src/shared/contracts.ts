@@ -246,9 +246,23 @@ export interface AuthState {
 	 *
 	 * `data-refused` is macOS refusing Nixie the browser profiles, which a session read off disk needs
 	 * every few minutes to stay playable. Only a permission granted in System Settings changes it.
+	 *
+	 * `choose-account` is only ever an answer to a sign-in: the browser holds more than one Google
+	 * account, and the reader picks one of `accounts` before anything is linked.
 	 */
-	status: "signed-out" | "signing-in" | "authenticated" | "expired" | "unentitled" | "data-refused";
+	status: "signed-out" | "signing-in" | "authenticated" | "expired" | "unentitled" | "data-refused" | "choose-account";
 	accountName?: string;
+	avatarUrl?: string;
+	accounts?: GoogleAccount[];
+}
+
+/**
+ * One of the Google accounts signed in to the same browser, addressed by its position in that
+ * browser's sign-in list, which is what `X-Goog-AuthUser` names.
+ */
+export interface GoogleAccount {
+	index: number;
+	name: string;
 	avatarUrl?: string;
 }
 
@@ -288,11 +302,13 @@ export interface ExtensionSource {
 /**
  * Where the linked session came from, which decides how it is refreshed: a browser profile is re-read
  * off disk, an extension source is pulled through the native host. A legacy `linked-account.json` has
- * no `source` field and reads as a browser, the shape it always was.
+ * no `source` field and reads as a browser, the shape it always was. `authUser` is which of the
+ * browser's Google accounts was chosen; a link without it uses the first, as every link once did.
  */
-export type LinkedAccount =
+export type LinkedAccount = (
 	| { source: "browser"; browser: string; profile: string }
-	| { source: "extension"; installId: string; browser: string; pairingKey: string };
+	| { source: "extension"; installId: string; browser: string; pairingKey: string }
+) & { authUser?: number };
 
 export interface Settings {
 	theme: Theme;
@@ -446,6 +462,7 @@ export interface NixieBridge {
 		state(): Promise<AuthState>;
 		browsers(): Promise<BrowserAccount[]>;
 		importFromBrowser(account: BrowserAccount): Promise<AuthState>;
+		chooseAccount(index: number): Promise<AuthState>;
 		signOut(): Promise<AuthState>;
 		/** Browser profiles connected through the extension, as main holds them now. */
 		extensionSources(): Promise<ExtensionSource[]>;

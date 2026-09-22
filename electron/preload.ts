@@ -58,6 +58,7 @@ const bridge: NixieBridge = {
 		state: () => ipcRenderer.invoke("auth:state"),
 		browsers: () => ipcRenderer.invoke("auth:browsers"),
 		importFromBrowser: (account: BrowserAccount) => ipcRenderer.invoke("auth:import-browser", account),
+		chooseAccount: (index: number) => ipcRenderer.invoke("auth:choose-account", index),
 		signOut: () => ipcRenderer.invoke("auth:sign-out"),
 		extensionSources: () => ipcRenderer.invoke("auth:extension-sources"),
 		linkExtension: (installId: string, pairingSecret: string) =>

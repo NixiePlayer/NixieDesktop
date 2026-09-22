@@ -12,6 +12,7 @@ export const main = {
 	errors: {
 		unentitled: "That account has no YouTube Music Premium subscription, which Nixie requires",
 		notSignedIn: "That profile is not signed in to YouTube",
+		signInClosed: "That sign-in is no longer open. Please start again.",
 		secureStorage: "Secure storage is not available on this computer",
 		unlockKeyringToPair: "Unlock a system keyring before pairing the extension",
 		browserGone: "That browser is no longer connected",

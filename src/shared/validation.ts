@@ -291,12 +291,23 @@ export function validatePairingSecret(value: unknown): asserts value is string {
 }
 
 /**
+ * Which of the browser's Google accounts a link uses, as a sign-in index.
+ * ponytail: only the first ten are probed and accepted; a browser holding more reaches only those.
+ */
+export function validateAuthUser(value: unknown): asserts value is number {
+	if (!Number.isInteger(value) || (value as number) < 0 || (value as number) > 9) {
+		throw new TypeError("Invalid account");
+	}
+}
+
+/**
  * The link file names where the session came from. A file predating the extension has no `source`, so
  * a missing one reads as `browser`, the shape it always was. This is what `refreshLinkedCookies`
  * branches on, so a bad file must throw rather than default to a path that reads the wrong store.
  */
 export function validateLinkedAccount(value: unknown): asserts value is LinkedAccount {
 	if (!record(value)) throw new TypeError("Invalid linked account");
+	if (value.authUser !== undefined) validateAuthUser(value.authUser);
 	const source = value.source === undefined ? "browser" : value.source;
 	if (source === "browser") {
 		if (typeof value.browser !== "string" || typeof value.profile !== "string") {
