@@ -786,7 +786,12 @@ export class YouTubeAdapter {
 				}
 				break;
 			case "playlist-delete": {
-				const result = await client.playlist.delete(request.playlistId.replace(/^VL/, ""));
+				// Not `playlist.delete`: it calls a `deletePlaylistServiceEndpoint` youtubei.js has no api_url
+				// for, so it throws before sending anything.
+				const result = await client.actions.execute("/playlist/delete", {
+					playlistId: request.playlistId.replace(/^VL/, ""),
+					client: "YTMUSIC",
+				});
 				if (!result.success) throw new Error("YouTube Music refused to delete the playlist");
 				break;
 			}

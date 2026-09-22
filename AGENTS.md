@@ -72,7 +72,7 @@ Unofficial YouTube Music desktop client for macOS, Windows and Linux. Electron m
 
 - `YouTubeAdapter.resolve` walks `YTMUSIC`, `TV_SIMPLY`, `IOS`. Other clients return SABR-only or 403 streams.
 - Decks set `crossOrigin = "anonymous"` and `handleMedia` echoes `access-control-allow-origin`; otherwise WebAudio outputs silence. `handleMedia` keeps upstream error statuses and refusals carry no body, or Chromium retries forever instead of firing `error`.
-- Upstream data meant for `extractEntities` goes through raw `/browse` with `parse: true` and the unwrapped result, not `client.music.*` wrappers (they assert layouts and throw). Never use `music.getHomeFeed()`, `account.getSettings()`, `playlist.addVideos/removeVideos/moveVideo/setName/setDescription` or `music.getUpNext`; the raw equivalents already exist in the adapter.
+- Upstream data meant for `extractEntities` goes through raw `/browse` with `parse: true` and the unwrapped result, not `client.music.*` wrappers (they assert layouts and throw). Never use `music.getHomeFeed()`, `account.getSettings()`, `playlist.addVideos/removeVideos/moveVideo/setName/setDescription/delete` or `music.getUpNext`; the raw equivalents already exist in the adapter.
 - Playlist rows are addressed by set video id (`PlaylistItem.itemId`), read from the row menu. Never synthesise it from the video id.
 - Radio queues drop `PlaylistPanelVideoWrapper` counterparts, or each song plays twice.
 - Gapless: `preloadNext` and `move("next")` must agree on `nextQueueIndex`; the handoff is armed `SWITCH_LEAD_MS` before the end, never driven off `ended`. `backgroundThrottling: false` belongs to this.
