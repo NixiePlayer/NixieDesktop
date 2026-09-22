@@ -103,6 +103,8 @@ export interface Playlist {
 	itemCount?: number;
 	/** Only ever known for a playlist the account owns: upstream tells nobody else. */
 	privacy?: PlaylistPrivacy;
+	/** Pinned to the top of the library, which upstream lists first. */
+	pinned?: boolean;
 }
 
 export interface PlaylistItem {

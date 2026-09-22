@@ -47,4 +47,5 @@ export const shell = {
 	notRemoved: "Not removed from library",
 	subscriptionNotUpdated: "Subscription not updated",
 	libraryRefused: "YouTube Music would not do that.",
+	pinned: "Pinned",
 };

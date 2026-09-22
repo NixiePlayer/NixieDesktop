@@ -8,6 +8,7 @@ import {
 	Library,
 	LogOut,
 	PanelLeft,
+	Pin,
 	Play,
 	Search,
 	Settings,
@@ -360,8 +361,9 @@ function NavRail({ open }: { open: boolean }) {
 						<span className="flex min-w-0 flex-col">
 							<span className="truncate">{entityTitle(playlist, m)}</span>
 							{/* Whoever made it, or the label for the two nobody did. */}
-							<span className="text-muted-foreground truncate text-xs font-normal">
-								{playlist.author ?? autoPlaylist(playlist.id, m)?.author}
+							<span className="text-muted-foreground flex items-center gap-1 text-xs font-normal">
+								{playlist.pinned && <Pin aria-label={m.shell.pinned} className="size-3 shrink-0 fill-current" />}
+								<span className="min-w-0 truncate">{playlist.author ?? autoPlaylist(playlist.id, m)?.author}</span>
 							</span>
 						</span>
 						{/* Which row the queue came from, which is the queue's own context and not the track on it:

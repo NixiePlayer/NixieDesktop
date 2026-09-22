@@ -930,6 +930,25 @@ describe("entity extraction", () => {
 		]);
 	});
 
+	it("marks a pinned playlist from the badge a library tile holds unresolved", () => {
+		const keep = [{ type: "MusicInlineBadge", icon_type: "KEEP" }];
+		const library = {
+			contents: [
+				{
+					id: "VLLM",
+					item_type: "playlist",
+					title: "Liked Music",
+					// What `MusicTwoRowItem` leaves under `badges`: the parser's result, not an array.
+					badges: { is_array: true, array: () => keep, item: () => keep[0] },
+				},
+				{ id: "VLPLlofi", item_type: "playlist", title: "Lo-fi" },
+			],
+		};
+		const [liked, lofi] = extractEntities(library, identity);
+		expect(liked).toHaveProperty("pinned", true);
+		expect(lofi).not.toHaveProperty("pinned", true);
+	});
+
 	it("reads the fields upstream actually exposes", () => {
 		expect(items[0]).toMatchObject({
 			id: "zvC6jsZnicY",

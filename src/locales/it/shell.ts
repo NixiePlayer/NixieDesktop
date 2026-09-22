@@ -48,4 +48,5 @@ export const shell: typeof en = {
 	notRemoved: "Non rimosso dalla raccolta",
 	subscriptionNotUpdated: "Iscrizione non aggiornata",
 	libraryRefused: "YouTube Music non ha permesso l'operazione.",
+	pinned: "Fissata",
 };

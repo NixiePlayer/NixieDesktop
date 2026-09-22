@@ -98,8 +98,10 @@ export const saveToLibrary = (id: string, saved: boolean) =>
 export const setSubscribed = (artistId: string, subscribed: boolean) =>
 	toggle(artistId, subscribed, { type: "subscribe", artistId, subscribed }, messages().shell.subscriptionNotUpdated);
 
+/** A new playlist leads the list the way upstream lists it: below the pinned ones, above the rest. */
 export function addPlaylist(playlist: Playlist) {
-	playlists = [playlist, ...playlists];
+	const at = playlists.filter((held) => held.pinned).length;
+	playlists = [...playlists.slice(0, at), playlist, ...playlists.slice(at)];
 	held.add(playlist.id);
 	emit();
 }

@@ -129,13 +129,22 @@ function thumbnail(value: UnknownRecord) {
 }
 
 /**
- * Parental advisory. A row carries it under `badges`, a responsive header under `subtitle_badge`,
- * and both hold the same `MusicInlineBadge` whose icon names it.
+ * An inline badge by its icon: `EXPLICIT` for parental advisory, `KEEP` for a playlist pinned to the
+ * top of the library. A row carries them under `badges`, a responsive header under `subtitle_badge`,
+ * and both hold the same `MusicInlineBadge` whose icon names it. A card's `badges` is the parser's
+ * unresolved result rather than an array, so it is unwrapped the way a browse response is.
  */
-function explicitFrom(node: UnknownRecord) {
+function hasBadge(node: UnknownRecord, icon: string) {
 	return [node.badges, node.subtitle_badge]
-		.flatMap((badges) => (Array.isArray(badges) ? badges : []))
-		.some((badge) => record(badge) && typeof badge.icon_type === "string" && badge.icon_type.includes("EXPLICIT"));
+		.flatMap((badges) => {
+			const list = parsedResult(badges) ? unwrapParsed(badges) : badges;
+			return Array.isArray(list) ? list : [list];
+		})
+		.some((badge) => record(badge) && typeof badge.icon_type === "string" && badge.icon_type.includes(icon));
+}
+
+function parsedResult(value: unknown): value is Parameters<typeof unwrapParsed>[0] & object {
+	return record(value) && typeof value.is_array === "boolean" && typeof value.array === "function";
 }
 
 function endpointPayload(node: UnknownRecord) {
@@ -1488,7 +1497,7 @@ export function extractEntities(
 					durationSeconds:
 						numberValue(record(node.duration) ? node.duration.seconds : node.duration) || fixedDuration(node),
 					artworkUrl: artwork,
-					explicit: explicitFrom(node) || undefined,
+					explicit: hasBadge(node, "EXPLICIT") || undefined,
 					plays: playsFrom(node),
 					rank: rankFrom(node),
 					...episode,
@@ -1515,7 +1524,7 @@ export function extractEntities(
 					artists,
 					year: firstString(node, "year"),
 					artworkUrl: artwork,
-					explicit: explicitFrom(node) || undefined,
+					explicit: hasBadge(node, "EXPLICIT") || undefined,
 				};
 				items.push(album);
 				return;
@@ -1535,6 +1544,7 @@ export function extractEntities(
 					artworkUrl: artwork,
 					author: playlistAuthor(node),
 					itemCount: numberValue(firstString(node, "item_count", "song_count")) || undefined,
+					pinned: hasBadge(node, "KEEP") || undefined,
 				};
 				items.push(playlist);
 				return;
@@ -1599,7 +1609,7 @@ export function extractQueueTracks(value: unknown, registerArtwork: (url: string
 			albumId: album ? undefined : albumIdFrom(node),
 			durationSeconds: numberValue(record(node.duration) ? node.duration.seconds : node.duration),
 			artworkUrl: artwork,
-			explicit: explicitFrom(node) || undefined,
+			explicit: hasBadge(node, "EXPLICIT") || undefined,
 			// A queue row keeps its show only as the byline text above, so an episode here links nowhere.
 			...episodeFrom(node),
 		});
@@ -1709,7 +1719,7 @@ export function withSearchTopResult(
 			albumId: albumIdFrom(card),
 			durationSeconds: runs.map(text).map(numberValue).filter(Boolean).at(-1) ?? 0,
 			artworkUrl: artwork,
-			explicit: explicitFrom(card) || undefined,
+			explicit: hasBadge(card, "EXPLICIT") || undefined,
 		} satisfies Track;
 	} else {
 		switch (pageType) {
@@ -1719,7 +1729,13 @@ export function withSearchTopResult(
 				top = { id, name: title, artworkUrl: artwork, listeners: listenersFrom(card) } satisfies Artist;
 				break;
 			case "MUSIC_PAGE_TYPE_ALBUM":
-				top = { id, title, artists, artworkUrl: artwork, explicit: explicitFrom(card) || undefined } satisfies Album;
+				top = {
+					id,
+					title,
+					artists,
+					artworkUrl: artwork,
+					explicit: hasBadge(card, "EXPLICIT") || undefined,
+				} satisfies Album;
 				break;
 			case "MUSIC_PAGE_TYPE_PLAYLIST":
 			case "MUSIC_PAGE_TYPE_PODCAST_SHOW":
@@ -1910,7 +1926,7 @@ export function withAlbumHeader(
 		artworkUrl: artworkUrl ? registerArtwork(artworkUrl) : undefined,
 		// An older header opens its subtitle with the artist or the year instead, and neither is a label.
 		kind: label && label !== firstString(artist, "name") && !/^\d+$/.test(label) ? label : undefined,
-		explicit: explicitFrom(header) || undefined,
+		explicit: hasBadge(header, "EXPLICIT") || undefined,
 	};
 	return [
 		album,
