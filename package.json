@@ -59,7 +59,7 @@
 		"react": "19.2.8",
 		"react-dom": "19.2.8",
 		"tailwind-merge": "3.6.0",
-		"youtubei.js": "17.2.0"
+		"youtubei.js": "18.0.0"
 	},
 	"devDependencies": {
 		"@tailwindcss/vite": "4.3.3",
