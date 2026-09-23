@@ -21,3 +21,7 @@ process.parentPort.on("message", ({ data }: { data: Job }) => {
 		});
 	}
 });
+
+// Sent once the runtime has booted and the listener above is in place, which is what the parent's
+// spawn budget waits for: the boot is the slow part on Windows, and it is not the evaluation's.
+process.parentPort.postMessage({ ready: true });
