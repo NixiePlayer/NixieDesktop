@@ -73,7 +73,7 @@
 		"electron": "43.2.0",
 		"electron-builder": "26.15.3",
 		"oxfmt": "0.60.0",
-		"oxlint": "1.75.0",
+		"oxlint": "1.83.0",
 		"oxlint-tsgolint": "7.0.2001",
 		"shadcn": "4.15.0",
 		"tailwindcss": "4.3.3",
