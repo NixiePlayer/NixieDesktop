@@ -609,7 +609,8 @@ function createAdapter() {
 			restricted: stateStore.snapshot.settings.restricted,
 			language: appLanguage(),
 			accountIndex: authUser,
-		})
+		}),
+		(message) => void logger.write("warn", message)
 	);
 	// Floating on purpose: whatever asked for a new adapter must not wait on YouTube.
 	void adapter.warm().catch((error: unknown) => {

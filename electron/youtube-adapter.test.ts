@@ -739,6 +739,37 @@ describe("history reporting", () => {
 	});
 });
 
+describe("stream resolve", () => {
+	it("logs each client that missed before one answered, without upstream text", async () => {
+		const getStreamingData = vi
+			.fn()
+			.mockRejectedValueOnce(Object.assign(new Error("Restricted evaluator timed out"), { code: "EVALUATOR_TIMEOUT" }))
+			.mockRejectedValueOnce(new Error("Request to https://private.test/?token=secret failed with status code 403"))
+			.mockResolvedValueOnce({
+				url: "https://rr1.googlevideo.com/videoplayback",
+				itag: 140,
+				mime_type: 'audio/mp4; codecs="mp4a.40.2"',
+				bitrate: 130000,
+				approx_duration_ms: "200000",
+			});
+		vi.mocked(Innertube.create).mockResolvedValueOnce({ getStreamingData } as never);
+		const log = vi.fn();
+		const adapter = new YouTubeAdapter(
+			{ registerMedia: () => "nixie://app/media/id" } as never,
+			join(tmpdir(), "nixie-cache-missing"),
+			() => Promise.resolve("SID=resolve"),
+			async () => ({}),
+			log
+		);
+
+		await expect(adapter.resolve("zvC6jsZnicY", "normal")).resolves.toMatchObject({ url: "nixie://app/media/id" });
+		expect(log.mock.calls).toEqual([
+			["stream attempt failed: YTMUSIC opus: Error / EVALUATOR_TIMEOUT"],
+			["stream attempt failed: YTMUSIC mp4a: Error / HTTP 403"],
+		]);
+	});
+});
+
 describe("entity extraction", () => {
 	const items = extractEntities(shelf, (url) => `nixie://app/artwork/${encodeURIComponent(url)}`);
 

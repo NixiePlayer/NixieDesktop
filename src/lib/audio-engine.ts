@@ -66,6 +66,11 @@ const settingsKey = (settings: Settings) => `${settings.quality}:${settings.norm
 const PERSIST_INTERVAL_MS = 5000;
 const PREVIOUS_RESTART_SECONDS = 2;
 const PLAY_START_TIMEOUT_MS = 15_000;
+/**
+ * How long a playing deck may wait for data before the wait is logged. A seek or a slow first range
+ * waits for a moment and recovers on its own; one still waiting after this is a stream that stopped.
+ */
+const MEDIA_WAIT_REPORT_MS = 5000;
 
 /**
  * `ended` only fires once the current deck has already drained, and starting a media element takes
@@ -120,6 +125,11 @@ export function createAudioEngine(deps: AudioEngineDeps = {}): AudioEngine {
 	const reusable = (deck: Deck) => Date.now() - preparedAt[deck] < SOURCE_REUSE_MS;
 	/** The generation the one automatic retry after a failed deck runs under. */
 	let recovery = -1;
+	/**
+	 * The step a playback start is waiting on, named in the report when its timeout fires. The one line
+	 * a user sends back cannot otherwise tell a slow resolve from a stalled stream or a dead audio device.
+	 */
+	let startStage: "SETTINGS" | "RESOLVE" | "AUDIO_CONTEXT" | "MEDIA" = "SETTINGS";
 
 	const listeners = new Set<() => void>();
 	const positionListeners = new Set<() => void>();
@@ -171,6 +181,10 @@ export function createAudioEngine(deps: AudioEngineDeps = {}): AudioEngine {
 	}
 
 	const elements: [HTMLAudioElement, HTMLAudioElement] = [createAudio(), createAudio()];
+	const waitTimers: [ReturnType<typeof setTimeout> | undefined, ReturnType<typeof setTimeout> | undefined] = [
+		undefined,
+		undefined,
+	];
 	elements.forEach((element, deck) => {
 		element.preload = "auto";
 		// `createMediaElementSource` is spec-required to output silence for a tainted element, and in
@@ -187,6 +201,18 @@ export function createAudioEngine(deps: AudioEngineDeps = {}): AudioEngine {
 			setPosition(element.currentTime);
 			armHandoff(element);
 		});
+		// A stream that stops arriving mid-track fires `waiting` and then nothing at all: no `error`, since
+		// Chromium keeps retrying, and no `timeupdate`, since the clock has stopped. Only logged, once per
+		// wait, so a report says the track went silent and when, not just that the next start failed.
+		element.addEventListener("waiting", () => {
+			clearTimeout(waitTimers[deck]);
+			waitTimers[deck] = setTimeout(() => {
+				if (deck === active && !element.paused && state.playback.status === "playing") {
+					reportFailure({ name: "Error", code: "MEDIA_WAITING" });
+				}
+			}, MEDIA_WAIT_REPORT_MS);
+		});
+		element.addEventListener("playing", () => clearTimeout(waitTimers[deck]));
 		element.addEventListener("ended", () => {
 			if (deck === active) move("next", true);
 		});
@@ -251,6 +277,17 @@ export function createAudioEngine(deps: AudioEngineDeps = {}): AudioEngine {
 	function ensureGraph() {
 		if (audioContext) return;
 		const context = createAudioContext();
+		// Chromium stops a context whose output device fails (on Windows: a Bluetooth drop, a default-device
+		// switch, sleep) and says so only through these two events, while every deck on it freezes without
+		// an event of its own. Nothing here ever suspends the context, so any state but running is news.
+		context.addEventListener("error", () => reportFailure({ name: "Error", code: "AUDIO_CONTEXT_ERROR" }));
+		context.addEventListener("statechange", () => {
+			// A string, since the DOM types do not list "interrupted" yet.
+			const contextState: string = context.state;
+			if (contextState === "suspended" || contextState === "interrupted") {
+				reportFailure({ name: "Error", code: `AUDIO_CONTEXT_${contextState.toUpperCase()}` });
+			}
+		});
 		const bus = context.createGain();
 		bus.gain.value = volumeGain(state.playback.volume);
 		bus.connect(context.destination);
@@ -392,7 +429,12 @@ export function createAudioEngine(deps: AudioEngineDeps = {}): AudioEngine {
 			generation += 1;
 			preloaded = undefined;
 			clearDeck();
-			reportFailure({ name: "TimeoutError" });
+			// Once `resume()` has answered the context should be running. One that is not is holding the deck
+			// silent, which is what a Windows audio device fault (a Bluetooth drop, a default-device switch,
+			// sleep) leaves behind, and it is the more useful of the two to name.
+			const stage =
+				startStage === "MEDIA" && audioContext && audioContext.state !== "running" ? "AUDIO_CONTEXT" : startStage;
+			reportFailure({ name: "TimeoutError", code: `STALLED_ON_${stage}` });
 			set({ status: "error", positionSeconds: 0, errorMessage: messages().shell.playbackTimeout });
 		}, PLAY_START_TIMEOUT_MS);
 	}
@@ -452,8 +494,10 @@ export function createAudioEngine(deps: AudioEngineDeps = {}): AudioEngine {
 			set({ status: "loading", errorMessage: undefined });
 			armLoadingTimeout(token);
 			try {
+				startStage = "AUDIO_CONTEXT";
 				await audioContext?.resume();
 				if (token !== generation) return;
+				startStage = "MEDIA";
 				await elements[active].play();
 				if (token !== generation) return elements[active].pause();
 				set({ status: "playing" });
@@ -507,17 +551,21 @@ export function createAudioEngine(deps: AudioEngineDeps = {}): AudioEngine {
 		try {
 			// Settings are read here, not held in engine state, because the settings page writes them
 			// straight to the store and has no other way back into the engine.
+			startStage = "SETTINGS";
 			const stored = await getBridge()?.local.load();
 			if (token !== generation) return;
 			// Without a bridge there is nothing to resolve media against, so this cannot play.
 			if (!stored) return set({ status: "error", errorMessage: messages().shell.noBridge });
 			const settings = stored.settings;
 			const fresh = fastPath?.settings === settingsKey(settings) ? fastPath : undefined;
+			startStage = "RESOLVE";
 			const gainDb = fresh ? fresh.gainDb : await prepare(current, active, token, settings);
 			if (token !== generation || gainDb === undefined) return;
 			preloaded = undefined;
+			startStage = "AUDIO_CONTEXT";
 			await audioContext?.resume();
 			if (token !== generation) return;
+			startStage = "MEDIA";
 			await elements[active].play();
 			if (token !== generation) return elements[active].pause();
 			set({ status: "playing" }, gainDb);
@@ -749,6 +797,7 @@ export function createAudioEngine(deps: AudioEngineDeps = {}): AudioEngine {
 
 		dispose() {
 			clearInterval(persistTimer);
+			waitTimers.forEach((timer) => clearTimeout(timer));
 			clearHandoff();
 			clearLoadingTimeout();
 			elements.forEach((element) => element.pause());

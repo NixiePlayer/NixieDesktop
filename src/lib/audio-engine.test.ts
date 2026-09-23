@@ -55,6 +55,8 @@ interface Harness {
 	position: ReturnType<typeof vi.fn>;
 	notify: ReturnType<typeof vi.fn>;
 	rendererError: ReturnType<typeof vi.fn>;
+	/** The context the engine built on its first play, once it has. */
+	audioContext: () => (EventTarget & { state: string }) | undefined;
 	command: ReturnType<typeof vi.fn>;
 	query: ReturnType<typeof vi.fn>;
 	saved: PersistedState[];
@@ -62,7 +64,13 @@ interface Harness {
 }
 
 function harness(
-	options: { resolveDelay?: number; withoutMusic?: boolean; radio?: Track[]; radioDelay?: number } = {}
+	options: {
+		resolveDelay?: number;
+		withoutMusic?: boolean;
+		radio?: Track[];
+		radioDelay?: number;
+		context?: { state?: AudioContextState; resume?: () => Promise<void> };
+	} = {}
 ): Harness {
 	const audio: [FakeAudio, FakeAudio] = [new FakeAudio(), new FakeAudio()];
 	const gains: { value: number }[] = [];
@@ -73,6 +81,7 @@ function harness(
 	const rendererError = vi.fn(async () => {});
 	const stored = defaultState();
 	let created = 0;
+	let audioContext: (EventTarget & { state: string }) | undefined;
 
 	const resolve = vi.fn(async (trackId: string) => {
 		if (options.resolveDelay) await new Promise((done) => setTimeout(done, options.resolveDelay));
@@ -124,8 +133,9 @@ function harness(
 		random: () => 0,
 		createAudio: () => audio[created++] as unknown as HTMLAudioElement,
 		createAudioContext: () =>
-			({
+			(audioContext = Object.assign(new EventTarget(), {
 				currentTime: 0,
+				state: "running",
 				destination: {},
 				createGain: () => {
 					const node = makeGain();
@@ -136,7 +146,8 @@ function harness(
 				createMediaElementSource: () => ({ connect: (target: unknown) => target }),
 				resume: async () => {},
 				close: async () => {},
-			}) as unknown as AudioContext,
+				...options.context,
+			})) as unknown as AudioContext,
 	};
 
 	// Patch play/pause so ordering against gain writes is observable.
@@ -150,6 +161,7 @@ function harness(
 
 	return {
 		rendererError,
+		audioContext: () => audioContext,
 		engine: createAudioEngine(deps),
 		audio,
 		gains,
@@ -308,7 +320,7 @@ describe("audio engine", () => {
 
 	it("bounds a stalled media start and resolves a fresh stream on retry", async () => {
 		vi.useFakeTimers();
-		const { engine, audio, resolve } = harness();
+		const { engine, audio, resolve, rendererError } = harness();
 		await engine.start();
 		audio[0].play = vi.fn(() => {
 			audio[0].paused = false;
@@ -325,6 +337,7 @@ describe("audio engine", () => {
 			positionSeconds: 0,
 			errorMessage: "Playback did not start within 15 seconds",
 		});
+		expect(rendererError).toHaveBeenCalledWith("playback", { name: "TimeoutError", code: "STALLED_ON_MEDIA" });
 		expect(audio[0].src).toBe("");
 
 		audio[0].play = async () => {
@@ -334,6 +347,63 @@ describe("audio engine", () => {
 		await engine.play();
 		expect(resolve).toHaveBeenCalledTimes(2);
 		expect(engine.getSnapshot().playback.status).toBe("playing");
+	});
+
+	it("names the step a timed-out start was still waiting on", async () => {
+		vi.useFakeTimers();
+		const never = () => new Promise<never>(() => undefined);
+		const stalls = [
+			{ code: "STALLED_ON_RESOLVE", setup: (h: Harness) => h.resolve.mockImplementation(never) },
+			{ code: "STALLED_ON_AUDIO_CONTEXT", context: { resume: never } },
+			// The element never starts because the context under it stopped rendering.
+			{
+				code: "STALLED_ON_AUDIO_CONTEXT",
+				context: { state: "suspended" as const },
+				setup: (h: Harness) => (h.audio[0].play = never),
+			},
+		];
+		for (const stall of stalls) {
+			const h = harness({ context: stall.context });
+			await h.engine.start();
+			stall.setup?.(h);
+			void h.engine.play(track("t1"), [track("t1")]);
+			await vi.advanceTimersByTimeAsync(15_000);
+			expect(h.rendererError).toHaveBeenCalledWith("playback", { name: "TimeoutError", code: stall.code });
+			h.engine.dispose();
+		}
+	});
+
+	it("logs an audio context that faults under a playing deck", async () => {
+		const { engine, audioContext, rendererError } = harness();
+		await engine.start();
+		await engine.play(track("t1"), [track("t1")]);
+		const context = audioContext()!;
+		context.dispatchEvent(new Event("error"));
+		context.state = "suspended";
+		context.dispatchEvent(new Event("statechange"));
+		context.state = "running";
+		context.dispatchEvent(new Event("statechange"));
+		expect(rendererError.mock.calls).toEqual([
+			["playback", { name: "Error", code: "AUDIO_CONTEXT_ERROR" }],
+			["playback", { name: "Error", code: "AUDIO_CONTEXT_SUSPENDED" }],
+		]);
+	});
+
+	it("logs a playing deck that waits for data too long, and not one that recovers", async () => {
+		vi.useFakeTimers();
+		const { engine, audio, rendererError } = harness();
+		await engine.start();
+		await engine.play(track("t1"), [track("t1")]);
+
+		audio[0].dispatch("waiting");
+		await vi.advanceTimersByTimeAsync(4000);
+		audio[0].dispatch("playing");
+		await vi.advanceTimersByTimeAsync(5000);
+		expect(rendererError).not.toHaveBeenCalled();
+
+		audio[0].dispatch("waiting");
+		await vi.advanceTimersByTimeAsync(5000);
+		expect(rendererError).toHaveBeenCalledExactlyOnceWith("playback", { name: "Error", code: "MEDIA_WAITING" });
 	});
 
 	it("publishes the live playhead without waiting for the disk interval", async () => {

@@ -26,6 +26,7 @@ import type {
 	TrackRating,
 	WatchTarget,
 } from "../src/shared/contracts";
+import { diagnosticReason } from "../src/shared/diagnostics";
 import { autoPlaylist, isTrack } from "../src/shared/entities";
 import { messagesFor, type Language, type Messages } from "../src/shared/i18n";
 import type { SecureResourceRegistry } from "./media-protocol";
@@ -466,18 +467,22 @@ export class YouTubeAdapter {
 	readonly #cachePath: string;
 	readonly #getCookieHeader: () => Promise<string>;
 	readonly #getSessionOptions: () => Promise<SessionOptions>;
+	/** Fixed descriptions and diagnostic reasons only, like every other log line. */
+	readonly #log: (message: string) => void;
 	#sessionKey?: string;
 
 	constructor(
 		resources: SecureResourceRegistry,
 		cachePath: string,
 		getCookieHeader: () => Promise<string>,
-		getSessionOptions: () => Promise<SessionOptions> = async () => ({})
+		getSessionOptions: () => Promise<SessionOptions> = async () => ({}),
+		log: (message: string) => void = () => undefined
 	) {
 		this.#resources = resources;
 		this.#cachePath = cachePath;
 		this.#getCookieHeader = getCookieHeader;
 		this.#getSessionOptions = getSessionOptions;
+		this.#log = log;
 	}
 
 	/**
@@ -856,8 +861,13 @@ export class YouTubeAdapter {
 					format = candidate;
 					break;
 				}
+				this.#log(`stream attempt without URL: ${attempt.innertubeClient} ${attempt.codec}`);
 			} catch (error) {
 				lastError = error;
+				// Each miss costs a round trip and an evaluation, and a start that runs past its timeout
+				// discards whatever `resolve` finally answered, so these lines are the only record of why a
+				// resolve was slow. IOS opus always misses, but it is only reached once four others have.
+				this.#log(`stream attempt failed: ${attempt.innertubeClient} ${attempt.codec}: ${diagnosticReason(error)}`);
 			}
 		}
 		if (!format?.url) throw lastError instanceof Error ? lastError : new Error("No playable audio stream");

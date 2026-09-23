@@ -50,6 +50,21 @@ const errorCodes = new Set([
 	"MEDIA_ERR_NETWORK",
 	"MEDIA_ERR_DECODE",
 	"MEDIA_ERR_SRC_NOT_SUPPORTED",
+	// Which step of a playback start was still pending when its timeout fired (`audio-engine.ts`).
+	"STALLED_ON_SETTINGS",
+	"STALLED_ON_RESOLVE",
+	"STALLED_ON_AUDIO_CONTEXT",
+	"STALLED_ON_MEDIA",
+	// The player-script evaluator (`electron/decipher.ts`), which every stream resolve goes through.
+	"EVALUATOR_SPAWN_TIMEOUT",
+	"EVALUATOR_TIMEOUT",
+	"EVALUATOR_EXITED",
+	"EVALUATOR_FAILED",
+	// Playback events the engine reports as they happen rather than when a start times out.
+	"AUDIO_CONTEXT_ERROR",
+	"AUDIO_CONTEXT_SUSPENDED",
+	"AUDIO_CONTEXT_INTERRUPTED",
+	"MEDIA_WAITING",
 	"UND_ERR_CONNECT_TIMEOUT",
 	"UND_ERR_HEADERS_TIMEOUT",
 	"UND_ERR_SOCKET",
