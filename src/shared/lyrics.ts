@@ -72,7 +72,7 @@ function toResult(candidate: LyricsCandidate): LyricsResult {
 	return {
 		source: candidate.source,
 		instrumental,
-		lines: instrumental ? [] : markGaps(lines.map(splitBackground)),
+		lines: instrumental ? [] : markGaps(lines.map(blankSectionLabel).map(splitBackground)),
 		// No timestamps anywhere means the "synced" field was really plain text all along. A file that
 		// did parse falls back to nothing instead, or a credits-only one comes back as its own raw text.
 		plainLyrics: instrumental
@@ -155,27 +155,56 @@ const collapse = (value: string) => value.replace(/\s+/g, " ").trim();
 
 /** A short label before a colon, which is how every credit line reads in any language. */
 const creditLine = /^[^:：]{1,30}[:：]\s*\S/;
+/**
+ * The tail block only comes from NetEase's own `label : value` form, spaced before the colon, since a
+ * closing lyric holding a colon is far more common than an opening one.
+ */
+const tailCreditLine = /^[^:：]{1,30}\s[:：]\s*\S/;
 
 /**
- * NetEase stamps its writing and production credits as real LRC lines at the head of the file, so
- * they would otherwise render as the opening lyrics and hold the active line into the first verse.
- * They are the leading run of labelled lines, and that run reaches past two seconds on some tracks
+ * NetEase stamps its writing and production credits as real LRC lines at the head of the file, and on
+ * some tracks the mixing and mastering credits at its tail, so they would otherwise render as lyrics
+ * and hold the active line into the first verse or past the last one. Each block is the run of
+ * labelled lines at that end of the file, and the head one reaches past two seconds on some tracks
  * while a real opening line can be timed at 0.1, so it is contiguity that ends it rather than a time
  * window: the first line that reads like a lyric stops it, and the blank separator NetEase puts
- * between the two blocks is carried out with the credits.
- * ponytail: bounded to the first twelve lines, so a genuine opening line holding a colon costs that
- * one line rather than the song. Match on the role words themselves if that ever shows up.
+ * between the blocks is carried out with the credits.
  */
 function stripCredits(lines: LyricsLine[]) {
+	const body = lines.slice(creditRun(lines, creditLine));
+	return body.slice(0, body.length - creditRun([...body].reverse(), tailCreditLine));
+}
+
+/**
+ * How many lines at the start of `lines` belong to a credit block, blank separators included.
+ * ponytail: bounded to twelve lines, so a genuine first or last line read as a credit costs that one
+ * line rather than the song. Match on the role words themselves if that ever shows up.
+ */
+function creditRun(lines: LyricsLine[], credit: RegExp) {
 	let end = 0;
 	let credits = 0;
 	while (end < lines.length && end < 12) {
 		const text = lines[end]?.text ?? "";
-		if (text && !creditLine.test(text)) break;
+		if (text && !credit.test(text)) break;
 		if (text) credits++;
 		end++;
 	}
-	return credits ? lines.slice(end) : lines;
+	return credits ? end : 0;
+}
+
+const section = String.raw`(?:(?:pre|post)-?\s?)?(?:intro|verse|chorus|hook|bridge|refrain|interlude|instrumental|outro|前奏|主歌|导歌|副歌|桥段|间奏|尾奏)(?:\s*\d+)?`;
+/** `[Verse 1]`, `【副歌】`, `(Chorus: Artist)` or `Bridge:`, and nothing else on the line. */
+const sectionLabel = new RegExp(
+	String.raw`^(?:[[【(（]\s*${section}(?:\s*[:：].*)?\s*[\]】)）]|${section}\s*[:：])$`,
+	"iu"
+);
+
+/**
+ * A song-part name is structure, not something sung. The line is kept as an empty one rather than
+ * dropped, so a label heading an instrumental part still opens the break it names.
+ */
+function blankSectionLabel(line: LyricsLine): LyricsLine {
+	return sectionLabel.test(line.text) ? { timeSeconds: line.timeSeconds, text: "" } : line;
 }
 
 /**

@@ -83,6 +83,46 @@ describe("lyrics ranking", () => {
 		expect(best?.lines.map((line) => line.text)).toEqual(["one", "two: three"]);
 	});
 
+	it("strips the credit block NetEase stamps at the tail of the file", () => {
+		// From "光年之外": a blank line then the credit in the LRC file, the credit alone in the yrc one.
+		const lrc = "[00:01.00] one\n[00:04.00] two\n[03:50.737]\n[03:54.371]监制 : Lupo Groinig";
+		const yrc =
+			"[1000,500](1000,500,0)one\n[4000,500](4000,500,0)two\n[230920,4580](230920,910,0)监(231830,910,0)制 (232740,910,0): (233650,910,0)Lupo (234560,940,0)Groinig";
+		for (const candidate of [{ syncedLyrics: lrc }, { wordSyncedLyrics: yrc }]) {
+			const best = pickBest([{ source: "NetEase", ...candidate }], 0);
+			expect(best?.lines.map((line) => line.text)).toEqual(["one", "two"]);
+		}
+	});
+
+	it("blanks song-part names instead of showing them as lyrics", () => {
+		const labels = ["[Verse 1]", "【副歌】", "(Pre-Chorus)", "[Chorus: Someone]", "Bridge:"];
+		const lrc = ["[00:01.00] one", ...labels.map((label, index) => `[00:0${index + 2}.00] ${label}`), "[00:08.00] two"];
+		const best = pickBest([{ source: "LRCLIB", syncedLyrics: lrc.join("\n") }], 180);
+		expect(best?.lines.map((line) => line.text)).toEqual(["one", "two"]);
+		expect(best?.lines.every((line) => !line.background)).toBe(true);
+	});
+
+	it("keeps a lyric that only mentions a song part", () => {
+		const lrc = "[00:01.00] Sing the chorus\n[00:02.00] (Hook me up)\n[00:03.00] Verse: one\n[00:04.00] end";
+		const best = pickBest([{ source: "LRCLIB", syncedLyrics: lrc }], 180);
+		expect(best?.lines.map((line) => line.text || line.background)).toEqual([
+			"Sing the chorus",
+			"Hook me up",
+			"Verse: one",
+			"end",
+		]);
+	});
+
+	it("opens a break at a label heading an instrumental part", () => {
+		const lrc = "[00:01.00] one\n[00:04.00] [Instrumental]\n[00:20.00] two";
+		const best = pickBest([{ source: "LRCLIB", syncedLyrics: lrc }], 180);
+		expect(best?.lines.map((line) => [line.timeSeconds, line.text])).toEqual([
+			[1, "one"],
+			[4, ""],
+			[20, "two"],
+		]);
+	});
+
 	it("leaves a file that is all lyrics alone", () => {
 		expect(pickBest([{ source: "LRCLIB", syncedLyrics: synced }], 180)?.lines).toHaveLength(2);
 	});
