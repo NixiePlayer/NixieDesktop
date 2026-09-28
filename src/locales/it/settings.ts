@@ -46,6 +46,12 @@ export const settings: typeof en = {
 			description:
 				"Nasconde brani e video con contenuti potenzialmente per adulti. Nessun filtro è perfetto. YouTube la memorizza per ogni app e non nel tuo account, quindi vale solo per Nixie.",
 		},
+		flowingLyrics: {
+			label: "Testi scorrevoli",
+			experimental: "Sperimentale",
+			description:
+				"Riempie ogni parola della riga corrente mentre viene cantata, sui brani per cui NetEase sincronizza le singole parole. Nixie interroga allora NetEase anche quando LRCLIB ha testi sincronizzati, e può scegliere una corrispondenza peggiore. Vale dal brano successivo.",
+		},
 		likedFromYouTube: {
 			label: "Musica che ti piace da YouTube",
 			description:

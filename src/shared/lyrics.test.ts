@@ -14,7 +14,7 @@ describe("lyrics ranking", () => {
 		const best = pickBest(candidates, 180);
 		expect(best?.source).toBe("NetEase");
 		expect(best?.lines).toHaveLength(2);
-		expect(isBestPossible(best, ["YouTube Music"])).toBe(true);
+		expect(isBestPossible(best, ["YouTube Music"], true)).toBe(true);
 	});
 
 	it("breaks a quality tie on source order", () => {
@@ -26,7 +26,7 @@ describe("lyrics ranking", () => {
 			180
 		);
 		expect(best?.source).toBe("LRCLIB");
-		expect(isBestPossible(best, ["NetEase", "YouTube Music"])).toBe(false);
+		expect(isBestPossible(best, ["NetEase", "YouTube Music"], true)).toBe(false);
 	});
 
 	it("drops candidates whose length disagrees, and keeps ones that state none", () => {
@@ -57,7 +57,7 @@ describe("lyrics ranking", () => {
 			180
 		);
 		expect(instrumental?.instrumental).toBe(true);
-		expect(isBestPossible(instrumental, ["NetEase", "YouTube Music"])).toBe(true);
+		expect(isBestPossible(instrumental, ["NetEase", "YouTube Music"], true)).toBe(true);
 	});
 
 	it("strips the credit block NetEase stamps at the head of the file", () => {
@@ -202,7 +202,7 @@ describe("lyrics ranking", () => {
 
 	it("returns nothing when every provider came back empty", () => {
 		expect(pickBest([{ source: "LRCLIB" }, { source: "NetEase" }], 180)).toBeUndefined();
-		expect(isBestPossible(undefined, [])).toBe(false);
+		expect(isBestPossible(undefined, [], true)).toBe(false);
 	});
 });
 
@@ -229,10 +229,11 @@ describe("word-synced lyrics", () => {
 		expect(sung[1]?.endSeconds).toBeCloseTo(28.65);
 	});
 
-	it("ranks word timing above line timing, and asks NetEase after a line-synced LRCLIB answer", () => {
+	it("ranks word timing above line timing, and asks NetEase after a line-synced LRCLIB answer only for word timing", () => {
 		const lrclib = pickBest([{ source: "LRCLIB", syncedLyrics: synced }], 180);
-		expect(isBestPossible(lrclib, ["NetEase", "YouTube Music"])).toBe(false);
-		expect(isBestPossible(lrclib, ["YouTube Music"])).toBe(true);
+		expect(isBestPossible(lrclib, ["NetEase", "YouTube Music"], true)).toBe(false);
+		expect(isBestPossible(lrclib, ["NetEase", "YouTube Music"], false)).toBe(true);
+		expect(isBestPossible(lrclib, ["YouTube Music"], true)).toBe(true);
 
 		const best = pickBest(
 			[
@@ -242,7 +243,7 @@ describe("word-synced lyrics", () => {
 			180
 		);
 		expect(best?.source).toBe("NetEase");
-		expect(isBestPossible(best, ["YouTube Music"])).toBe(true);
+		expect(isBestPossible(best, ["YouTube Music"], true)).toBe(true);
 	});
 
 	it("falls back to the LRC file when the yrc one is nothing but credits", () => {

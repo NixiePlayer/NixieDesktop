@@ -367,6 +367,12 @@ export interface Settings {
 	 * music keeps going. Read as on unless it is exactly false, for the same reason `reportHistory` is.
 	 */
 	autoplay?: boolean;
+	/**
+	 * Experimental word-synced lyrics: NetEase is asked for word timing, and a line-synced LRCLIB
+	 * answer no longer ends the lookup. Read as off unless it is exactly true, so a state file written
+	 * before this existed stays on the line-synced ranking.
+	 */
+	flowingLyrics?: boolean;
 }
 
 export interface WindowBounds {

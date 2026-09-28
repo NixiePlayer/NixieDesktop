@@ -22,6 +22,7 @@ import {
 	useAccountSettings,
 } from "#/components/settings-account";
 import { DocumentRow } from "#/components/settings-document";
+import { Badge } from "#/components/ui/badge";
 import { Button } from "#/components/ui/button";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "#/components/ui/select";
 import { Switch } from "#/components/ui/switch";
@@ -29,6 +30,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "#/components/ui/tabs";
 import { toast } from "#/components/ui/toast";
 import { dropHeldPages, queryRegions } from "#/lib/api";
 import { applyLanguage, language, storedLanguage, useMessages } from "#/lib/i18n";
+import { heldLyrics } from "#/lib/lyrics";
 import { platform } from "#/lib/platform";
 import { applyTheme, storedTheme } from "#/lib/theme";
 import { checkForUpdates, useUpdateState } from "#/lib/updates";
@@ -94,7 +96,7 @@ function Setting({
 	control,
 	children,
 }: {
-	label: string;
+	label: React.ReactNode;
 	description?: string;
 	control?: React.ReactNode;
 	children?: React.ReactNode;
@@ -105,7 +107,7 @@ function Setting({
 			    point it drops under it: squeezing the description instead wraps it a word at a time. */}
 			<div className="flex flex-col gap-4 @lg:flex-row @lg:items-start @lg:justify-between @lg:gap-6">
 				<div className="flex min-w-0 flex-col gap-1">
-					<p className="text-sm font-medium">{label}</p>
+					<p className="flex items-center gap-2 text-sm font-medium">{label}</p>
 					{description && <p className="text-muted-foreground text-sm">{description}</p>}
 				</div>
 				{control}
@@ -504,6 +506,24 @@ function SettingsPage() {
 									</p>
 								)}
 							</Setting>
+							<Setting
+								label={
+									<>
+										{s.general.flowingLyrics.label}
+										<Badge variant="secondary">{s.general.flowingLyrics.experimental}</Badge>
+									</>
+								}
+								description={s.general.flowingLyrics.description}
+								control={
+									<Switch
+										checked={settings.flowingLyrics === true}
+										// Held answers were ranked under the old value, so they are dropped once it is stored.
+										onCheckedChange={(on) =>
+											void save({ ...settings, flowingLyrics: on }).then(() => heldLyrics.clear())
+										}
+									/>
+								}
+							/>
 							<Setting
 								label={s.general.region.label}
 								description={s.general.region.description}

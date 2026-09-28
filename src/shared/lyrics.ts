@@ -26,17 +26,18 @@ function quality(result: LyricsResult) {
 	return 4;
 }
 
-/** The best quality each provider can return at all, which is what bounds how far the lookup goes. */
-const ceiling: Record<LyricsSource, number> = { "LRCLIB": 1, "NetEase": 0, "YouTube Music": 3 };
-
 /**
  * Nothing a provider still to be asked could return would beat this, so the caller can stop asking.
  * A later provider only wins on strictly better quality, since a tie goes to source order and the
  * providers are asked in that order. An instrumental marking is upstream stating there is no text to
- * find, so it stops the lookup however much better a later provider could have done.
+ * find, so it stops the lookup however much better a later provider could have done. NetEase can
+ * only beat a line-synced answer when it is asked for `wordTiming`; without it a line-synced LRCLIB
+ * answer ends the lookup, as it did before word timing existed.
  */
-export function isBestPossible(result: LyricsResult | undefined, remaining: LyricsSource[]) {
+export function isBestPossible(result: LyricsResult | undefined, remaining: LyricsSource[], wordTiming: boolean) {
 	if (!result) return false;
+	// The best quality each provider can return at all, which is what bounds how far the lookup goes.
+	const ceiling: Record<LyricsSource, number> = { "LRCLIB": 1, "NetEase": wordTiming ? 0 : 1, "YouTube Music": 3 };
 	return result.instrumental || remaining.every((source) => quality(result) <= ceiling[source]);
 }
 

@@ -47,6 +47,12 @@ export const settings = {
 			description:
 				"Hides songs and videos with potentially mature content. No filter catches everything. YouTube keeps this per app rather than on your account, so it covers Nixie alone.",
 		},
+		flowingLyrics: {
+			label: "Flowing lyrics",
+			experimental: "Experimental",
+			description:
+				"Fills each word of the current line as it is sung, on tracks where NetEase times single words. Nixie then asks NetEase even when LRCLIB has synced lyrics, which can pick a worse match. Applies from the next track.",
+		},
 		likedFromYouTube: {
 			label: "Liked music from YouTube",
 			description: "Shows music videos you gave a thumbs up in other YouTube apps in your Liked music playlist.",

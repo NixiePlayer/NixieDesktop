@@ -107,6 +107,7 @@ It requires a YouTube Music Premium subscription, and refuses an account that ho
 - Fetch lyrics only when a track is requested, from LRCLIB, then NetEase Cloud Music, then YouTube Music.
 - Ask those sources in order and stop at the first result nothing later could improve on.
 - Rank every answer by quality before source: synchronized by word, synchronized by line, then an instrumental marking, then plain text.
+- Ask for word timing only when the experimental Flowing lyrics setting is on, which is off by default. With it off, a line-synchronized LRCLIB answer ends the lookup.
 - Try LRCLIB's exact track, artist, album, and duration match first, then fall back to its search.
 - Choose a NetEase song by length before spending a second request on its lyrics.
 - Parse synchronized LRC timestamps, including multiple timestamps on one line, and NetEase's word timing.

@@ -31,9 +31,15 @@ export class LyricsClient {
 	#tail = Promise.resolve();
 	#lastLrclib = 0;
 	#youtube: (videoId: string) => Promise<{ text: string; attribution?: string } | undefined>;
+	#wordTiming: () => boolean;
 
-	constructor(youtube: (videoId: string) => Promise<{ text: string; attribution?: string } | undefined>) {
+	/** `wordTiming` is read per lookup, so turning the setting on or off applies to the next track. */
+	constructor(
+		youtube: (videoId: string) => Promise<{ text: string; attribution?: string } | undefined>,
+		wordTiming: () => boolean
+	) {
 		this.#youtube = youtube;
+		this.#wordTiming = wordTiming;
 	}
 
 	query(parameters: URLSearchParams) {
@@ -47,25 +53,26 @@ export class LyricsClient {
 
 	/**
 	 * The providers are asked in order and stop at the first result nothing still to be asked could
-	 * beat, which lands on the same answer as fetching all three and ranking them. A line-synced
-	 * LRCLIB answer still goes on to NetEase, the one source that times single words, and stops there,
-	 * since YouTube Music has only plain text. A failing provider only costs its own tier.
+	 * beat, which lands on the same answer as fetching all three and ranking them. With word timing on,
+	 * a line-synced LRCLIB answer still goes on to NetEase, the one source that times single words, and
+	 * stops there, since YouTube Music has only plain text. A failing provider only costs its own tier.
 	 */
 	async #query(parameters: URLSearchParams) {
 		const query = parseQuery(parameters);
 		if (!query.track) return json(undefined);
 
+		const wordTiming = this.#wordTiming();
 		const candidates: LyricsCandidate[] = [];
 		const providers: [LyricsSource, () => Promise<LyricsCandidate[]>][] = [
 			["LRCLIB", () => this.#lrclib(query)],
-			["NetEase", () => this.#netease(query)],
+			["NetEase", () => this.#netease(query, wordTiming)],
 			["YouTube Music", () => this.#youtubeMusic(query)],
 		];
 		for (const [index, [, provider]] of providers.entries()) {
 			candidates.push(...(await provider().catch(() => [])));
 			const best = pickBest(candidates, query.durationSeconds, query.track);
 			const remaining = providers.slice(index + 1).map(([source]) => source);
-			if (isBestPossible(best, remaining)) return json(best);
+			if (isBestPossible(best, remaining, wordTiming)) return json(best);
 		}
 		return json(pickBest(candidates, query.durationSeconds, query.track));
 	}
@@ -94,11 +101,11 @@ export class LyricsClient {
 
 	/**
 	 * Undocumented but unauthenticated public endpoints, carrying the large synced catalogue that
-	 * LRCLIB is missing, and word timing (`yrc`, asked for with `yv`) for part of it. Two round trips,
-	 * since the search only names a song id, so the song is chosen here on its length rather than by
-	 * fetching the lyrics of every result and ranking those.
+	 * LRCLIB is missing, and word timing (`yrc`, asked for with `yv` only when `wordTiming` is on) for
+	 * part of it. Two round trips, since the search only names a song id, so the song is chosen here on
+	 * its length rather than by fetching the lyrics of every result and ranking those.
 	 */
-	async #netease(query: LyricsQuery): Promise<LyricsCandidate[]> {
+	async #netease(query: LyricsQuery, wordTiming: boolean): Promise<LyricsCandidate[]> {
 		const found = await this.#json(
 			buildUrl("https://music.163.com/api/search/get", {
 				s: `${query.track} ${query.artist}`.trim(),
@@ -121,7 +128,7 @@ export class LyricsClient {
 				lv: "-1",
 				kv: "-1",
 				tv: "-1",
-				yv: "-1",
+				...(wordTiming ? { yv: "-1" } : {}),
 			})
 		)) as { code?: number; nolyric?: boolean; lrc?: { lyric?: string }; yrc?: { lyric?: string } } | undefined;
 		if (lyric?.code !== 200) return [];
@@ -130,7 +137,7 @@ export class LyricsClient {
 				source: "NetEase",
 				durationSeconds: song.duration / 1000,
 				syncedLyrics: lyric.lrc?.lyric || undefined,
-				wordSyncedLyrics: lyric.yrc?.lyric || undefined,
+				wordSyncedLyrics: (wordTiming && lyric.yrc?.lyric) || undefined,
 				instrumental: lyric.nolyric === true,
 			},
 		];

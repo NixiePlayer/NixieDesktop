@@ -162,8 +162,12 @@ const resources = new SecureResourceRegistry({
 		.filter((value) => value !== undefined)
 		.map((value) => (value.startsWith("http") ? new URL(value).origin : value)),
 });
-// Deferred rather than passed by value: the adapter is built on `whenReady`, this runs before it.
-const lyrics = new LyricsClient((videoId) => youtube.lyrics(videoId));
+// Deferred rather than passed by value: the adapter and the store are built on `whenReady`, this runs
+// before them.
+const lyrics = new LyricsClient(
+	(videoId) => youtube.lyrics(videoId),
+	() => stateStore.snapshot.settings.flowingLyrics === true
+);
 
 function trusted(event: IpcMainInvokeEvent) {
 	const url = event.senderFrame?.url ?? "";
