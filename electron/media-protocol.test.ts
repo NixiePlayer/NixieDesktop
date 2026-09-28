@@ -71,6 +71,25 @@ describe("remote media", () => {
 		expect(log).toHaveBeenCalledWith("media fetch rejected: 403 itag 251");
 	});
 
+	it("aborts the upstream fetch once the deck abandons the body", async () => {
+		// Electron never aborts `request.signal` for an abandoned load, it only cancels the body it was given.
+		vi.mocked(net.fetch).mockResolvedValueOnce(new Response(new ReadableStream(), { status: 200 }));
+		const registry = new SecureResourceRegistry();
+		const url = registry.registerMedia({
+			url: "https://example.test/audio",
+			contentLength: 10,
+			fingerprint: { itag: 251, mimeType: "audio/webm", codec: "opus", bitrate: 128_000, durationMs: 1_000 },
+		});
+		const id = new URL(url).pathname.split("/").at(-1) ?? "";
+
+		const response = await registry.handleMedia(new Request(url), id);
+		const signal = vi.mocked(net.fetch).mock.lastCall?.[1]?.signal;
+		expect(signal?.aborted).toBe(false);
+		await response.body?.cancel();
+
+		expect(signal?.aborted).toBe(true);
+	});
+
 	it("refuses an expired id with no body, so the deck errors instead of reading it as audio", async () => {
 		vi.useFakeTimers();
 		try {

@@ -30,6 +30,33 @@ function isArtworkHost(target: URL) {
 	return ARTWORK_HOSTS.some((host) => target.hostname.endsWith(host));
 }
 
+/**
+ * Electron never aborts `request.signal` when the renderer abandons a `protocol.handle` load (a skip,
+ * a new `src`, a dropped seek range), and cancelling a `net.fetch` body leaves its request open. What
+ * it does do is cancel the body it was handed, so that cancel aborts the fetch here. Without it every
+ * abandoned load kept a paused upstream request for the life of the app, until googlevideo had no
+ * socket (HTTP/1.1) or flow-control window (HTTP/2) left and every later load waited for bytes that
+ * never came, with no error to show for it.
+ */
+function abandonable(request: Request) {
+	const abandoned = new AbortController();
+	return {
+		signal: AbortSignal.any([request.signal, abandoned.signal]),
+		body(upstream: Response) {
+			const reader = upstream.body?.getReader();
+			if (!reader) return null;
+			return new ReadableStream<Uint8Array>({
+				async pull(controller) {
+					const { done, value } = await reader.read();
+					if (done) controller.close();
+					else controller.enqueue(value);
+				},
+				cancel: () => abandoned.abort(),
+			});
+		},
+	};
+}
+
 function token() {
 	return randomBytes(24).toString("base64url");
 }
@@ -101,9 +128,10 @@ export class SecureResourceRegistry {
 		if (!target.url) return this.#refuse(request, 404);
 		const url = new URL(target.url);
 		if (range) url.searchParams.set("range", `${range.start}-${range.end}`);
+		const load = abandonable(request);
 		const upstream = await net
 			.fetch(url.toString(), {
-				signal: request.signal,
+				signal: load.signal,
 				headers: { "cache-control": "no-store" },
 			})
 			.catch((error: unknown) => {
@@ -124,7 +152,7 @@ export class SecureResourceRegistry {
 			headers.set("content-length", String(range.end - range.start + 1));
 			headers.set("content-range", `bytes ${range.start}-${range.end}/${target.contentLength ?? "*"}`);
 		}
-		return new Response(upstream.body, { status: range ? 206 : upstream.status, headers });
+		return new Response(load.body(upstream), { status: range ? 206 : upstream.status, headers });
 	}
 
 	async handleArtwork(request: Request, id: string) {
@@ -136,8 +164,9 @@ export class SecureResourceRegistry {
 		}
 		const allowed = target.protocol === "https:" && isArtworkHost(target);
 		if (!allowed) return new Response("Not found", { status: 404 });
-		const upstream = await net.fetch(target.toString(), { signal: request.signal });
-		return new Response(upstream.body, {
+		const load = abandonable(request);
+		const upstream = await net.fetch(target.toString(), { signal: load.signal });
+		return new Response(load.body(upstream), {
 			status: upstream.status,
 			headers: {
 				"cache-control": "private, max-age=86400",
