@@ -1,12 +1,13 @@
 import { Link } from "@tanstack/react-router";
 import { Play, X } from "lucide-react";
-import { type RefObject, useEffect, useMemo, useRef, useState } from "react";
+import { memo, type RefObject, useEffect, useLayoutEffect, useRef, useState } from "react";
+import type { AudioEngine } from "#/lib/audio-engine";
 import { formatDuration } from "#/lib/format";
 import { useMessages } from "#/lib/i18n";
 import { heldLyrics, loadLyrics } from "#/lib/lyrics";
 import { cn } from "#/lib/utils";
 import { usePlayback, usePlaybackPosition, usePlayer } from "#/player";
-import type { LyricsResult, QueueContext } from "#/shared/contracts";
+import type { LyricsLine, LyricsResult, LyricsWord, QueueContext } from "#/shared/contracts";
 import { artistNames } from "#/shared/entities";
 import { EntityContextMenu, TrackMenu } from "./entity-menu";
 import { Artwork, PlayingBars, TrackLink } from "./media";
@@ -61,17 +62,14 @@ export function NowPanel({
 function LyricsPane({ active, scrollRef }: { active: boolean; scrollRef: RefObject<HTMLDivElement | null> }) {
 	const engine = usePlayer();
 	const { playback } = usePlayback();
-	const position = usePlaybackPosition();
 	const m = useMessages();
 	// undefined while the lookup is in flight, null once it came back empty
 	const [lyrics, setLyrics] = useState<LyricsResult | null>();
-	const activeRef = useRef<HTMLButtonElement>(null);
 	const track = playback.currentTrack;
-
-	const activeLine = useMemo(() => {
-		if (!lyrics?.lines.length) return -1;
-		return lyrics.lines.reduce((found, line, index) => (line.timeSeconds <= position ? index : found), -1);
-	}, [lyrics, position]);
+	const time = useLyricsTime(active && playback.status === "playing" && Boolean(lyrics?.lines.length));
+	const activeLine = lyrics?.lines.length
+		? lyrics.lines.reduce((found, line, index) => (line.timeSeconds <= time ? index : found), -1)
+		: -1;
 
 	useEffect(() => {
 		// A held answer is drawn on this tick, so a track already looked up never passes through the skeleton.
@@ -90,7 +88,7 @@ function LyricsPane({ active, scrollRef }: { active: boolean; scrollRef: RefObje
 	useEffect(() => {
 		if (!active) return;
 		if (activeLine < 0) scrollRef.current?.scrollTo({ top: 0 });
-		else activeRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+		else scrollRef.current?.querySelector("[data-current]")?.scrollIntoView({ block: "center", behavior: "smooth" });
 	}, [active, activeLine, scrollRef]);
 
 	if (!track) return <Empty title={m.shell.nothingPlaying} body={m.shell.startTrackForLyrics} />;
@@ -105,17 +103,14 @@ function LyricsPane({ active, scrollRef }: { active: boolean; scrollRef: RefObje
 		<div className="flex flex-col gap-4 py-4">
 			{lyrics.lines.length ? (
 				lyrics.lines.map((line, index) => (
-					<button
+					<Lyric
 						key={`${line.timeSeconds}-${index}`}
-						ref={index === activeLine ? activeRef : undefined}
-						onClick={() => engine.seek(line.timeSeconds)}
-						className={cn(
-							"rounded text-left text-2xl leading-tight font-bold tracking-tight transition-colors",
-							index === activeLine ? "text-foreground" : "text-muted-foreground/60 hover:text-muted-foreground"
-						)}
-					>
-						{line.text || "♪"}
-					</button>
+						line={line}
+						current={index === activeLine}
+						// Only the current line moves, so every other one gets a constant and skips the frame.
+						time={index === activeLine ? time : 0}
+						engine={engine}
+					/>
 				))
 			) : (
 				// Only some sources time their lyrics. An untimed one still reads, it just has no line to
@@ -125,6 +120,110 @@ function LyricsPane({ active, scrollRef }: { active: boolean; scrollRef: RefObje
 				</p>
 			)}
 			<p className="text-muted-foreground pt-4 text-xs">{lyrics.attribution ?? m.shell.lyricsBy(lyrics.source)}</p>
+		</div>
+	);
+}
+
+/**
+ * The playhead once a frame while `running`, which is what moves the word highlight and the break
+ * dots smoothly, and the ordinary four-a-second position otherwise, so a paused or hidden pane spends
+ * no frames. A layout effect, so the first frame after a resume is not drawn at a stale time.
+ */
+function useLyricsTime(running: boolean) {
+	const engine = usePlayer();
+	const position = usePlaybackPosition();
+	const [time, setTime] = useState(0);
+
+	useLayoutEffect(() => {
+		if (!running) return;
+		let frame = 0;
+		const tick = () => {
+			setTime(engine.getLivePosition());
+			frame = requestAnimationFrame(tick);
+		};
+		tick();
+		return () => cancelAnimationFrame(frame);
+	}, [running, engine]);
+
+	return running ? time : position;
+}
+
+const Lyric = memo(function Lyric({
+	line,
+	current,
+	time,
+	engine,
+}: {
+	line: LyricsLine;
+	current: boolean;
+	time: number;
+	engine: AudioEngine;
+}) {
+	const tone = current ? "text-foreground" : "text-muted-foreground/60";
+	if (!line.text && !line.background) return <Break line={line} current={current} time={time} tone={tone} />;
+
+	// The words are drawn one by one only while they are being sung; any other line is its plain text.
+	const words = current ? line.words : undefined;
+	return (
+		<button
+			data-current={current || undefined}
+			onClick={() => engine.seek(line.timeSeconds)}
+			className={cn(
+				"flex flex-col items-start gap-1 rounded text-left transition-colors",
+				tone,
+				!current && "hover:text-muted-foreground"
+			)}
+		>
+			{line.text && (
+				<span className="text-2xl leading-tight font-bold tracking-tight">
+					{words ? <Words words={words.filter((word) => !word.background)} time={time} /> : line.text}
+				</span>
+			)}
+			{line.background && (
+				<span className="text-base leading-snug font-semibold">
+					{words ? <Words words={words.filter((word) => word.background)} time={time} /> : line.background}
+				</span>
+			)}
+		</button>
+	);
+});
+
+const clamp = (value: number) => Math.min(Math.max(value, 0), 1);
+
+/**
+ * Each word fills from the left over the time it is sung. The lit edge is feathered over a fifth of
+ * the word, so it starts off the left side and ends exactly at the right one.
+ */
+function Words({ words, time }: { words: LyricsWord[]; time: number }) {
+	return words.map((word, index) => {
+		const edge = clamp((time - word.startSeconds) / Math.max(word.endSeconds - word.startSeconds, 0.01)) * 120 - 20;
+		return (
+			<span
+				key={index}
+				className="bg-clip-text text-transparent"
+				style={{
+					backgroundImage: `linear-gradient(to right, var(--foreground) ${edge}%, color-mix(in oklab, var(--muted-foreground) 60%, transparent) ${edge + 20}%)`,
+				}}
+			>
+				{word.text}
+			</span>
+		);
+	});
+}
+
+/** An instrumental break: three dots that light one after the other until the next line comes in. */
+function Break({ line, current, time, tone }: { line: LyricsLine; current: boolean; time: number; tone: string }) {
+	const length = (line.endSeconds ?? line.timeSeconds) - line.timeSeconds;
+	const progress = current && length > 0 ? clamp((time - line.timeSeconds) / length) : 0;
+	return (
+		<div data-current={current || undefined} aria-hidden className={cn("flex gap-2 py-2 transition-colors", tone)}>
+			{[0, 1, 2].map((dot) => (
+				<span
+					key={dot}
+					className="size-3 rounded-full bg-current"
+					style={{ opacity: current ? 0.3 + 0.7 * clamp(progress * 3 - dot) : 1 }}
+				/>
+			))}
 		</div>
 	);
 }

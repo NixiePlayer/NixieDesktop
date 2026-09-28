@@ -221,9 +221,27 @@ export interface AudioVariantFingerprint {
 	durationMs: number;
 }
 
+export interface LyricsWord {
+	text: string;
+	startSeconds: number;
+	endSeconds: number;
+	/** Sung as a backing vocal: it was in parentheses, which is the one convention every source shares. */
+	background?: boolean;
+}
+
+/**
+ * A line with no `text` and no `background` is an instrumental break running to `endSeconds`, drawn
+ * as dots. Every other empty line a source sends is dropped before it gets here.
+ */
 export interface LyricsLine {
 	timeSeconds: number;
+	/** The lead vocal, with any parenthesised backing vocal taken out into `background`. */
 	text: string;
+	background?: string;
+	/** When singing stops. Only word-synced sources state it; a line-synced one ends at the next line. */
+	endSeconds?: number;
+	/** Present only from a word-synced source. `text` and `background` are these words joined. */
+	words?: LyricsWord[];
 }
 
 /** Ordered best to worst: the tie-break when two providers answer at the same quality. */

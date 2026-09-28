@@ -106,13 +106,15 @@ It requires a YouTube Music Premium subscription, and refuses an account that ho
 
 - Fetch lyrics only when a track is requested, from LRCLIB, then NetEase Cloud Music, then YouTube Music.
 - Ask those sources in order and stop at the first result nothing later could improve on.
-- Rank every answer by quality before source: synchronized, then an instrumental marking, then plain text.
+- Rank every answer by quality before source: synchronized by word, synchronized by line, then an instrumental marking, then plain text.
 - Try LRCLIB's exact track, artist, album, and duration match first, then fall back to its search.
 - Choose a NetEase song by length before spending a second request on its lyrics.
-- Parse synchronized LRC timestamps, including multiple timestamps on one line.
+- Parse synchronized LRC timestamps, including multiple timestamps on one line, and NetEase's word timing.
 - Discard the writing and production credits NetEase stamps as lyric lines at the head of a file.
 - Reject fallback matches whose durations differ by more than the allowed tolerance, and keep matches where either side states no duration.
-- Highlight and smoothly center the active lyric line during playback.
+- Highlight and smoothly center the active lyric line during playback. With word timing, fill each word of the active line as it is sung.
+- Draw a parenthesised part of a line as a backing vocal, in smaller text under the lead vocal.
+- Mark every silence of seven seconds or more with three dots that fill until the next line: the intro, a break after a word-synced line ends, and a break an LRC file marks with an empty line.
 - Seek when the user selects a synchronized lyric line.
 - Render an untimed source as a static block, without a highlight or seeking.
 - Credit the source, or the licensor it names, under the lyrics.

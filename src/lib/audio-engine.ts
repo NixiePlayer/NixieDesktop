@@ -31,6 +31,12 @@ export interface AudioEngine {
 	getSnapshot(): EngineState;
 	subscribePosition(listener: () => void): () => void;
 	getPosition(): number;
+	/**
+	 * The playhead read off the playing deck at call time, for the word highlight, which is drawn every
+	 * frame and cannot wait on `timeupdate`. Anything but playing answers the last reported position,
+	 * since a deck being switched still holds the old track's time.
+	 */
+	getLivePosition(): number;
 	start(): Promise<void>;
 	dispose(): void;
 	play(track?: Track, queue?: Track[], context?: QueueContext): Promise<void>;
@@ -755,6 +761,7 @@ export function createAudioEngine(deps: AudioEngineDeps = {}): AudioEngine {
 			return () => positionListeners.delete(listener);
 		},
 		getPosition: () => position,
+		getLivePosition: () => (state.playback.status === "playing" ? elements[active].currentTime : position),
 
 		start() {
 			// StrictMode and an early shortcut share one startup, and commands await the restored track.
