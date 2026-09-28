@@ -66,6 +66,8 @@ interface Harness {
 function harness(
 	options: {
 		resolveDelay?: number;
+		/** How long the settings round trip to main takes. */
+		loadDelay?: number;
 		withoutMusic?: boolean;
 		radio?: Track[];
 		radioDelay?: number;
@@ -102,7 +104,10 @@ function harness(
 	const bridge = {
 		local: {
 			rendererError,
-			load: async () => structuredClone(stored),
+			load: async () => {
+				if (options.loadDelay) await new Promise((done) => setTimeout(done, options.loadDelay));
+				return structuredClone(stored);
+			},
 			save: async (state: PersistedState) => {
 				saved.push(state);
 			},
@@ -256,14 +261,14 @@ describe("audio engine", () => {
 		command.mockClear();
 
 		audio[0].duration = 200;
-		audio[0].currentTime = 199.9;
+		audio[0].currentTime = 199.95;
 		audio[0].dispatch("timeupdate");
 		await vi.waitFor(() => expect(command).toHaveBeenCalledTimes(2));
 
 		// The end of the outgoing track and the start of the incoming one, in that order. Nothing else
 		// sees the final position: the next play resets the clock before anything can read it.
 		expect(command.mock.calls.map(([request]) => request)).toEqual([
-			{ type: "history", trackId: "t1", positionSeconds: 199.9 },
+			{ type: "history", trackId: "t1", positionSeconds: 199.95 },
 			{ type: "history", trackId: "t2", positionSeconds: 0 },
 		]);
 	});
@@ -443,13 +448,108 @@ describe("audio engine", () => {
 		await vi.waitFor(() => expect(audio[1].src).toContain("t2"));
 
 		audio[0].duration = 200;
-		audio[0].currentTime = 199.9;
+		audio[0].currentTime = 199.95;
 		audio[0].dispatch("timeupdate");
 
 		// `ended` never fires: the switch is armed against the boundary instead of reacting to it.
 		await vi.waitFor(() => expect(audio[1].played).toBe(1));
 		expect(engine.getSnapshot().playback.queueIndex).toBe(1);
 		expect(audio[0].paused).toBe(false);
+	});
+
+	it("starts the preloaded deck on the tick the handoff fires, before the settings round trip", async () => {
+		const { engine, audio } = harness({ loadDelay: 30 });
+		await engine.start();
+		const queue = [track("t1"), track("t2")];
+		await engine.play(queue[0], queue);
+		await vi.waitFor(() => expect(audio[1].src).toContain("t2"));
+		await vi.waitFor(() => expect(engine.getSnapshot().playback.status).toBe("playing"));
+		await new Promise((done) => setTimeout(done, 40));
+
+		audio[0].duration = 200;
+		audio[0].currentTime = 199.95;
+		audio[0].dispatch("timeupdate");
+		await new Promise((done) => setTimeout(done, 5));
+
+		// The settings are still on their way back from main, and the old deck has already drained by
+		// the time they land: waiting for them is the gap.
+		expect(audio[1].played).toBe(1);
+		await vi.waitFor(() => expect(engine.getSnapshot().playback.status).toBe("playing"));
+		expect(engine.getSnapshot().playback.currentTrack?.id).toBe("t2");
+	});
+
+	it("measures the boundary again when a deck stalled after the handoff was armed", async () => {
+		const { engine, audio } = harness();
+		await engine.start();
+		const queue = [track("t1"), track("t2")];
+		await engine.play(queue[0], queue);
+		await vi.waitFor(() => expect(audio[1].src).toContain("t2"));
+		await new Promise((done) => setTimeout(done, 5));
+
+		// A seek into the last seconds fires `timeupdate` at the target while the deck still waits for
+		// that range, so the playhead does not move for a while after the timer was armed.
+		audio[0].duration = 200;
+		audio[0].currentTime = 199.7;
+		audio[0].dispatch("timeupdate");
+		await new Promise((done) => setTimeout(done, 260));
+		expect(audio[1].played).toBe(0);
+
+		audio[0].currentTime = 199.95;
+		await vi.waitFor(() => expect(audio[1].played).toBe(1));
+	});
+
+	it("prepares the next track while the current one still resolves", async () => {
+		const { engine, resolve } = harness({ resolveDelay: 30 });
+		await engine.start();
+		const queue = [track("t1"), track("t2")];
+		void engine.play(queue[0], queue);
+		await new Promise((done) => setTimeout(done, 10));
+
+		expect(resolve.mock.calls.map(([id]) => id)).toEqual(["t1", "t2"]);
+	});
+
+	it("waits for a preload still in flight when the track ends rather than resolving it twice", async () => {
+		const { engine, audio, resolve } = harness({ resolveDelay: 40 });
+		await engine.start();
+		const queue = [track("t1"), track("t2"), track("t3")];
+		await engine.play(queue[0], queue);
+		await vi.waitFor(() => expect(audio[1].src).toContain("t2"));
+		await new Promise((done) => setTimeout(done, 5));
+		// The gapless start onto t2 asks for t3 as it goes, and t3 is still resolving once t2 plays.
+		engine.next();
+		// Not `vi.waitFor`, whose polling interval is longer than the resolve still in flight.
+		await new Promise((done) => setTimeout(done, 5));
+		expect(engine.getSnapshot().playback.status).toBe("playing");
+
+		// Sought to the very end straight away: t2 runs out before t3 has landed.
+		audio[1].dispatch("ended");
+		await vi.waitFor(() => expect(engine.getSnapshot().playback.currentTrack?.id).toBe("t3"));
+		await vi.waitFor(() => expect(engine.getSnapshot().playback.status).toBe("playing"));
+
+		expect(resolve.mock.calls.filter(([id]) => id === "t3")).toHaveLength(1);
+		expect(audio[0].src).toContain("t3");
+	});
+
+	it("does not start the next track when paused while its preload was still in flight", async () => {
+		const { engine, audio } = harness({ resolveDelay: 40 });
+		await engine.start();
+		const queue = [track("t1"), track("t2"), track("t3")];
+		await engine.play(queue[0], queue);
+		await vi.waitFor(() => expect(audio[1].src).toContain("t2"));
+		await new Promise((done) => setTimeout(done, 5));
+		engine.next();
+		// Not `vi.waitFor`, whose polling interval is longer than the resolve still in flight.
+		await new Promise((done) => setTimeout(done, 5));
+		expect(engine.getSnapshot().playback.status).toBe("playing");
+		const playedBefore = audio[0].played;
+
+		audio[1].dispatch("ended");
+		engine.pause();
+		await new Promise((done) => setTimeout(done, 60));
+
+		expect(audio[0].played).toBe(playedBefore);
+		expect(engine.getSnapshot().playback.currentTrack?.id).toBe("t2");
+		expect(engine.getSnapshot().playback.status).toBe("paused");
 	});
 
 	it("preloads the wrap rather than the row past the end when repeat is all", async () => {
@@ -548,9 +648,10 @@ describe("audio engine", () => {
 		await vi.waitFor(() => expect(engine.getSnapshot().playback.queue).toHaveLength(4));
 		expect(query).toHaveBeenCalledExactlyOnceWith({ type: "radio", id: "t2" });
 
+		// r1 may still be resolving here, and the boundary waits for it rather than resolving it again.
 		audio[0].dispatch("ended");
+		await vi.waitFor(() => expect(engine.getSnapshot().playback.currentTrack?.id).toBe("r1"));
 		await vi.waitFor(() => expect(engine.getSnapshot().playback.status).toBe("playing"));
-		expect(engine.getSnapshot().playback.currentTrack?.id).toBe("r1");
 	});
 
 	it("keeps an episode's radio to episodes", async () => {

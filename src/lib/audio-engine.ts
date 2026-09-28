@@ -85,13 +85,21 @@ const MEDIA_WAIT_REPORT_MS = 5000;
  * the preloaded deck is started this far early and the outgoing deck is left to play its own tail
  * out underneath it, so the join is an overlap of at most this long rather than a gap.
  *
- * ponytail: one fixed lead, not a measured start latency. It also has to cover the `local.load()`
- * round trip `play` makes. Overshoot costs a sliver of overlap, undershoot brings back a sliver of
- * gap; measure `play()` to the first `timeupdate` per deck if a transition ever sounds doubled.
+ * Measured on the audio thread (an AudioWorklet tapping each deck), the preloaded deck's first
+ * samples land in the render quantum `play()` is called in, and the outgoing deck falls silent about
+ * 18ms before its `currentTime` says it ends. So this lead is an overlap of about 30ms, and what it
+ * guards against is only the timer firing late on a busy renderer. That holds because `play` starts
+ * the preloaded deck before it awaits anything: behind the settings round trip the same lead was
+ * used up by main and by React, and a busy main process turned it into a gap.
+ *
+ * ponytail: one fixed lead, not a measured start latency. Overshoot costs a sliver of overlap,
+ * undershoot brings back a sliver of gap; tap the decks again if a transition ever sounds doubled.
  */
-const SWITCH_LEAD_MS = 80;
+const SWITCH_LEAD_MS = 50;
 /** Far enough out that a `timeupdate` (roughly every 250ms) always lands inside it. */
 const HANDOFF_ARM_SECONDS = 2;
+/** How far ahead of its planned moment the armed switch may still find the deck and switch anyway. */
+const HANDOFF_SLACK_MS = 20;
 /**
  * A deck is reused only while its media id has this long left to live, so the track resumed on it can
  * play out before main starts refusing the ranges it still has to fetch. Chromium drops a paused
@@ -111,6 +119,8 @@ export function createAudioEngine(deps: AudioEngineDeps = {}): AudioEngine {
 	let position = 0;
 	let active: Deck = 0;
 	let preloaded: Preloaded | undefined;
+	/** The preload still resolving, which a track that runs out before it lands waits for. */
+	let preloading: Promise<void> | undefined;
 	let generation = 0;
 	let ready = false;
 	let startPromise: Promise<void> | undefined;
@@ -220,7 +230,15 @@ export function createAudioEngine(deps: AudioEngineDeps = {}): AudioEngine {
 		});
 		element.addEventListener("playing", () => clearTimeout(waitTimers[deck]));
 		element.addEventListener("ended", () => {
-			if (deck === active) move("next", true);
+			if (deck !== active) return;
+			// A track sought to its end straight after it started runs out while its successor is still
+			// resolving. Waiting for that preload is the rest of one resolve; moving now resolves the same
+			// track a second time from scratch on this deck. A pause meanwhile keeps it paused.
+			if (!preloading) return move("next", true);
+			const token = generation;
+			void preloading.then(() => {
+				if (token === generation && state.playback.status === "playing") move("next", true);
+			});
 		});
 		element.addEventListener("error", () => {
 			// The source is what failed, usually an id or a signed URL that expired while nothing played, so
@@ -407,14 +425,18 @@ export function createAudioEngine(deps: AudioEngineDeps = {}): AudioEngine {
 		const upcoming = queue[result.index];
 		if (!upcoming) return;
 		const deck = active === 0 ? 1 : 0;
-		void prepare(upcoming, deck, token, settings)
+		const pending = prepare(upcoming, deck, token, settings)
 			.then((gainDb) => {
 				if (gainDb === undefined || token !== generation) return;
 				preloaded = { trackId: upcoming.id, index: result.index, deck, gainDb, settings: settingsKey(settings) };
 			})
 			.catch(() => {
 				preloaded = undefined;
+			})
+			.finally(() => {
+				if (preloading === pending) preloading = undefined;
 			});
+		preloading = pending;
 	}
 
 	function clearHandoff() {
@@ -453,6 +475,11 @@ export function createAudioEngine(deps: AudioEngineDeps = {}): AudioEngine {
 		handoffTimer = setTimeout(
 			() => {
 				handoffTimer = undefined;
+				// A seek into the last seconds arms this at the target while the deck still waits for that
+				// range, so the deck may be further from its end than planned: measured again, not trusted.
+				if ((element.duration - element.currentTime) * 1000 > SWITCH_LEAD_MS + HANDOFF_SLACK_MS) {
+					return armHandoff(element);
+				}
 				// `play` runs synchronously as far as the deck it leaves, so the flag is read there.
 				handoff = true;
 				move("next", true);
@@ -563,6 +590,12 @@ export function createAudioEngine(deps: AudioEngineDeps = {}): AudioEngine {
 		// length is read off it here, or every track reached through the gapless handoff keeps the
 		// zero upstream gave it, which pins the seek bar at the start for the whole song.
 		if (fastPath) syncDuration(elements[active]);
+		// The preloaded deck starts on this tick. Everything awaited below, the settings round trip and
+		// the render of the track change React slips in while it waits, took about half the handoff
+		// lead when measured, which is what left a gap between two tracks whenever the page was busy.
+		// Settings that went stale under the preload restart it below on a fresh source instead.
+		const started = fastPath ? elements[active].play() : undefined;
+		started?.catch(() => undefined);
 		armLoadingTimeout(token);
 
 		try {
@@ -576,21 +609,25 @@ export function createAudioEngine(deps: AudioEngineDeps = {}): AudioEngine {
 			const settings = stored.settings;
 			const fresh = fastPath?.settings === settingsKey(settings) ? fastPath : undefined;
 			startStage = "RESOLVE";
-			const gainDb = fresh ? fresh.gainDb : await prepare(current, active, token, settings);
+			const preparing = fresh ? fresh.gainDb : prepare(current, active, token, settings);
+			// Asked for alongside this start rather than after it, and only once this track's own resolve
+			// is on its way, so a track sought to its end right after a slow start still finds its
+			// successor ready, or at least already resolving.
+			preloadNext(token, settings);
+			const gainDb = await preparing;
 			if (token !== generation || gainDb === undefined) return;
 			startStage = "AUDIO_CONTEXT";
 			await audioContext?.resume();
 			if (token !== generation) return;
 			startStage = "MEDIA";
 			const deck = active;
-			await elements[deck].play();
+			await (fresh ? started : elements[deck].play());
 			if (token !== generation) return elements[deck].pause();
 			set({ status: "playing" }, gainDb);
 			void persist();
 			report(current.id, 0);
 			// Repeat "one" advances on its own onto the track already playing, which is not news.
 			if (unwatched && current.id !== outgoing?.id) announce(current);
-			preloadNext(token, settings);
 		} catch (error) {
 			// Swallowing this is what made playback failures undiagnosable, so the reason is kept.
 			if (token !== generation) return;
