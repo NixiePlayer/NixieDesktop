@@ -504,8 +504,10 @@ export function createAudioEngine(deps: AudioEngineDeps = {}): AudioEngine {
 				await audioContext?.resume();
 				if (token !== generation) return;
 				startStage = "MEDIA";
-				await elements[active].play();
-				if (token !== generation) return elements[active].pause();
+				// `active` can move while this awaits, and a superseded start must only stop its own deck.
+				const deck = active;
+				await elements[deck].play();
+				if (token !== generation) return elements[deck].pause();
 				set({ status: "playing" });
 			} catch (error) {
 				if (token !== generation) return;
@@ -526,18 +528,27 @@ export function createAudioEngine(deps: AudioEngineDeps = {}): AudioEngine {
 
 		const token = ++generation;
 		const fastPath = preloaded?.trackId === current.id && reusable(preloaded.deck) ? preloaded : undefined;
+		// Consumed on this tick, whichever path is taken: a `move` landing while this start still awaits
+		// would otherwise decide the same preload again and replay the track it just started.
+		preloaded = undefined;
 		// A handoff starts the next deck before the current track has finished, so the deck it leaves
 		// is left running and plays its own tail out under the new one. Every other switch stops it.
 		// Nothing else claims that deck in the meantime: `preloadNext` only reaches it after a resolve,
 		// which is a network round trip and so always longer than the lead.
 		if (!handoff || !fastPath) elements[active]?.pause();
 		active = fastPath?.deck ?? active;
+		// The slow path still holds the outgoing source here, and a pause before `prepare` writes the new
+		// one would otherwise let the paused fast path resume the old track under the new one's title.
+		if (!fastPath) preparedAt[active] = 0;
 		if (fastPath) gains[active]?.gain.setValueAtTime(dbToLinear(fastPath.gainDb), audioContext?.currentTime ?? 0);
 		// Resuming the current track without an explicit argument keeps the live playhead. The snapshot's
 		// `positionSeconds` is not it: `timeupdate` and `pause` never write there, so a fresh source for a
 		// track paused minutes in would otherwise start back where the session was restored.
 		restoreTo = !track && current.id === state.playback.currentTrack?.id ? position : 0;
 		setPosition(restoreTo);
+		// A preloaded element is not always at 0: the restored one sits at the restored position, and
+		// one that already played sits wherever it stopped. Guarded so a gapless handoff never seeks.
+		if (fastPath && elements[active].currentTime !== restoreTo) elements[active].currentTime = restoreTo;
 		set({
 			currentTrack: current,
 			context: context ?? state.playback.context,
@@ -567,13 +578,13 @@ export function createAudioEngine(deps: AudioEngineDeps = {}): AudioEngine {
 			startStage = "RESOLVE";
 			const gainDb = fresh ? fresh.gainDb : await prepare(current, active, token, settings);
 			if (token !== generation || gainDb === undefined) return;
-			preloaded = undefined;
 			startStage = "AUDIO_CONTEXT";
 			await audioContext?.resume();
 			if (token !== generation) return;
 			startStage = "MEDIA";
-			await elements[active].play();
-			if (token !== generation) return elements[active].pause();
+			const deck = active;
+			await elements[deck].play();
+			if (token !== generation) return elements[deck].pause();
 			set({ status: "playing" }, gainDb);
 			void persist();
 			report(current.id, 0);
@@ -605,7 +616,8 @@ export function createAudioEngine(deps: AudioEngineDeps = {}): AudioEngine {
 		// The preload already decided what follows, and with shuffle on that decision was a die roll:
 		// rolling a second one here would land somewhere else and throw the prepared deck away.
 		const decided =
-			direction === "next" && preloaded && queue[preloaded.index]?.id === preloaded.trackId
+			// The restored preload holds the current row on the active deck, so it decides nothing.
+			direction === "next" && preloaded && !preloaded.restored && queue[preloaded.index]?.id === preloaded.trackId
 				? preloaded.index
 				: undefined;
 		const result =
@@ -642,6 +654,9 @@ export function createAudioEngine(deps: AudioEngineDeps = {}): AudioEngine {
 	 * track after a queue edit takes the fast path onto an element holding nothing at all.
 	 */
 	function clearDeck() {
+		// Cancels whatever is still resolving, the restored prepare included, so it cannot load the old
+		// track back into the deck this just emptied.
+		generation += 1;
 		clearHandoff();
 		if (preloaded?.deck === active) preloaded = undefined;
 		const element = elements[active];
