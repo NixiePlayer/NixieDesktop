@@ -123,6 +123,45 @@ describe("lyrics ranking", () => {
 		]);
 	});
 
+	it("blanks the title NetEase stamps ahead of the intro", () => {
+		// From "Welcome to Paradise": the title right after the credits, then ten seconds of guitar.
+		const lrc = "[00:00.000] 作词 : A\n[00:02.000]Welcome to paradise\n[00:05.000]\n[00:12.000]Dear mother,";
+		const yrc =
+			"[90,450](90,150,0)Welcome (240,150,0)to (390,150,0)paradise\n[11010,840](11010,390,0)Dear (11400,450,0)mother,";
+		for (const candidate of [{ syncedLyrics: lrc }, { wordSyncedLyrics: yrc }]) {
+			const best = pickBest([{ source: "NetEase", ...candidate }], 0, "Welcome to Paradise (Remastered)");
+			expect(best?.lines.map((line) => line.text)).toEqual(["", "Dear mother,"]);
+		}
+	});
+
+	it("keeps a title the song opens by singing", () => {
+		const lrc = "[00:01.00] Help!\n[00:03.00] I need somebody";
+		expect(pickBest([{ source: "LRCLIB", syncedLyrics: lrc }], 180, "Help!")?.lines[0]?.text).toBe("Help!");
+	});
+
+	it("re-cases a shouted line the way the rest of the song writes it", () => {
+		// From "This Is How I Disappear", plus a name that keeps its learned capital and a CJK line.
+		const lrc = [
+			"[00:01.00] And live my life alone",
+			"[00:02.00] Forever now in Mexico",
+			"[00:03.00] FOREVER NOW IN MEXICO",
+			"[00:04.00] I’M SO FAR AWAY FROM YOU",
+			"[00:05.00] 我爱你 NASA",
+		].join("\n");
+		const best = pickBest([{ source: "LRCLIB", syncedLyrics: lrc }], 180);
+		expect(best?.lines.slice(2).map((line) => line.text)).toEqual([
+			"Forever now in Mexico",
+			"I’m so far away from you",
+			"我爱你 NASA",
+		]);
+		const worded = pickBest(
+			[{ source: "NetEase", wordSyncedLyrics: "[1000,900](1000,300,0)SO (1300,300,0)YOU (1600,300,0)CAN" }],
+			180
+		)?.lines[0];
+		expect(worded?.text).toBe("So you can");
+		expect(worded?.words?.map((timed) => timed.text)).toEqual(["So ", "you ", "can"]);
+	});
+
 	it("leaves a file that is all lyrics alone", () => {
 		expect(pickBest([{ source: "LRCLIB", syncedLyrics: synced }], 180)?.lines).toHaveLength(2);
 	});

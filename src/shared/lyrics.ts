@@ -43,12 +43,13 @@ export function isBestPossible(result: LyricsResult | undefined, remaining: Lyri
 /**
  * The single ranking authority: quality first, then source order. A synced result from any provider
  * beats a plain one from the provider above it, which is the whole point of having more than one, and
- * a word-synced one beats a line-synced one the same way.
+ * a word-synced one beats a line-synced one the same way. `title` is the track's own, used only to
+ * spot a provider stamping it as the first line.
  */
-export function pickBest(candidates: LyricsCandidate[], durationSeconds: number) {
+export function pickBest(candidates: LyricsCandidate[], durationSeconds: number, title = "") {
 	return candidates
 		.filter((candidate) => matchesLength(candidate, durationSeconds))
-		.map(toResult)
+		.map((candidate) => toResult(candidate, title))
 		.filter((result) => quality(result) < 4)
 		.sort((a, b) => quality(a) - quality(b) || priority.indexOf(a.source) - priority.indexOf(b.source))
 		.at(0);
@@ -64,7 +65,7 @@ function matchesLength(candidate: LyricsCandidate, durationSeconds: number) {
 	return durationsMatch(durationSeconds, candidate.durationSeconds);
 }
 
-function toResult(candidate: LyricsCandidate): LyricsResult {
+function toResult(candidate: LyricsCandidate, title: string): LyricsResult {
 	const worded = candidate.wordSyncedLyrics ? stripCredits(parseYrc(candidate.wordSyncedLyrics)) : [];
 	const timed = candidate.syncedLyrics ? parseLrc(candidate.syncedLyrics) : [];
 	const lines = worded.some((line) => line.text) ? worded : stripCredits(timed);
@@ -72,7 +73,7 @@ function toResult(candidate: LyricsCandidate): LyricsResult {
 	return {
 		source: candidate.source,
 		instrumental,
-		lines: instrumental ? [] : markGaps(lines.map(blankSectionLabel).map(splitBackground)),
+		lines: instrumental ? [] : markGaps(unshout(blankTitle(lines, title)).map(blankSectionLabel).map(splitBackground)),
 		// No timestamps anywhere means the "synced" field was really plain text all along. A file that
 		// did parse falls back to nothing instead, or a credits-only one comes back as its own raw text.
 		plainLyrics: instrumental
@@ -205,6 +206,64 @@ const sectionLabel = new RegExp(
  */
 function blankSectionLabel(line: LyricsLine): LyricsLine {
 	return sectionLabel.test(line.text) ? { timeSeconds: line.timeSeconds, text: "" } : line;
+}
+
+/** Letters and digits only, and without the `(Remastered)` or ` - Live` a streaming title carries. */
+const titleKey = (value: string) =>
+	value
+		.replace(/\s-\s.*$/, "")
+		.replace(/[([（【][^)\]）】]*[)\]）】]/g, "")
+		.toLowerCase()
+		.replace(/[^\p{L}\p{N}]+/gu, "");
+
+/**
+ * NetEase opens some files with the song's title as a line of its own, timed like the credits before
+ * it and followed by the intro. It is blanked rather than dropped, so the intro still gets its dots.
+ * The break after it is what tells it from a song that opens by singing its own title.
+ */
+function blankTitle(lines: LyricsLine[], title: string) {
+	const [first, next] = lines.filter((line) => line.text);
+	if (!first || !next || !titleKey(title) || titleKey(first.text) !== titleKey(title)) return lines;
+	if (next.timeSeconds - first.timeSeconds < GAP_SECONDS) return lines;
+	return lines.map((line) => (line === first ? { timeSeconds: line.timeSeconds, text: "" } : line));
+}
+
+const word = /[\p{L}\p{N}'’]+/gu;
+/** Capitals and no other letters, so a CJK line holding an English acronym is not one. */
+const shouted = (text: string) => /\p{Lu}/u.test(text) && !/[\p{Ll}\p{Lo}]/u.test(text);
+
+/**
+ * Transcribers write a shouted part in capitals, which reads as a different kind of line rather than
+ * as louder. Such a line is re-cased the way the rest of the song writes each word, learned from its
+ * mixed-case lines past their first word (which is capitalised for its position), so a name or an
+ * acronym keeps its capitals; a word the song never writes otherwise goes lower case, except "I".
+ * ponytail: the first spelling seen wins, so a word the song also shouts inside a mixed line keeps
+ * its capitals. Count spellings if that shows up.
+ */
+function unshout(lines: LyricsLine[]) {
+	const casing = new Map<string, string>();
+	for (const line of lines) {
+		if (shouted(line.text)) continue;
+		for (const [index, [spelling]] of [...line.text.matchAll(word)].entries()) {
+			if (index && !casing.has(spelling.toLowerCase())) casing.set(spelling.toLowerCase(), spelling);
+		}
+	}
+	return lines.map((line) => {
+		if (!shouted(line.text)) return line;
+		let first = true;
+		const recase = (text: string) =>
+			text.replace(word, (spelling) => {
+				const lower = spelling.toLowerCase();
+				const cased = casing.get(lower) ?? (/^i(['’]|$)/.test(lower) ? `I${lower.slice(1)}` : lower);
+				if (!first) return cased;
+				first = false;
+				return cased.charAt(0).toUpperCase() + cased.slice(1);
+			});
+		const text = recase(line.text);
+		first = true;
+		const words = line.words?.map((timed) => ({ ...timed, text: recase(timed.text) }));
+		return { ...line, text, ...(words ? { words } : {}) };
+	});
 }
 
 /**

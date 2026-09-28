@@ -63,11 +63,11 @@ export class LyricsClient {
 		];
 		for (const [index, [, provider]] of providers.entries()) {
 			candidates.push(...(await provider().catch(() => [])));
-			const best = pickBest(candidates, query.durationSeconds);
+			const best = pickBest(candidates, query.durationSeconds, query.track);
 			const remaining = providers.slice(index + 1).map(([source]) => source);
 			if (isBestPossible(best, remaining)) return json(best);
 		}
-		return json(pickBest(candidates, query.durationSeconds));
+		return json(pickBest(candidates, query.durationSeconds, query.track));
 	}
 
 	/** The exact match needs all four fields, so a track with no length goes straight to the search. */
