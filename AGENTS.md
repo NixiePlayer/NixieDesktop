@@ -13,7 +13,7 @@ Unofficial YouTube Music desktop client for macOS, Windows and Linux. Electron m
 - Never use em dashes anywhere: code, comments, docs, tests, commits, generated content.
 - Conventional Commits (`type(scope): subject`), scoped when there is an obvious scope (`player`, `electron`, `explore`, `settings`, ...). Add a body when the subject cannot carry the reasoning: what was wrong, why this change, what it costs.
 - Keep this file current and short. When a convention changes here, change `CONTRIBUTING.md` too. `README.md` and `CONTRIBUTING.md` do not restate this file.
-- Node 24 and pnpm 12.3.4 (`packageManager` and `engines.pnpm` must match, `engine-strict=true`). Exact dependency versions only, no ranges.
+- Node 24 and pnpm 12.8.1 (`packageManager` and `engines.pnpm` must match, `engine-strict=true`). Exact dependency versions only, no ranges.
 - Run `pnpm check` before calling work done. CI runs it on Ubuntu and Windows plus `pnpm audit --audit-level high`. Actions are pinned to commit SHAs.
 - Files are LF everywhere (`.gitattributes`); oxfmt fails on CRLF.
 

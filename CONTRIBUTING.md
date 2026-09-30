@@ -27,7 +27,7 @@ Small and obvious fixes need no ceremony. Send them.
 ## Setup
 
 See [Development](README.md#development) in the README. Short version: Node 24, pnpm
-12.3.4, then `pnpm install && pnpm dev`.
+12.8.1, then `pnpm install && pnpm dev`.
 
 macOS, Windows and Linux all work for development. On macOS the Xcode command line tools
 and the Node distribution headers are required. `scripts/build-native.mjs` builds the
