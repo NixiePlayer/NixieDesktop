@@ -5,6 +5,13 @@
 [changelog]
 header = ""
 body = """
+{% set breaking = commits | filter(attribute="breaking", value=true) %}\
+{% if breaking | length > 0 %}
+### Breaking changes
+{% for commit in breaking %}
+- {{ commit.breaking_description | upper_first }}
+{%- endfor %}
+{% endif %}
 {% for group, commits in commits | group_by(attribute="group") %}
 ### {{ group }}
 {% for commit in commits %}
@@ -25,6 +32,10 @@ filter_commits = true
 # Only version tags count, so a marker tag that was never a release cannot become the range
 # `--latest` measures the notes from.
 tag_pattern = "v[0-9]*"
+# Tags whose release never shipped: v0.5.2 stopped at the audit gate and was never published. The
+# notes run from the last published release, so such a tag sits inside the range, and ignoring it
+# folds its commits into the new release instead of printing them as a second, headless section.
+ignore_tags = "^v0\\.5\\.2$"
 commit_parsers = [
 	# The bump commit `pnpm release:*` writes is about the release, not in it.
 	{ message = "^chore\\(release\\)", skip = true },

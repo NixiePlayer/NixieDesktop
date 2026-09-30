@@ -169,7 +169,15 @@ jobs:
           find release -maxdepth 1 -type f -exec basename {} \; | sort > actual-assets.txt
           sort -o expected-assets.txt expected-assets.txt
           diff -u expected-assets.txt actual-assets.txt
-      - run: pnpm dlx git-cliff@2.13.1 --latest --strip all --output NOTES.md
+      # Measured from the last published release rather than from the previous tag (`--latest`): a
+      # tag whose release failed has no page anyone can read, so starting after it would drop the
+      # changes it carried. `ignore_tags` in cliff.toml keeps such a tag from splitting the range.
+      - name: Write the release notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PREVIOUS="$(gh release view --json tagName --jq .tagName)"
+          pnpm dlx git-cliff@2.14.2 --strip all --output NOTES.md "$PREVIOUS..$GITHUB_REF_NAME"
       - name: Publish the immutable release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

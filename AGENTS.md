@@ -110,4 +110,6 @@ Releases are cut by the maintainer. "Release a new patch/minor/major version" me
 
 - Every build passes `--publish never`; only the workflow's `publish` job writes to GitHub Releases.
 - Do not rename the macOS ZIPs: the updater picks the architecture by the `arm64` substring in the URL. `scripts/finish-dmgs.mjs` renames, notarizes and staples the DMGs.
+- Notes run from the last published release to the new tag, not from the previous tag, so a tag whose release failed loses nothing; list such a tag in `ignore_tags` in `cliff.toml`. A `BREAKING CHANGE:` footer opens the notes under "Breaking changes": state new system requirements there.
+- `latest-mac.yml` gets `minimumSystemVersion` (a Darwin kernel version, Darwin 22 = macOS 13) in the macOS job, since electron-builder omits it and the updater would otherwise install a build that cannot open. When Electron raises its macOS floor, the release fails until the step's check and value are raised together.
 - macOS signing and notarization: see `docs/signing.md`. Credentials live in the gitignored `electron-builder.env`. Windows builds are unsigned on purpose.

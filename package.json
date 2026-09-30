@@ -34,7 +34,7 @@
 		"release:patch": "pnpm version patch --message \"chore(release): v%s\"",
 		"release:minor": "pnpm version minor --message \"chore(release): v%s\"",
 		"release:major": "pnpm version major --message \"chore(release): v%s\"",
-		"release:notes": "pnpm dlx git-cliff@2.13.1 --latest --strip all",
+		"release:notes": "pnpm dlx git-cliff@2.14.2 --strip all \"$(gh release view --json tagName --jq .tagName)..HEAD\"",
 		"release:retag": "node scripts/retag.mjs",
 		"release:push": "git push --follow-tags",
 		"preversion": "pnpm check",

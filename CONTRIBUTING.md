@@ -65,7 +65,9 @@ commas, colons, parentheses or ordinary hyphens.
 obvious one (`player`, `electron`, `explore`, `settings`) and none when it spans the
 repository. Add a body whenever the subject cannot carry the reasoning on its own: what was
 wrong, why this change, what it costs. Release notes are generated from these commits, and
-a commit that does not follow the format is dropped from them silently.
+a commit that does not follow the format is dropped from them silently. A change users must
+act on, such as a new minimum OS version, carries a `BREAKING CHANGE:` footer, whose text opens
+the notes.
 
 **Exact dependency versions.** `.npmrc` sets `save-exact=true`. Ranges are not allowed. And
 before adding a dependency at all, check whether a few lines of code do the job. This
