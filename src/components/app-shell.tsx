@@ -6,6 +6,7 @@ import {
 	Compass,
 	Home,
 	Library,
+	Link2,
 	LogOut,
 	PanelLeft,
 	Pin,
@@ -18,6 +19,7 @@ import { useEffect, useRef, useState } from "react";
 import { heldSuggestions, queryMusic, rememberSearch } from "#/lib/api";
 import { useMessages } from "#/lib/i18n";
 import { usePlaylists } from "#/lib/library";
+import { type MusicLink, musicLink } from "#/lib/music-link";
 import { isMac } from "#/lib/platform";
 import { swipeAbortDuration, swipeOffset, type SwipeHint, useHistoryEdges, useSwipeNavigation } from "#/lib/swipe-nav";
 import { useUpdateState } from "#/lib/updates";
@@ -36,7 +38,7 @@ import {
 	isTrack,
 	trackAlbumId,
 } from "#/shared/entities";
-import { EntityContextMenu } from "./entity-menu";
+import { EntityContextMenu, playRadio } from "./entity-menu";
 import { Artwork, entityRoute, PlayingBars } from "./media";
 import { NowPanel, type PanelTab } from "./now-panel";
 import { PlayerBar } from "./player-bar";
@@ -52,6 +54,7 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
+import { toast } from "./ui/toast";
 
 // Search lives in the top bar, so the rail carries Explore instead, the way YouTube Music does.
 const navigation = [
@@ -423,9 +426,11 @@ function SearchField({ inputRef }: { inputRef: React.RefObject<HTMLInputElement 
 	const [results, setResults] = useState<MusicEntity[]>([]);
 
 	const query = draft.trim();
+	const link = musicLink(query);
 
 	useEffect(() => {
-		if (query.length < 2) {
+		// A link is opened, never searched for: upstream has nothing to suggest for one.
+		if (query.length < 2 || musicLink(query)) {
 			setResults([]);
 			return;
 		}
@@ -473,6 +478,25 @@ function SearchField({ inputRef }: { inputRef: React.RefObject<HTMLInputElement 
 		void navigate({ to: entityRoute(item), params: { id: item.id } });
 	};
 
+	const openLink = (target: Exclude<MusicLink, { type: "unsupported" }>) => {
+		setOpen(false);
+		inputRef.current?.blur();
+		if (target.type === "song") {
+			void playRadio(engine, { type: "radio", id: target.id }, {}, m.shell.linkFailed);
+			return;
+		}
+		// A link of the right shape can still name something upstream refuses (a private playlist, a
+		// deleted album), and a loader that throws takes the whole shell down with it, since no route
+		// below the root has an error boundary. So the page is asked for before the route is.
+		// ponytail: an album or playlist link costs its page twice. Hand the answer to the route if that
+		// ever shows.
+		const to = target.type === "album" ? "/album/$id" : target.type === "artist" ? "/artist/$id" : "/playlist/$id";
+		void queryMusic({ type: target.type, id: target.id }).then(
+			() => navigate({ to, params: { id: target.id } }),
+			() => toast.add({ title: m.shell.linkFailed, type: "error" })
+		);
+	};
+
 	const play = (track: Track) => void engine.play(track, [track], { type: "search", title: query });
 
 	return (
@@ -511,14 +535,28 @@ function SearchField({ inputRef }: { inputRef: React.RefObject<HTMLInputElement 
 					className="bg-popover text-popover-foreground border-border absolute inset-x-0 top-full z-50 mt-2 overflow-hidden rounded-xl border p-1 shadow-lg"
 				>
 					<CommandList>
-						<CommandItem value="see-all" onSelect={() => seeAll(query)}>
-							<Search />
-							{/* One line whatever the query and whatever the language: the dropdown is the width of the
+						{link && (
+							<CommandItem
+								value="link"
+								disabled={link.type === "unsupported"}
+								onSelect={() => link.type !== "unsupported" && openLink(link)}
+							>
+								<Link2 />
+								<span className="truncate">
+									{link.type === "unsupported" ? m.shell.unsupportedLink : m.shell.openLink[link.type]}
+								</span>
+							</CommandItem>
+						)}
+						{!link && (
+							<CommandItem value="see-all" onSelect={() => seeAll(query)}>
+								<Search />
+								{/* One line whatever the query and whatever the language: the dropdown is the width of the
 								    field above it, so a wrapped row is a row of a different height, and every row under it
 								    moves. Italian states this in half again as many characters as English does. */}
-							<span className="truncate">{m.shell.seeAllResults(query)}</span>
-						</CommandItem>
-						{results.length > 0 && (
+								<span className="truncate">{m.shell.seeAllResults(query)}</span>
+							</CommandItem>
+						)}
+						{!link && results.length > 0 && (
 							<CommandGroup heading={m.shell.results}>
 								{results.map((item) => {
 									const track = isPlaylistItem(item) ? item.track : isTrack(item) ? item : undefined;

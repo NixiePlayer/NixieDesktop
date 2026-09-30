@@ -139,8 +139,10 @@ export async function playCollection(engine: AudioEngine, item: Subject, title =
 export async function playRadio(
 	engine: AudioEngine,
 	query: Extract<MusicQuery, { type: "radio" }>,
-	context: { id?: string; title: string },
-	failure = messages().menu.couldNotPlay(context.title)
+	// No title for a song opened from a link: all it states is an id, so the queue is named after the
+	// song it opens on once that arrives.
+	context: { id?: string; title?: string },
+	failure = messages().menu.couldNotPlay(context.title ?? messages().common.song)
 ) {
 	const key = query.playlistId ?? query.id;
 	if (starting === key) return;
@@ -150,7 +152,7 @@ export async function playRadio(
 		const [first] = queue;
 		if (!first) throw new Error("No queue");
 		const { playback } = engine.getSnapshot();
-		const target = { type: "radio" as const, id: context.id, title: context.title };
+		const target = { type: "radio" as const, id: context.id, title: context.title ?? first.title };
 		// A radio seeded off the song already playing opens on that song, so there is no track to
 		// change: asking `play` for it would reload the deck and restart it from the beginning under
 		// the listener. Only the queue behind it is new.

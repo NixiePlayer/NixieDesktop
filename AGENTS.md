@@ -30,7 +30,7 @@ Unofficial YouTube Music desktop client for macOS, Windows and Linux. Electron m
 - `electron/`: privileged main process (`main.ts`), preload bridge, `youtube-adapter.ts`, `media-protocol.ts` (`nixie://`), `state-store.ts`, `lyrics.ts`, `browser-cookies.ts`, native host for the Nixie Link extension (`native-host*`).
 - `src/shared/`: serializable IPC contracts (`contracts.ts`) and pure logic shared by both processes. Entity narrowing and display helpers live in `entities.ts`, never in components.
 - `src/routes/`: TanStack Router file routes, hash history. Data loading is route loaders only; there is no query client.
-- `src/lib/`: framework-free stores and logic (`audio-engine.ts`, `api.ts`, `library.ts`, `rating.ts`, `updates.ts`, `theme.ts`, `i18n.ts`, `platform.ts`, `swipe-nav.ts`).
+- `src/lib/`: framework-free stores and logic (`audio-engine.ts`, `api.ts`, `library.ts`, `music-link.ts`, `rating.ts`, `updates.ts`, `theme.ts`, `i18n.ts`, `platform.ts`, `swipe-nav.ts`).
 - `src/player.tsx`: React binding over the audio engine: `usePlayer()` actions, `usePlayback()` state, `usePlaybackPosition()` high-frequency position.
 - `src/components/`: app components. `src/components/ui/` is generated shadcn/Base UI source: change it through the shadcn CLI and current docs, not by hand.
 - `src/locales/{en,it}/`: dictionaries. `scripts/`: dev setup, licences, release hooks. `build/`: icons and NSIS include.
