@@ -23,13 +23,22 @@ function subscribe(listener: () => void) {
 	return () => void listeners.delete(listener);
 }
 
+/**
+ * The build already announced, and its toast. Keyed on the version rather than on the move into
+ * "ready": every later check (the six-hourly one, or a press in About) walks a downloaded build back
+ * through "checking" and "available" to "ready" again, since electron-updater re-offers the cached
+ * download, and each of those returns would otherwise stack another toast for the same build.
+ */
+let announced: { version: string | undefined; toastId: string } | undefined;
+
 function set(next: UpdateState) {
-	// Only the arrival is announced. The pushes keep coming while the toast is on screen (a download
-	// ticks its percent), and re-announcing on every one of them would replace it under the pointer.
-	const arrived = next.status === "ready" && state.status !== "ready";
 	state = next;
 	emit();
-	if (arrived) announce(next.version);
+	if (next.status !== "ready" || (announced && announced.version === next.version)) return;
+	// A newer build downloaded over one still on screen: the restart installs the newer, so the older
+	// toast would only name the wrong version.
+	if (announced) toast.close(announced.toastId);
+	announced = { version: next.version, toastId: announce(next.version) };
 }
 
 /**
@@ -40,7 +49,7 @@ function set(next: UpdateState) {
  */
 function announce(version: string | undefined) {
 	const m = messages().settings.update;
-	toast.add({
+	return toast.add({
 		title: version ? m.ready.label(version) : m.toast.anyReady,
 		description: m.toast.description,
 		type: "success",
