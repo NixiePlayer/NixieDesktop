@@ -7,6 +7,7 @@ import { EditPlaylistDialog, PrivacyLabel } from "#/components/playlist-dialog";
 import { Button } from "#/components/ui/button";
 import { DropdownMenuItem } from "#/components/ui/dropdown-menu";
 import { Input } from "#/components/ui/input";
+import { Skeleton } from "#/components/ui/skeleton";
 import { toast } from "#/components/ui/toast";
 import { queryMusic } from "#/lib/api";
 import { formatTotalDuration } from "#/lib/format";
@@ -14,45 +15,92 @@ import { useMessages } from "#/lib/i18n";
 import { invalidatePages } from "#/lib/invalidate";
 import { updatePlaylist } from "#/lib/library";
 import { usePlayer } from "#/player";
-import type { MusicCommand, Playlist, PlaylistItem } from "#/shared/contracts";
+import type { MusicCommand, MusicEntity, Playlist, PlaylistItem } from "#/shared/contracts";
 import { autoPlaylist, isPlaylist, isPlaylistItem, isTrack } from "#/shared/entities";
+
+/** YouTube Music's own cap on a playlist, and what stops a list that keeps answering with more. */
+const MAX_ROWS = 5000;
+
+/**
+ * Rows the settled walks resolved to, by walk. A page opened again from the router's cache has to
+ * draw its whole list on the first frame, or scroll restoration lands inside the first hundred rows.
+ */
+const settled = new WeakMap<Promise<PlaylistItem[]>, PlaylistItem[]>();
 
 export const Route = createFileRoute("/playlist/$id")({
 	validateSearch: (search) => ({ find: search.find === true || undefined }),
-	loader: ({ params }) => queryMusic({ type: "playlist", id: params.id }),
+	// Upstream answers a hundred rows at a time. The first page paints now and the walk through the
+	// rest is left unawaited, so it is cached with the page: its continuation is spent once, in main.
+	loader: async ({ params }) => {
+		const page = await queryMusic({ type: "playlist", id: params.id });
+		const rest = restOf(params.id, page.continuation);
+		void rest.then((rows) => settled.set(rest, rows));
+		return { ...page, rest };
+	},
 	pendingComponent: DetailSkeleton,
 	component: PlaylistPage,
 });
 
+/**
+ * Every row after the first page. Never rejects: a page that fails ends the list where it got to,
+ * since a loader's promise that rejects takes the whole shell down with it.
+ */
+async function restOf(id: string, continuation: string | undefined) {
+	const rows: PlaylistItem[] = [];
+	let next = continuation;
+	while (next && rows.length < MAX_ROWS) {
+		const page = await queryMusic({ type: "playlist", id, continuation: next }).catch(() => undefined);
+		rows.push(...toRows(page?.items ?? []));
+		next = page?.continuation;
+	}
+	return rows;
+}
+
+// Rows may arrive either already wrapped as playlist items or as bare tracks.
+function toRows(items: MusicEntity[]): PlaylistItem[] {
+	return items.flatMap((item) => {
+		if (isPlaylistItem(item)) return [item];
+		// No row id, and none can be invented: the video id addresses the song and the endpoint
+		// refuses it, so such a row lists and plays and offers neither reordering nor removal.
+		if (isTrack(item)) return [{ track: item }];
+		return [];
+	});
+}
+
 function PlaylistPage() {
 	const { id } = Route.useParams();
 	const { find } = Route.useSearch();
-	const { items: page } = Route.useLoaderData();
+	const { items: page, rest } = Route.useLoaderData();
 	const engine = usePlayer();
 	const m = useMessages();
 	const [filter, setFilter] = useState("");
 
-	// Rows may arrive either already wrapped as playlist items or as bare tracks.
-	const rows = useMemo(
-		() =>
-			page.flatMap((item) => {
-				if (isPlaylistItem(item)) return [item];
-				// No row id, and none can be invented: the video id addresses the song and the endpoint
-				// refuses it, so such a row lists and plays and offers neither reordering nor removal.
-				if (isTrack(item)) return [{ track: item }];
-				return [];
-			}),
-		[page]
-	);
-	const [items, setItems] = useState<PlaylistItem[]>(rows);
+	const rows = useMemo(() => toRows(page), [page]);
+	const [items, setItems] = useState<PlaylistItem[]>(() => [...rows, ...(settled.get(rest) ?? [])]);
+	// The walk whose rows are in `items`, if it is done. Until it is, the list is not the whole list.
+	const [merged, setMerged] = useState(settled.has(rest) ? rest : undefined);
 	const [loaded, setLoaded] = useState(rows);
 	// The list is edited optimistically here, so it is state and not the loader's rows. It still has to
 	// follow a refetch: saving a song to the playlist that is open invalidates this page, and the
 	// answer is the list as it now stands, where this copy is the list as it was opened.
 	if (loaded !== rows) {
 		setLoaded(rows);
-		setItems(rows);
+		setItems([...rows, ...(settled.get(rest) ?? [])]);
+		setMerged(settled.has(rest) ? rest : undefined);
 	}
+	useEffect(() => {
+		if (merged === rest) return;
+		let current = true;
+		void rest.then((more) => {
+			if (!current) return;
+			setItems((shown) => [...shown, ...more]);
+			setMerged(rest);
+		});
+		return () => {
+			current = false;
+		};
+	}, [merged, rest]);
+	const complete = merged === rest;
 	// By id, never "the first playlist on the page": the shelves under a playlist carry related ones.
 	const header = page.find((item): item is Playlist => isPlaylist(item) && item.id === id);
 	const [title, setTitle] = useState(header?.title ?? m.common.playlist);
@@ -251,7 +299,9 @@ function PlaylistPage() {
 					// row's own id only for a playlist this account can edit. Without one there is nothing
 					// to offer here: the video id names the song, and this endpoint refuses it.
 					// A show is the same: the edit endpoint is addressed by a playlist id, never by `MPSP`.
-					if (show || !item?.itemId) return null;
+					// Nor while the rest of the list is on its way: an edit rolled back after it lands would
+					// put back a list without it.
+					if (show || !complete || !item?.itemId) return null;
 					const itemId = item.itemId;
 					return (
 						<>
@@ -283,6 +333,13 @@ function PlaylistPage() {
 					);
 				}}
 			/>
+			{!complete && (
+				<div className="mt-1 flex flex-col gap-1">
+					{Array.from({ length: 3 }, (_, index) => (
+						<Skeleton key={index} className="h-14 rounded-md" />
+					))}
+				</div>
+			)}
 		</div>
 	);
 }
