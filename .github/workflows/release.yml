@@ -55,6 +55,18 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      # electron-updater skips a build whose `minimumSystemVersion` is above the running system, and
+      # electron-builder never writes one, so without it every Mac below Electron's floor would
+      # download a build it cannot open and install it on quit. The value is a Darwin kernel version,
+      # compared with `os.release()`: Darwin 22 is macOS 13, the `LSMinimumSystemVersion` Electron
+      # stamps into the bundle. The check fails the release when a new Electron raises that floor,
+      # so the feed cannot go on offering a build to a Mac it no longer runs on.
+      - name: State the minimum macOS in the update feed
+        run: |
+          for app in release/mac/Nixie.app release/mac-arm64/Nixie.app; do
+            test "$(plutil -extract LSMinimumSystemVersion raw "$app/Contents/Info.plist")" = "13.0"
+          done
+          printf 'minimumSystemVersion: 22.0.0\n' >> release/latest-mac.yml
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: macos
