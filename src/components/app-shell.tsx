@@ -503,65 +503,60 @@ function SearchField({ inputRef }: { inputRef: React.RefObject<HTMLInputElement 
 				/>
 			</div>
 
-			{open &&
-				query.length > 0 && (
-					// Preventing the default mousedown keeps focus in the input, so the blur above does
-					// not tear the panel down before a click on a row registers.
-					<div
-						onMouseDown={(event) => event.preventDefault()}
-						className="bg-popover text-popover-foreground border-border absolute inset-x-0 top-full z-50 mt-2 overflow-hidden rounded-xl border p-1 shadow-lg"
-					>
-						<CommandList>
-							<CommandItem value="see-all" onSelect={() => seeAll(query)}>
-								<Search />
-								{/* One line whatever the query and whatever the language: the dropdown is the width of the
+			{open && query.length > 0 && (
+				// Preventing the default mousedown keeps focus in the input, so the blur above does
+				// not tear the panel down before a click on a row registers.
+				<div
+					onMouseDown={(event) => event.preventDefault()}
+					className="bg-popover text-popover-foreground border-border absolute inset-x-0 top-full z-50 mt-2 overflow-hidden rounded-xl border p-1 shadow-lg"
+				>
+					<CommandList>
+						<CommandItem value="see-all" onSelect={() => seeAll(query)}>
+							<Search />
+							{/* One line whatever the query and whatever the language: the dropdown is the width of the
 								    field above it, so a wrapped row is a row of a different height, and every row under it
 								    moves. Italian states this in half again as many characters as English does. */}
-								<span className="truncate">{m.shell.seeAllResults(query)}</span>
-							</CommandItem>
-							{results.length > 0 && (
-								<CommandGroup heading={m.shell.results}>
-									{results.map((item) => {
-										const track = isPlaylistItem(item) ? item.track : isTrack(item) ? item : undefined;
-										return (
-											<CommandItem
-												key={entityKey(item)}
-												value={`r:${entityKey(item)}`}
-												onSelect={() => openEntity(item)}
-											>
-												<div className="relative shrink-0">
-													<Artwork src={entityArtwork(item)} round={isArtist(item)} className="size-8 rounded-sm" />
-													{track && (
-														<Button
-															size="icon-xs"
-															aria-label={m.common.playTitle(track.title)}
-															className="absolute inset-0 m-auto rounded-full opacity-0 group-hover/command-item:opacity-100 focus-visible:opacity-100"
-															onClick={(event) => {
-																event.stopPropagation();
-																play(track);
-															}}
-														>
-															<Play fill="currentColor" />
-														</Button>
-													)}
-												</div>
-												<span className="flex min-w-0 flex-col">
-													<span className="truncate">{entityTitle(item, m)}</span>
-													<span className="text-muted-foreground truncate text-xs">
-														{entityKind(item, m)}
-														{entitySubtitle(item, m) !== entityKind(item, m) &&
-															entitySubtitle(item, m) &&
-															` • ${entitySubtitle(item, m)}`}
-													</span>
+							<span className="truncate">{m.shell.seeAllResults(query)}</span>
+						</CommandItem>
+						{results.length > 0 && (
+							<CommandGroup heading={m.shell.results}>
+								{results.map((item) => {
+									const track = isPlaylistItem(item) ? item.track : isTrack(item) ? item : undefined;
+									return (
+										<CommandItem key={entityKey(item)} value={`r:${entityKey(item)}`} onSelect={() => openEntity(item)}>
+											<div className="relative shrink-0">
+												<Artwork src={entityArtwork(item)} round={isArtist(item)} className="size-8 rounded-sm" />
+												{track && (
+													<Button
+														size="icon-xs"
+														aria-label={m.common.playTitle(track.title)}
+														className="absolute inset-0 m-auto rounded-full opacity-0 group-hover/command-item:opacity-100 focus-visible:opacity-100"
+														onClick={(event) => {
+															event.stopPropagation();
+															play(track);
+														}}
+													>
+														<Play fill="currentColor" />
+													</Button>
+												)}
+											</div>
+											<span className="flex min-w-0 flex-col">
+												<span className="truncate">{entityTitle(item, m)}</span>
+												<span className="text-muted-foreground truncate text-xs">
+													{entityKind(item, m)}
+													{entitySubtitle(item, m) !== entityKind(item, m) &&
+														entitySubtitle(item, m) &&
+														` • ${entitySubtitle(item, m)}`}
 												</span>
-											</CommandItem>
-										);
-									})}
-								</CommandGroup>
-							)}
-						</CommandList>
-					</div>
-				)}
+											</span>
+										</CommandItem>
+									);
+								})}
+							</CommandGroup>
+						)}
+					</CommandList>
+				</div>
+			)}
 		</CommandPrimitive>
 	);
 }

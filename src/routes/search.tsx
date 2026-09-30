@@ -316,20 +316,19 @@ function TopResult({
 					{track?.explicit && <ExplicitBadge />}
 				</span>
 			)}
-			{isArtist(item) &&
-				details && (
-					// Two lines are held open from the first paint, so the bio does not shove the
-					// block down the column when the artist page lands a round-trip later.
-					<span className="block min-h-10 pt-1">
-						<Await promise={details} fallback={<span aria-hidden />}>
-							{(page) => (
-								<span className="text-muted-foreground line-clamp-2 text-sm">
-									{page.items.find((entry): entry is Artist => isArtist(entry) && entry.id === item.id)?.description}
-								</span>
-							)}
-						</Await>
-					</span>
-				)}
+			{isArtist(item) && details && (
+				// Two lines are held open from the first paint, so the bio does not shove the
+				// block down the column when the artist page lands a round-trip later.
+				<span className="block min-h-10 pt-1">
+					<Await promise={details} fallback={<span aria-hidden />}>
+						{(page) => (
+							<span className="text-muted-foreground line-clamp-2 text-sm">
+								{page.items.find((entry): entry is Artist => isArtist(entry) && entry.id === item.id)?.description}
+							</span>
+						)}
+					</Await>
+				</span>
+			)}
 		</div>
 	);
 

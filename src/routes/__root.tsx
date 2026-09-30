@@ -19,12 +19,12 @@ export const Route = createRootRoute({
 	errorComponent: RootError,
 });
 
-function RootError({ error, reset }: { error: Error; reset: () => void }) {
+function RootError({ error, reset }: { error: unknown; reset: () => void }) {
 	const m = useMessages();
 	return (
 		<div className="flex flex-col items-start gap-3 py-12">
 			<h1 className="text-2xl font-bold">{m.signin.somethingWentWrong}</h1>
-			<p className="text-muted-foreground text-sm">{error.message}</p>
+			<p className="text-muted-foreground text-sm">{error instanceof Error ? error.message : String(error)}</p>
 			<Button onClick={reset}>{m.common.tryAgain}</Button>
 			<DiagnosticReport />
 		</div>

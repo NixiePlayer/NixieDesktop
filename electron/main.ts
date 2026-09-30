@@ -916,7 +916,7 @@ function registerIpc() {
 	handle("local:diagnostics", buildDiagnosticReport);
 	handle("local:report-issue", async () => {
 		const report = await buildDiagnosticReport();
-		clipboard.writeText(report);
+		await clipboard.writeText(report);
 		await shell.openExternal(diagnosticIssueUrl(report));
 	});
 	handle("local:renderer-error", (_event, kind, error) => {

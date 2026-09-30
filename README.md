@@ -44,8 +44,8 @@ Grab the latest build from the [releases page](https://github.com/NixiePlayer/Ni
 
 | File | For |
 | --- | --- |
-| `Nixie-<version>-applesilicon.dmg` | Macs with Apple silicon, M1 and later |
-| `Nixie-<version>-intel.dmg` | Intel Macs |
+| `Nixie-<version>-applesilicon.dmg` | Macs with Apple silicon, M1 and later, on macOS 13 Ventura or later |
+| `Nixie-<version>-intel.dmg` | Intel Macs on macOS 13 Ventura or later |
 | `Nixie-<version>-setup.exe` | Windows 10 and 11, 64-bit |
 | `Nixie-<version>-x64.AppImage` | Linux, 64-bit |
 

@@ -26,7 +26,10 @@
 		"unicorn/require-post-message-target-origin": "off",
 		"unicorn/no-array-sort": "off",
 		"react/react-in-jsx-scope": "off",
-		"react/jsx-no-comment-textnodes": "off"
+		"react/jsx-no-comment-textnodes": "off",
+		"react/set-state-in-effect": "off",
+		"react/refs": "off",
+		"react/globals": "off"
 	},
 	"overrides": [
 		{
