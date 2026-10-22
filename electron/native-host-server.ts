@@ -151,6 +151,22 @@ export class NativeHostServer {
 		return () => this.#listeners.delete(listener);
 	}
 
+	/** Whether that install is connected, waiting up to `timeoutMs` for it to connect if it is not yet. */
+	waitFor(installId: string, timeoutMs: number): Promise<boolean> {
+		if (this.#connections.has(installId)) return Promise.resolve(true);
+		return new Promise((resolve) => {
+			const done = (connected: boolean) => {
+				clearTimeout(timer);
+				stop();
+				resolve(connected);
+			};
+			const timer = setTimeout(() => done(false), timeoutMs);
+			const stop = this.onChange((connections) => {
+				if (connections.some((connection) => connection.installId === installId)) done(true);
+			});
+		});
+	}
+
 	/** The cookies that profile holds now, pulled through the extension, or a rejection on timeout. */
 	async pull(installId: string, pairingSecret: string, timeoutMs = 4000): Promise<SessionCookie[]> {
 		const connection = this.#connections.get(installId);

@@ -312,6 +312,8 @@ let pendingSignIn: { cookies: ImportedCookie[]; link: LinkedAccount; accounts: G
 // session is cleared as PRIVACY.md promises rather than kept for as long as the app runs.
 const EXTENSION_GRACE_MS = 5 * 60_000;
 let lastExtensionSeenAt = Date.now();
+// Until this launch's first pull, the partition holds what the previous launch pulled.
+let extensionPulled = false;
 let lastBrowserRefreshFailure: string | undefined;
 
 async function writeCookies(cookies: ImportedCookie[]) {
@@ -413,6 +415,7 @@ async function refreshLinkedCookies() {
 			const cookies = await nativeHost.pull(link.installId, secret);
 			lastExtensionSeenAt = Date.now();
 			await write(cookies);
+			extensionPulled = true;
 		} catch (error) {
 			// Every message on this branch is a fixed string from the host server or safeStorage: no path,
 			// no cookie, no token.
@@ -599,6 +602,32 @@ async function resumeExtensionSession(sources: ExtensionSource[]) {
 	// it removed.
 	if (epoch !== sessionEpoch) return;
 	if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send("auth:state", state);
+}
+
+/**
+ * The cookies a previous launch pulled are, once more than a few minutes old, the downgraded session
+ * `refreshLinkedCookies` describes: every stream they mint is a 403. A play pressed before the
+ * extension's alarm brings it back would fail on them, so until this launch's first pull a resolve
+ * waits for the linked install, bounded to leave the renderer's 15-second start timeout room for the
+ * resolve itself. A wait that runs out goes ahead on the old cookies, as it did before. Once one pull
+ * has landed, a browser closed mid-session costs nothing here: the cookies it left are recent.
+ */
+const EXTENSION_WAIT_MS = 8000;
+
+async function awaitExtensionSession() {
+	if (extensionPulled) return;
+	let link: unknown;
+	try {
+		link = JSON.parse(await readFile(linkPath(), "utf8"));
+		validateLinkedAccount(link);
+	} catch {
+		return;
+	}
+	if (link.source !== "extension" || Date.now() - lastExtensionSeenAt > EXTENSION_GRACE_MS) return;
+	if (!(await nativeHost.waitFor(link.installId, EXTENSION_WAIT_MS))) return;
+	// The connection's own pull (`resumeExtensionSession`) may not have started yet, and the stamp left
+	// by the failed one at launch would otherwise send this resolve out on the old cookies.
+	refreshedAt = 0;
 }
 
 function createAdapter() {
@@ -848,6 +877,7 @@ function registerIpc() {
 	handle("player:resolve", async (_event, trackId, quality) => {
 		if (typeof trackId !== "string" || !/^[\w-]{1,256}$/.test(trackId)) throw new TypeError("Invalid track ID");
 		if (!["low", "normal", "high"].includes(String(quality))) throw new TypeError("Invalid audio quality");
+		await awaitExtensionSession();
 		const result = await youtube.resolve(trackId, quality as AudioQuality);
 		return { url: result.url, fingerprint: result.fingerprint, integratedLufs: result.integratedLufs };
 	});

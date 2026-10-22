@@ -116,6 +116,15 @@ describe("NativeHostServer", () => {
 		expect(server.connections()[0]).toEqual({ installId: INSTALL_ID, browser: "Google Chrome", signedIn: true });
 	});
 
+	it("waits for an install to connect, and answers false once the wait runs out", async () => {
+		await expect(server.waitFor(INSTALL_ID, 50)).resolves.toBe(false);
+		const waiting = server.waitFor(INSTALL_ID, 2000);
+		await handshake(true, OTHER_INSTALL_ID);
+		await handshake();
+		await expect(waiting).resolves.toBe(true);
+		await expect(server.waitFor(INSTALL_ID, 0)).resolves.toBe(true);
+	});
+
 	it("authenticates the pull and decrypts its cookie payload", async () => {
 		const peer = await handshake();
 		await vi_poll(() => server.connections().length === 1);

@@ -102,7 +102,7 @@ function main() {
 
 	const socket = net.connect(config.pipe);
 	// The app is not running: leave without a word rather than retrying. The extension's own alarm is
-	// the retry, at one attempt a minute.
+	// the retry, at one attempt every 30 seconds.
 	socket.on("error", () => process.exit(0));
 	socket.on("close", () => process.exit(0));
 	socket.setEncoding("utf8");
