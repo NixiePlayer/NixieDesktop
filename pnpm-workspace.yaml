@@ -5,3 +5,9 @@ allowBuilds:
   unrs-resolver: true
 minimumReleaseAgeExclude:
   - electron@44.5.1
+auditConfig:
+  ignoreGhsas:
+    # braces stack exhaustion. No patched braces exists, and the only path to it is the shadcn CLI
+    # (shadcn > fast-glob / ts-morph > micromatch > braces), a dev-only tool that is not packaged and
+    # globs its own fixed patterns. Remove once shadcn or micromatch drops braces.
+    - GHSA-vfj7-8cjw-p6xm
