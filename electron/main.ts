@@ -879,6 +879,7 @@ function registerIpc() {
 		if (!["low", "normal", "high"].includes(String(quality))) throw new TypeError("Invalid audio quality");
 		await awaitExtensionSession();
 		const result = await youtube.resolve(trackId, quality as AudioQuality);
+		if ("unavailable" in result) return { unavailable: result.unavailable };
 		return { url: result.url, fingerprint: result.fingerprint, integratedLufs: result.integratedLufs };
 	});
 	ipcMain.on("player:position", (_event, positionSeconds) => stateStore.setPlaybackPosition(positionSeconds));

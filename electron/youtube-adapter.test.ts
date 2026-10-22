@@ -19,6 +19,7 @@ import {
 	libraryTarget,
 	pruneCache,
 	monthlyListeners,
+	ResponsiveListItem,
 	onParserError,
 	topSongsPlaylist,
 	withAlbumHeader,
@@ -31,9 +32,14 @@ import {
 
 vi.mock("youtubei.js", () => ({
 	Innertube: { create: vi.fn(() => Promise.resolve({})) },
-	Parser: { parseArray: vi.fn(() => []), parseResponse: vi.fn(() => ({})), setParserErrorHandler: vi.fn() },
+	Parser: {
+		parseArray: vi.fn(() => []),
+		parseResponse: vi.fn(() => ({})),
+		setParserErrorHandler: vi.fn(),
+		addRuntimeParser: vi.fn(),
+	},
 	UniversalCache: vi.fn(),
-	YTNodes: { MusicMultiRowListItem: class {}, Grid: Object },
+	YTNodes: { MusicMultiRowListItem: class {}, MusicResponsiveListItem: Object, Grid: Object },
 }));
 
 const paths: string[] = [];
@@ -740,33 +746,62 @@ describe("history reporting", () => {
 });
 
 describe("stream resolve", () => {
-	it("logs each client that missed before one answered, without upstream text", async () => {
-		const getStreamingData = vi
-			.fn()
-			.mockRejectedValueOnce(Object.assign(new Error("Restricted evaluator timed out"), { code: "EVALUATOR_TIMEOUT" }))
-			.mockRejectedValueOnce(new Error("Request to https://private.test/?token=secret failed with status code 403"))
-			.mockResolvedValueOnce({
-				url: "https://rr1.googlevideo.com/videoplayback",
-				itag: 140,
-				mime_type: 'audio/mp4; codecs="mp4a.40.2"',
-				bitrate: 130000,
-				approx_duration_ms: "200000",
-			});
-		vi.mocked(Innertube.create).mockResolvedValueOnce({ getStreamingData } as never);
-		const log = vi.fn();
-		const adapter = new YouTubeAdapter(
+	const resolver = (getBasicInfo: ReturnType<typeof vi.fn>, log = vi.fn()) => {
+		vi.mocked(Innertube.create).mockResolvedValueOnce({ getBasicInfo, session: { player: {} } } as never);
+		return new YouTubeAdapter(
 			{ registerMedia: () => "nixie://app/media/id" } as never,
 			join(tmpdir(), "nixie-cache-missing"),
 			() => Promise.resolve("SID=resolve"),
-			async () => ({}),
+			async () => ({ language: "it" }),
 			log
 		);
+	};
+	const playable = (decipher: () => Promise<string>) => ({
+		playability_status: { status: "OK" },
+		chooseFormat: () => ({
+			decipher,
+			itag: 140,
+			mime_type: 'audio/mp4; codecs="mp4a.40.2"',
+			bitrate: 130000,
+			approx_duration_ms: "200000",
+		}),
+	});
 
-		await expect(adapter.resolve("zvC6jsZnicY", "normal")).resolves.toMatchObject({ url: "nixie://app/media/id" });
-		expect(log.mock.calls).toEqual([
-			["stream attempt failed: YTMUSIC opus: Error / EVALUATOR_TIMEOUT"],
-			["stream attempt failed: YTMUSIC mp4a: Error / HTTP 403"],
-		]);
+	it("logs each codec that missed before one answered, without upstream text", async () => {
+		const getBasicInfo = vi
+			.fn()
+			.mockResolvedValueOnce(
+				playable(() =>
+					Promise.reject(Object.assign(new Error("Restricted evaluator timed out"), { code: "EVALUATOR_TIMEOUT" }))
+				)
+			)
+			.mockResolvedValueOnce(playable(() => Promise.resolve("https://rr1.googlevideo.com/videoplayback")));
+		const log = vi.fn();
+
+		await expect(resolver(getBasicInfo, log).resolve("zvC6jsZnicY", "normal")).resolves.toMatchObject({
+			url: "nixie://app/media/id",
+		});
+		expect(getBasicInfo).toHaveBeenCalledWith("zvC6jsZnicY", { client: "YTMUSIC" });
+		expect(log.mock.calls).toEqual([["stream attempt failed: opus: Error / EVALUATOR_TIMEOUT"]]);
+	});
+
+	it("answers a refused track with upstream's reason after one request, logging only its status", async () => {
+		const getBasicInfo = vi.fn().mockResolvedValue({
+			playability_status: { status: "UNPLAYABLE", reason: "Questo video non è disponibile nel tuo paese" },
+		});
+		const log = vi.fn();
+
+		await expect(resolver(getBasicInfo, log).resolve("zvC6jsZnicY", "normal")).resolves.toEqual({
+			unavailable: "Questo video non è disponibile nel tuo paese",
+		});
+		expect(getBasicInfo).toHaveBeenCalledTimes(1);
+		expect(log.mock.calls).toEqual([["stream refused: UNPLAYABLE"]]);
+
+		getBasicInfo.mockResolvedValue({ playability_status: { status: "<b>odd</b>" } });
+		await expect(resolver(getBasicInfo, log).resolve("zvC6jsZnicY", "normal")).resolves.toEqual({
+			unavailable: "Questo brano non è disponibile",
+		});
+		expect(log).toHaveBeenLastCalledWith("stream refused: unknown");
 	});
 });
 
@@ -776,6 +811,15 @@ describe("entity extraction", () => {
 	it("keeps one entity per item and no wrapper", () => {
 		// The shelf header and every navigation endpoint carry a title but no `item_type`.
 		expect(items).toHaveLength(5);
+	});
+
+	it("marks a row upstream greys out, and only that row", () => {
+		const [row] = extractEntities({ contents: [{ ...shelf.contents[0], unavailable: true }] }, (url) => url);
+		expect(row).toMatchObject({ id: "zvC6jsZnicY", unavailable: true });
+		expect(items[0]).not.toHaveProperty("unavailable", true);
+		const grey = { musicItemRendererDisplayPolicy: "MUSIC_ITEM_RENDERER_DISPLAY_POLICY_GREY_OUT" };
+		expect(new ResponsiveListItem(grey as never).unavailable).toBe(true);
+		expect(new ResponsiveListItem({} as never).unavailable).toBe(false);
 	});
 
 	it("keeps a channel labelled a video out of the playable rows", () => {

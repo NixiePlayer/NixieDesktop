@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { toast } from "#/components/ui/toast";
 import { createAudioEngine, type AudioEngineDeps } from "#/lib/audio-engine";
+import { isUnavailable } from "#/lib/unavailable";
 import type { NixieBridge, PersistedState, Track } from "#/shared/contracts";
 import { defaultState } from "#/shared/defaults";
 
@@ -71,6 +73,8 @@ function harness(
 		withoutMusic?: boolean;
 		radio?: Track[];
 		radioDelay?: number;
+		/** Track ids upstream refuses, answered with this reason. */
+		refuse?: string[];
 		context?: { state?: AudioContextState; resume?: () => Promise<void> };
 	} = {}
 ): Harness {
@@ -87,6 +91,7 @@ function harness(
 
 	const resolve = vi.fn(async (trackId: string) => {
 		if (options.resolveDelay) await new Promise((done) => setTimeout(done, options.resolveDelay));
+		if (options.refuse?.includes(trackId)) return { unavailable: "Not available in your country" };
 		return {
 			url: `nixie://app/media/${trackId}`,
 			fingerprint: { itag: 251, mimeType: "audio/webm", codec: "opus", bitrate: 128000, durationMs: 200000 },
@@ -782,6 +787,43 @@ describe("audio engine", () => {
 
 		expect(engine.getSnapshot().playback.status).toBe("playing");
 		expect(audio[0].currentTime).toBe(42);
+	});
+
+	// The refused ids are a session store, so each test here refuses ids of its own.
+	it("passes over a track upstream refuses, marks it, and says why", async () => {
+		const add = vi.spyOn(toast, "add");
+		const { engine } = harness({ refuse: ["gone-1"] });
+		await engine.start();
+		const queue = [track("gone-1"), track("t2")];
+		await engine.play(queue[0], queue);
+
+		await vi.waitFor(() => expect(engine.getSnapshot().playback.status).toBe("playing"));
+		expect(engine.getSnapshot().playback.currentTrack?.id).toBe("t2");
+		expect(isUnavailable(track("gone-1"))).toBe(true);
+		expect(add).toHaveBeenCalledWith(expect.objectContaining({ description: "Not available in your country" }));
+		add.mockRestore();
+	});
+
+	it("stays on a refused track with nothing playable after it, stating upstream's reason", async () => {
+		const { engine } = harness({ refuse: ["gone-2"] });
+		await engine.start();
+		await engine.play(track("gone-2"), [track("gone-2")]);
+
+		expect(engine.getSnapshot().playback).toMatchObject({
+			status: "error",
+			errorMessage: "Not available in your country",
+		});
+	});
+
+	it("steps over a greyed-out row without asking for it, and preloads past a refused one", async () => {
+		const { engine, resolve } = harness({ refuse: ["gone-3"] });
+		await engine.start();
+		const queue = [track("t1"), { ...track("grey"), unavailable: true as const }, track("gone-3"), track("t4")];
+		await engine.play(queue[0], queue);
+
+		await vi.waitFor(() => expect(resolve.mock.calls.map(([id]) => id)).toEqual(["t1", "gone-3", "t4"]));
+		engine.next();
+		await vi.waitFor(() => expect(engine.getSnapshot().playback.queueIndex).toBe(3));
 	});
 
 	it("resolves a fresh stream at the live playhead when the playing deck fails", async () => {

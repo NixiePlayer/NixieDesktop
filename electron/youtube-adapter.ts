@@ -22,8 +22,10 @@ import type {
 	Page,
 	Playlist,
 	PlaylistPrivacy,
+	ResolvedMedia,
 	Track,
 	TrackRating,
+	UnavailableMedia,
 	WatchTarget,
 } from "../src/shared/contracts";
 import { diagnosticReason } from "../src/shared/diagnostics";
@@ -60,6 +62,21 @@ export function onParserError(error: Parser.ParserError, report: (message: strin
 	report(`[YOUTUBEJS][Parser]: ${type} ${name}`);
 }
 Parser.setParserErrorHandler(onParserError);
+
+/**
+ * Upstream greys out a row it will not play for this account (a release pulled from the region, a
+ * removed upload) through `musicItemRendererDisplayPolicy`, a field youtubei.js drops. Registered
+ * under the class's own name, this replaces it for every parse: the static `type` is inherited, so
+ * every type check and cast upstream makes still passes, and the row carries that one flag.
+ */
+export class ResponsiveListItem extends YTNodes.MusicResponsiveListItem {
+	unavailable: boolean;
+	constructor(data: ConstructorParameters<typeof YTNodes.MusicResponsiveListItem>[0]) {
+		super(data);
+		this.unavailable = data.musicItemRendererDisplayPolicy === "MUSIC_ITEM_RENDERER_DISPLAY_POLICY_GREY_OUT";
+	}
+}
+Parser.addRuntimeParser("MusicResponsiveListItem", ResponsiveListItem);
 
 function record(value: unknown): value is UnknownRecord {
 	return typeof value === "object" && value !== null;
@@ -836,38 +853,50 @@ export class YouTubeAdapter {
 		return extractRating(response.data, trackId);
 	}
 
-	async resolve(trackId: string, quality: AudioQuality) {
+	async resolve(trackId: string, quality: AudioQuality): Promise<ResolvedMedia | UnavailableMedia> {
 		const client = await this.#getClient();
-		// Three separate upstream limits pick this order. WEB and ANDROID hand back SABR-only formats
-		// with no URL to decipher. TVHTML5 and MWEB do return a deciphered URL, but googlevideo then
-		// answers 403 for it unless the request carries a proof-of-origin token this app cannot mint.
-		// YTMUSIC leads because it is the only one that both resolves and streams at opus; IOS is the
-		// fallback and is mp4a-only, so its opus attempt always misses.
-		const attempts = (["YTMUSIC", "TV_SIMPLY", "IOS"] as const).flatMap((innertubeClient) =>
-			(["opus", "mp4a"] as const).map((codec) => ({ innertubeClient, codec }))
-		);
+		// YTMUSIC is the only client left that both resolves and streams with this session. WEB and
+		// ANDROID hand back SABR-only formats with no URL to decipher. TVHTML5 and MWEB return a URL that
+		// googlevideo answers 403 for without a proof-of-origin token this app cannot mint. TV_SIMPLY and
+		// IOS answer every signed-in `/player` with 400 "Request contains an invalid argument", so as
+		// fallbacks they only replaced the real refusal with their own 400.
 		let format;
 		let lastError: unknown;
-		for (const attempt of attempts) {
+		for (const codec of ["opus", "mp4a"] as const) {
 			try {
-				const candidate = await client.getStreamingData(trackId, {
+				const info = await client.getBasicInfo(trackId, { client: "YTMUSIC" });
+				const playability = info.playability_status;
+				// A refusal (region, removed, sign-in) answers the same for every codec, so it ends the
+				// walk, and it is an answer rather than a failure: the renderer marks the track and moves
+				// on. Its reason is upstream wording in the app language, shown as is; the log keeps only
+				// the status, an upstream enum.
+				if (playability?.status !== "OK") {
+					const status = playability?.status ?? "";
+					this.#log(`stream refused: ${/^[A-Z_]{1,40}$/.test(status) ? status : "unknown"}`);
+					return {
+						unavailable:
+							playability?.reason ||
+							messagesFor((await this.#getSessionOptions()).language ?? "en").main.errors.trackUnavailable,
+					};
+				}
+				const candidate = info.chooseFormat({
 					type: "audio",
 					format: "any",
-					codec: attempt.codec,
+					codec,
 					quality: quality === "low" ? "bestefficiency" : "best",
-					client: attempt.innertubeClient,
 				});
+				candidate.url = await candidate.decipher(client.session.player);
 				if (candidate.url) {
 					format = candidate;
 					break;
 				}
-				this.#log(`stream attempt without URL: ${attempt.innertubeClient} ${attempt.codec}`);
+				this.#log(`stream attempt without URL: ${codec}`);
 			} catch (error) {
 				lastError = error;
 				// Each miss costs a round trip and an evaluation, and a start that runs past its timeout
 				// discards whatever `resolve` finally answered, so these lines are the only record of why a
-				// resolve was slow. IOS opus always misses, but it is only reached once four others have.
-				this.#log(`stream attempt failed: ${attempt.innertubeClient} ${attempt.codec}: ${diagnosticReason(error)}`);
+				// resolve was slow.
+				this.#log(`stream attempt failed: ${codec}: ${diagnosticReason(error)}`);
 			}
 		}
 		if (!format?.url) throw lastError instanceof Error ? lastError : new Error("No playable audio stream");
@@ -1554,6 +1583,7 @@ export function extractEntities(
 					explicit: hasBadge(node, "EXPLICIT") || undefined,
 					plays: playsFrom(node),
 					rank: rankFrom(node),
+					unavailable: node.unavailable === true || undefined,
 					...episode,
 					// An episode is read before it is played: a daily show's titles are the same words and a
 					// date, and the summary is what tells one from the next. The age is the last segment of a

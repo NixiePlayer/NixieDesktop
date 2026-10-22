@@ -25,5 +25,7 @@ export const main = {
 		extensionNotConnected: "Extension not connected",
 		extensionTimedOut: "Extension pull timed out",
 		extensionDisconnected: "Extension disconnected",
+		// Thrown already translated by `resolve`, when upstream refuses a track without stating why.
+		trackUnavailable: "This song is not available",
 	},
 };

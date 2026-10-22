@@ -37,6 +37,7 @@ export const shell: typeof en = {
 	dislike: "Non mi piace",
 	pickSomething: "Scegli qualcosa da ascoltare",
 	playbackFailed: "Riproduzione non riuscita",
+	trackUnavailable: (title) => `Saltato ${title}: non disponibile`,
 	repeatLabel: { off: "Ripeti: disattivato", all: "Ripeti: tutto", one: "Ripeti: brano" },
 	repeatTooltip: { off: "Ripetizione disattivata", all: "Ripeti tutto", one: "Ripeti brano" },
 	volume: "Volume",

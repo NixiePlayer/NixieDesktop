@@ -1,4 +1,6 @@
+import { toast } from "#/components/ui/toast";
 import { messages } from "#/lib/i18n";
+import { isUnavailable, markUnavailable } from "#/lib/unavailable";
 import {
 	MEDIA_ID_LIFETIME_MS,
 	type NixieBridge,
@@ -11,7 +13,12 @@ import { defaultState } from "#/shared/defaults";
 import { diagnosticError } from "#/shared/diagnostics";
 import { isTrack } from "#/shared/entities";
 import { dbToLinear, normalizationGainDb, normalizationTargets, volumeGain } from "#/shared/normalization";
-import { nextQueueIndex } from "#/shared/queue";
+import { nextPlayableIndex } from "#/shared/queue";
+
+/** Upstream refused the track for this account, `message` being its reason. An answer, not a failure. */
+class Unavailable extends Error {}
+
+const playable = (track: Track) => !isUnavailable(track);
 
 export interface EngineState {
 	playback: PlaybackSnapshot;
@@ -345,6 +352,10 @@ export function createAudioEngine(deps: AudioEngineDeps = {}): AudioEngine {
 		const requestedAt = Date.now();
 		const media = await bridge.player.resolve(track.id, settings.quality);
 		if (token !== generation) return undefined;
+		if ("unavailable" in media) {
+			markUnavailable(track.id);
+			throw new Unavailable(media.unavailable);
+		}
 		preparedAt[deck] = requestedAt;
 		const target = settings.normalization === "off" ? undefined : normalizationTargets[settings.normalization];
 		const gainDb = target === undefined ? 0 : normalizationGainDb(media.integratedLufs, target);
@@ -410,7 +421,7 @@ export function createAudioEngine(deps: AudioEngineDeps = {}): AudioEngine {
 	 */
 	function preloadNext(token: number, settings: Settings) {
 		const { queueIndex, queue, repeat, shuffle } = state.playback;
-		const result = nextQueueIndex(queueIndex, queue.length, repeat, "next", random, shuffle);
+		const result = nextPlayableIndex(queue, queueIndex, repeat, "next", random, shuffle, playable);
 		if (result.shouldStop) {
 			// The extension happens here, a whole track before the queue actually runs out, rather than
 			// at the boundary: a radio fetched once the deck has drained is silence for as long as the
@@ -430,8 +441,11 @@ export function createAudioEngine(deps: AudioEngineDeps = {}): AudioEngine {
 				if (gainDb === undefined || token !== generation) return;
 				preloaded = { trackId: upcoming.id, index: result.index, deck, gainDb, settings: settingsKey(settings) };
 			})
-			.catch(() => {
+			.catch((error: unknown) => {
 				preloaded = undefined;
+				// The refused row is marked now, so asking again prepares the one after it. Each pass marks
+				// one more row, which is what keeps this from repeating.
+				if (error instanceof Unavailable && token === generation) preloadNext(token, settings);
 			})
 			.finally(() => {
 				if (preloading === pending) preloading = undefined;
@@ -629,14 +643,31 @@ export function createAudioEngine(deps: AudioEngineDeps = {}): AudioEngine {
 			// Repeat "one" advances on its own onto the track already playing, which is not news.
 			if (unwatched && current.id !== outgoing?.id) announce(current);
 		} catch (error) {
-			// Swallowing this is what made playback failures undiagnosable, so the reason is kept.
 			if (token !== generation) return;
+			if (error instanceof Unavailable) return skipUnavailable(current, error.message, unwatched);
+			// Swallowing this is what made playback failures undiagnosable, so the reason is kept.
 			const reason = error instanceof Error ? `${error.name}: ${error.message}` : messages().shell.unknownFailure;
 			reportFailure(error);
 			set({ status: "error", errorMessage: reason });
 		} finally {
 			if (token === generation) clearLoadingTimeout();
 		}
+	}
+
+	/**
+	 * A track upstream refused is passed over rather than stopping the queue on it, the way YouTube
+	 * Music skips a greyed-out row. The toast is the only place its reason shows once the next track
+	 * is playing. With nothing playable after it, it stays the current track and says why.
+	 */
+	function skipUnavailable(track: Track, reason: string, unwatched: boolean) {
+		const m = messages();
+		const { queue, queueIndex, repeat, shuffle } = state.playback;
+		if (nextPlayableIndex(queue, queueIndex, repeat, "next", random, shuffle, playable).shouldStop) {
+			set({ status: "error", errorMessage: reason });
+			return;
+		}
+		toast.add({ title: m.shell.trackUnavailable(track.title), description: reason });
+		move("next", unwatched);
 	}
 
 	function pause() {
@@ -659,7 +690,7 @@ export function createAudioEngine(deps: AudioEngineDeps = {}): AudioEngine {
 				: undefined;
 		const result =
 			decided === undefined
-				? nextQueueIndex(queueIndex, queue.length, repeat, direction, random, shuffle)
+				? nextPlayableIndex(queue, queueIndex, repeat, direction, random, shuffle, playable)
 				: { index: decided, shouldStop: false };
 		if (result.shouldStop && direction === "next") {
 			// Reaching here at all means the extension `preloadNext` fired a track ago has not landed,

@@ -127,6 +127,7 @@ function validTrack(value: unknown): value is Track {
 		(value.explicit === undefined || typeof value.explicit === "boolean") &&
 		optionalString(value.plays, 100) &&
 		(value.episode === undefined || value.episode === true) &&
+		(value.unavailable === undefined || value.unavailable === true) &&
 		(value.show === undefined ||
 			(record(value.show) &&
 				typeof value.show.id === "string" &&

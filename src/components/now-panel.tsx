@@ -5,6 +5,7 @@ import type { AudioEngine } from "#/lib/audio-engine";
 import { formatDuration } from "#/lib/format";
 import { useMessages } from "#/lib/i18n";
 import { heldLyrics, loadLyrics } from "#/lib/lyrics";
+import { useIsUnavailable } from "#/lib/unavailable";
 import { cn } from "#/lib/utils";
 import { usePlayback, usePlaybackPosition, usePlayer } from "#/player";
 import type { LyricsLine, LyricsResult, LyricsWord, QueueContext } from "#/shared/contracts";
@@ -262,6 +263,7 @@ function QueuePane() {
 	const engine = usePlayer();
 	const { playback } = usePlayback();
 	const m = useMessages();
+	const isUnavailable = useIsUnavailable();
 
 	if (!playback.queue.length) return <Empty title={m.shell.queueEmpty} body={m.shell.queueEmptyBody} />;
 
@@ -277,6 +279,8 @@ function QueuePane() {
 			)}
 			{playback.queue.map((track, index) => {
 				const current = index === playback.queueIndex;
+				// Greyed like its row on the page it came from; the queue steps over it.
+				const unavailable = isUnavailable(track);
 				return (
 					<EntityContextMenu
 						key={`${track.id}-${index}`}
@@ -284,11 +288,18 @@ function QueuePane() {
 						queueIndex={index}
 						render={<div className="relative" />}
 					>
-						<div className="hover:bg-accent flex w-full items-center gap-3 rounded-lg p-2 pr-10 text-left transition-colors">
+						<div
+							className={cn(
+								"hover:bg-accent flex w-full items-center gap-3 rounded-lg p-2 pr-10 text-left transition-colors",
+								unavailable && "opacity-50"
+							)}
+							title={unavailable ? m.media.unavailable : undefined}
+						>
 							<Button
 								variant="ghost"
 								size="icon-lg"
 								aria-label={m.common.playTitle(track.title)}
+								disabled={unavailable}
 								className="group/play relative p-0"
 								onClick={() => void engine.play(track, playback.queue, playback.context)}
 							>

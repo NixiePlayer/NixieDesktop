@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { maxBoostDb, normalizationGainDb, normalizationTargets, volumeGain } from "./normalization";
-import { nextQueueIndex } from "./queue";
+import { nextPlayableIndex, nextQueueIndex } from "./queue";
 
 describe("playback core", () => {
 	it("moves a track to the target from either side of it", () => {
@@ -45,5 +45,20 @@ describe("playback core", () => {
 		expect(nextQueueIndex(2, 3, "all")).toEqual({ index: 0, shouldStop: false });
 		expect(nextQueueIndex(1, 3, "one")).toEqual({ index: 1, shouldStop: false });
 		expect(nextQueueIndex(0, 3, "off", "next", () => 0, true)).toEqual({ index: 1, shouldStop: false });
+	});
+
+	it("steps over rows that will not play, and stops when none will", () => {
+		const queue = ["a", "b", "c"].map((id) => ({ id, title: id, artists: [], durationSeconds: 1 }));
+		const playable = (track: { id: string }) => track.id !== "b";
+		expect(nextPlayableIndex(queue, 0, "off", "next", Math.random, false, playable)).toEqual({
+			index: 2,
+			shouldStop: false,
+		});
+		expect(nextPlayableIndex(queue, 2, "all", "previous", Math.random, false, playable)).toEqual({
+			index: 0,
+			shouldStop: false,
+		});
+		expect(nextPlayableIndex(queue, 0, "all", "next", Math.random, false, () => false).shouldStop).toBe(true);
+		expect(nextPlayableIndex(queue, 1, "one", "next", Math.random, false, playable).shouldStop).toBe(true);
 	});
 });

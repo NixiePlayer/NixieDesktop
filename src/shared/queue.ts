@@ -1,4 +1,4 @@
-import type { RepeatMode } from "./contracts";
+import type { RepeatMode, Track } from "./contracts";
 
 interface QueueMove {
 	index: number;
@@ -24,4 +24,26 @@ export function nextQueueIndex(
 	if (next >= 0 && next < length) return { index: next, shouldStop: false };
 	if (repeat === "all") return { index: next < 0 ? length - 1 : 0, shouldStop: false };
 	return { index: Math.min(Math.max(next, 0), length - 1), shouldStop: true };
+}
+
+/**
+ * `nextQueueIndex`, stepping over rows that will not play. Bounded by the queue's length, so a queue
+ * of nothing else stops rather than spins; under shuffle each row it lands on rolls again.
+ */
+export function nextPlayableIndex(
+	queue: Track[],
+	index: number,
+	repeat: RepeatMode,
+	direction: "next" | "previous",
+	random: () => number,
+	shuffle: boolean,
+	playable: (track: Track) => boolean
+): QueueMove {
+	let result = nextQueueIndex(index, queue.length, repeat, direction, random, shuffle);
+	for (let step = 0; step < queue.length && !result.shouldStop; step++) {
+		const track = queue[result.index];
+		if (!track || playable(track)) return result;
+		result = nextQueueIndex(result.index, queue.length, repeat, direction, random, shuffle);
+	}
+	return { index: result.index, shouldStop: true };
 }

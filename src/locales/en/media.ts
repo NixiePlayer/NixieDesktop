@@ -16,4 +16,5 @@ export const media = {
 	},
 	like: "Add to liked songs",
 	dislike: "Dislike",
+	unavailable: "Not available",
 };

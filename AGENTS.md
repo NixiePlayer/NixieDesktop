@@ -70,12 +70,12 @@ Unofficial YouTube Music desktop client for macOS, Windows and Linux. Electron m
 
 ## Load-bearing workarounds (look like dead code, are not)
 
-- `YouTubeAdapter.resolve` walks `YTMUSIC`, `TV_SIMPLY`, `IOS`. Other clients return SABR-only or 403 streams.
+- `YouTubeAdapter.resolve` asks `YTMUSIC` only. Other clients return SABR-only or 403 streams, and `TV_SIMPLY` and `IOS` answer every signed-in `/player` with 400.
 - Decks set `crossOrigin = "anonymous"` and `handleMedia` echoes `access-control-allow-origin`; otherwise WebAudio outputs silence. `handleMedia` keeps upstream error statuses and refusals carry no body, or Chromium retries forever instead of firing `error`.
 - Upstream data meant for `extractEntities` goes through raw `/browse` with `parse: true` and the unwrapped result, not `client.music.*` wrappers (they assert layouts and throw). Never use `music.getHomeFeed()`, `account.getSettings()`, `playlist.addVideos/removeVideos/moveVideo/setName/setDescription/delete` or `music.getUpNext`; the raw equivalents already exist in the adapter.
 - Playlist rows are addressed by set video id (`PlaylistItem.itemId`), read from the row menu. Never synthesise it from the video id.
 - Radio queues drop `PlaylistPanelVideoWrapper` counterparts, or each song plays twice.
-- Gapless: `preloadNext` and `move("next")` must agree on `nextQueueIndex`; the handoff is armed `SWITCH_LEAD_MS` before the end, never driven off `ended`, and `play` starts the preloaded deck before it awaits anything. `backgroundThrottling: false` belongs to this.
+- Gapless: `preloadNext` and `move("next")` must agree on `nextPlayableIndex`; the handoff is armed `SWITCH_LEAD_MS` before the end, never driven off `ended`, and `play` starts the preloaded deck before it awaits anything. `backgroundThrottling: false` belongs to this.
 - Account setting writes replay the upstream payload verbatim; never derive the body from state.
 - Mix (`RD…`) pages are held once per session in `api.ts` because upstream draws a new mix per request.
 - `electron-updater` is imported as a default export and destructured (CommonJS).

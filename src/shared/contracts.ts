@@ -92,6 +92,11 @@ export interface Track {
 	description?: string;
 	/** How long ago an episode came out ("19h ago"), upstream's own words. Only ever shown. */
 	published?: string;
+	/**
+	 * Upstream greys the row out: it will not play for this account (pulled from the region, removed).
+	 * A track refused at play time is marked in the renderer instead (`src/lib/unavailable.ts`).
+	 */
+	unavailable?: true;
 }
 
 export interface Playlist {
@@ -445,6 +450,11 @@ export interface ResolvedMedia {
 	integratedLufs?: number;
 }
 
+/** Upstream refused the track for this account. The reason is upstream's own wording, localised. */
+export interface UnavailableMedia {
+	unavailable: string;
+}
+
 /** What the About tab states about the build it is running in. */
 export interface AppInfo {
 	version: string;
@@ -512,7 +522,7 @@ export interface NixieBridge {
 		accountSettings(): Promise<AccountSetting[]>;
 	};
 	player: {
-		resolve(trackId: string, quality: AudioQuality): Promise<ResolvedMedia>;
+		resolve(trackId: string, quality: AudioQuality): Promise<ResolvedMedia | UnavailableMedia>;
 		onMediaCommand(listener: (command: MediaCommand) => void): () => void;
 		position(positionSeconds: number): void;
 		/** Announces a track the queue moved to on its own. Main decides whether anything is shown. */

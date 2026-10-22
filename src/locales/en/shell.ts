@@ -36,6 +36,7 @@ export const shell = {
 	dislike: "Dislike",
 	pickSomething: "Pick something to start",
 	playbackFailed: "Playback failed",
+	trackUnavailable: (title: string) => `Skipped ${title}: not available`,
 	repeatLabel: { off: "Repeat: off", all: "Repeat: all", one: "Repeat: one" },
 	repeatTooltip: { off: "Repeat off", all: "Repeat all", one: "Repeat one" },
 	volume: "Volume",

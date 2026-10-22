@@ -17,4 +17,5 @@ export const media: typeof en = {
 	},
 	like: "Mi piace",
 	dislike: "Non mi piace",
+	unavailable: "Non disponibile",
 };

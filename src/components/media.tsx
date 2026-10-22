@@ -4,6 +4,7 @@ import { Fragment, type ReactNode, useCallback, useEffect, useRef, useState } fr
 import { expandPlays, formatDuration, formatTotalDuration } from "#/lib/format";
 import { useMessages } from "#/lib/i18n";
 import { nextRating, rate, useRating } from "#/lib/rating";
+import { useIsUnavailable } from "#/lib/unavailable";
 import { cn } from "#/lib/utils";
 import { usePlayback, usePlayer } from "#/player";
 import type { Album, Artist, BrowseTarget, MusicEntity, Playlist, QueueContext, Track } from "#/shared/contracts";
@@ -885,6 +886,9 @@ export function TrackRow({
 	const current = playback.currentTrack?.id === track.id;
 	// Paused, idle after the queue ran out, or failed: the row offers play back on hover.
 	const running = playback.status === "playing" || playback.status === "loading";
+	// Greyed the way YouTube Music greys it, and still listed: a release with rows missing reads as
+	// broken, and its numbering would skip. The menu stays, since saving the row still works.
+	const unavailable = useIsUnavailable()(track);
 	const row = useRef<HTMLDivElement>(null);
 
 	// A release runs longer than the window, so the marked row is often below the fold and a highlight
@@ -905,9 +909,11 @@ export function TrackRow({
 					ref={row}
 					className={cn(
 						"group/row hover:bg-accent grid cursor-pointer items-center gap-4 rounded-lg px-2 py-1.5",
-						marked && "bg-accent scroll-mb-24"
+						marked && "bg-accent scroll-mb-24",
+						unavailable && "cursor-default opacity-50"
 					)}
 					style={trackColumns(columns)}
+					title={unavailable ? m.media.unavailable : undefined}
 					// The row plays, like every mixed row in the app: the artist links stop the click, and the
 					// play button in the index column is the keyboard path. The containment test is what keeps
 					// the row's own menu off this handler. A React portal (the menu popup, its submenus, the
@@ -917,7 +923,7 @@ export function TrackRow({
 					// `target` is an `EventTarget`, and `instanceof` is what narrows it rather than a cast
 					// asserting what the type does not know.
 					onClick={(event) => {
-						if (!(event.target instanceof Node) || !row.current?.contains(event.target)) return;
+						if (unavailable || !(event.target instanceof Node) || !row.current?.contains(event.target)) return;
 						void engine.play(track, queue, context);
 					}}
 				/>
@@ -926,6 +932,8 @@ export function TrackRow({
 			<div className="text-muted-foreground flex h-8 items-center justify-center text-sm">
 				{current && running ? (
 					<PlayingBars paused={playback.status !== "playing"} />
+				) : unavailable ? (
+					index + 1
 				) : (
 					<>
 						<span className="group-hover/row:hidden">{current ? <PlayingBars paused /> : index + 1}</span>
@@ -1014,6 +1022,8 @@ function EpisodeRow({
 	const { playback } = usePlayback();
 	const current = playback.currentTrack?.id === track.id;
 	const running = playback.status === "playing" || playback.status === "loading";
+	// Greyed and kept, as in `TrackRow`.
+	const unavailable = useIsUnavailable()(track);
 	const row = useRef<HTMLDivElement>(null);
 	const meta = [track.published, track.durationSeconds > 0 && formatTotalDuration(track.durationSeconds, m)]
 		.filter(Boolean)
@@ -1033,11 +1043,13 @@ function EpisodeRow({
 					ref={row}
 					className={cn(
 						"group/row hover:bg-accent flex cursor-pointer gap-4 rounded-lg p-3",
-						marked && "bg-accent scroll-mb-24"
+						marked && "bg-accent scroll-mb-24",
+						unavailable && "cursor-default opacity-50"
 					)}
+					title={unavailable ? m.media.unavailable : undefined}
 					// The containment test is `TrackRow`'s: a portaled menu stays a React child of the row.
 					onClick={(event) => {
-						if (!(event.target instanceof Node) || !row.current?.contains(event.target)) return;
+						if (unavailable || !(event.target instanceof Node) || !row.current?.contains(event.target)) return;
 						void engine.play(track, queue, context);
 					}}
 				/>
@@ -1050,7 +1062,7 @@ function EpisodeRow({
 						<span className="bg-background/80 flex size-8 items-center justify-center rounded-full">
 							<PlayingBars paused={playback.status !== "playing"} />
 						</span>
-					) : (
+					) : unavailable ? null : (
 						<Button
 							variant="secondary"
 							size="icon-sm"

@@ -21,5 +21,6 @@ export const main: typeof en = {
 		extensionNotConnected: "Estensione non collegata",
 		extensionTimedOut: "L'estensione non ha risposto in tempo",
 		extensionDisconnected: "Estensione scollegata",
+		trackUnavailable: "Questo brano non è disponibile",
 	},
 };
