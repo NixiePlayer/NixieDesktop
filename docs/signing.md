@@ -201,19 +201,38 @@ is valid today, and the notarization ticket is Apple's own and outlives the cert
 An installed copy keeps opening indefinitely. What expiry costs is the ability to sign something
 new, which is to say the next release and nothing else.
 
-A Developer ID Application certificate is issued for five years, but a leaf cannot outlive the
-intermediate that signed it, and Apple's original `Developer ID Certification Authority` expires
-`Feb 1 22:12:15 2027 GMT`. One issued under it is truncated to that same second rather than given
-its term, which is why a certificate minted in August 2026 reads as under six months and looks like
-a mistake. The successor, `Developer ID Certification Authority, OU=G2`, runs to `Sep 17 2031`, so
-a certificate issued once Apple moves new issuance onto it gets the full term back. Read what you
-were actually given rather than assume either one:
+Renewal is a yearly job. A Developer ID Application certificate issued under
+`Developer ID Certification Authority, OU=G2` is valid for roughly a year: the one issued on
+Oct 29 2026 runs to Nov 28 2027. The G2 intermediate itself runs to `Sep 17 2031`, so the yearly
+term is Apple's policy for the leaf, not truncation by the CA. Apple's original
+`Developer ID Certification Authority` expires `Feb 1 22:12:15 2027 GMT`, and every certificate it
+issued stops working on that same second, whatever its own dates said.
+
+Read the issuer and the dates of what you hold rather than assume:
 
 ```sh
-security find-certificate -c "Developer ID Application" -p | openssl x509 -noout -dates
+security find-certificate -c "Developer ID Application" -p | openssl x509 -noout -issuer -dates
 ```
 
-Renewing is step 1 over again, with two things to get right.
+The issuer must carry `OU=G2`. `codesign -dv` cannot tell the two apart: it prints only common
+names, and both intermediates are named `Developer ID Certification Authority`. To check the chain
+of a build, extract it with `codesign -d --extract-certificates <app>`, which writes `codesign0`
+(the leaf), `codesign1` and `codesign2` into the current directory, and read the leaf with
+`openssl x509 -inform DER -in codesign0 -noout -issuer`.
+
+Renew through the developer portal rather than Xcode, since only the portal lets you choose the
+intermediary:
+
+1. Keychain Access, Certificate Assistant, **Request a Certificate From a Certificate Authority**,
+   your email address, CA email empty, **Saved to disk**.
+2. Certificates, Identifiers & Profiles, Certificates, **+**, **Developer ID Application**,
+   **Continue**. The next page asks for the Developer ID Certificate Intermediary: choose
+   **G2 Sub-CA**, never Previous Sub-CA, which issues a certificate that dies with the old CA. The
+   "Intermediate Certificates" links at the foot of the first page are downloads of the
+   intermediates, not that choice, and Xcode installs G2 by itself.
+3. Upload the request, download the `.cer`, and double-click it into the login keychain.
+
+Two things then have to be right.
 
 The certificate must be issued under the **same team**. The designated requirement baked into every
 signed copy pins `certificate leaf[subject.OU]` to the team id and tests the intermediate by marker
