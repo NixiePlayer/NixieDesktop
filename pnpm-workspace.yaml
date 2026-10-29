@@ -3,8 +3,6 @@ allowBuilds:
   esbuild: true
   lightningcss: true
   unrs-resolver: true
-minimumReleaseAgeExclude:
-  - electron@44.5.1
 auditConfig:
   ignoreGhsas:
     # braces stack exhaustion. No patched braces exists, and the only path to it is the shadcn CLI
