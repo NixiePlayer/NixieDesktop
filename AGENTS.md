@@ -41,6 +41,7 @@ Unofficial YouTube Music desktop client for macOS, Windows and Linux. Electron m
 - Unit test framework-free logic with Vitest next to the source (`*.test.ts`). English strings are what tests assert, so do not reword them in passing.
 - Type imports use `import type` (`typescript/consistent-type-imports`). Follow TanStack Router type inference: do not cast or annotate inferred router values.
 - Style with Tailwind utilities and the semantic tokens. `src/styles.css` holds tokens and a few global rules only, no page CSS and no `::-webkit-scrollbar` rules (they break overlay scrollbars).
+- A scroller that holds page content is an `OverlayScroll`, not `overflow-y-auto`: on Windows and Linux it draws a bar that shows only while the user scrolls, since Chromium's `OverlayScrollbar` feature yields to the Windows "Always show scrollbars" setting. macOS keeps its native bar.
 - Focus rings resolve through `--ring`, which is transparent except on text inputs. Do not hard-code a focus colour.
 - A box is never sized by its label: selects, menus and rails state their width; a label that changes (language or state) stacks every wording in one grid cell with the unused ones `invisible`. Growable text truncates or line-clamps.
 - Pages respond to their own width with `@container` queries, not viewport breakpoints, since the rail and Now panel change the column width without resizing the window.

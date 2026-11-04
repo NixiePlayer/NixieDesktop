@@ -6,6 +6,7 @@ import { useMessages } from "#/lib/i18n";
 import { platform } from "#/lib/platform";
 import type { AuthState, BrowserAccount, ExtensionSource, GoogleAccount } from "#/shared/contracts";
 import { DiagnosticReport } from "./diagnostic-report";
+import { OverlayScroll } from "./overlay-scroll";
 import { Button } from "./ui/button";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "./ui/field";
 import { Input } from "./ui/input";
@@ -304,141 +305,147 @@ export function SignInView({ onSignedIn }: { onSignedIn: (auth: AuthState) => vo
 			{/* No top bar here, so this strip is what keeps the frameless window draggable. */}
 			<div className="drag-region absolute inset-x-0 top-0 z-10 h-14" />
 			<HeroPanel />
-			<main className="flex min-h-0 flex-1 items-start justify-center overflow-y-auto px-6 py-14">
-				<div className="my-auto flex w-full max-w-sm flex-col gap-6">
-					<div className="flex flex-col gap-3">
-						<img src={MARK} alt="" className="size-11 rounded-xl lg:hidden" />
-						<h1 className="text-2xl font-bold tracking-tight">{choices ? m.signin.chooseTitle : m.signin.title}</h1>
-						<p className="text-muted-foreground text-sm">{choices ? m.signin.chooseIntro : m.signin.intro}</p>
-					</div>
-
-					{error && (
-						<p className="border-destructive/40 bg-destructive/10 text-destructive rounded-lg border px-3 py-2 text-sm">
-							{error}
-						</p>
-					)}
-
-					{choices ? (
+			<main className="flex min-h-0 flex-1">
+				<OverlayScroll className="min-w-0 flex-1" viewportClassName="flex items-start justify-center px-6 py-14">
+					<div className="my-auto flex w-full max-w-sm flex-col gap-6">
 						<div className="flex flex-col gap-3">
-							<div className="flex flex-col gap-2">
-								{choices.map((account) => (
-									<GoogleAccountRow
-										key={account.index}
-										account={account}
-										disabled={busy}
-										onSelect={() => run(window.nixie?.auth.chooseAccount(account.index))}
-									/>
-								))}
-							</div>
-							<Button
-								variant="outline"
-								disabled={busy}
-								className="self-start"
-								onClick={() => {
-									setError("");
-									setChoices(undefined);
-								}}
-							>
-								{m.signin.back}
-							</Button>
+							<img src={MARK} alt="" className="size-11 rounded-xl lg:hidden" />
+							<h1 className="text-2xl font-bold tracking-tight">{choices ? m.signin.chooseTitle : m.signin.title}</h1>
+							<p className="text-muted-foreground text-sm">{choices ? m.signin.chooseIntro : m.signin.intro}</p>
 						</div>
-					) : (
-						<>
-							{/* Windows Chrome, Edge, Brave and Vivaldi encrypt their cookies in a way only the browser
-					    itself can read, so the extension is the primary path there and sits above the disk list,
-					    which reaches only Firefox. */}
-							{platform === "win32" && (
-								<ExtensionBlock
-									sources={sources}
-									disabled={busy}
-									onLink={(installId, pairingSecret) => run(window.nixie?.auth.linkExtension(installId, pairingSecret))}
-								/>
-							)}
 
-							{accounts === undefined ? (
+						{error && (
+							<p className="border-destructive/40 bg-destructive/10 text-destructive rounded-lg border px-3 py-2 text-sm">
+								{error}
+							</p>
+						)}
+
+						{choices ? (
+							<div className="flex flex-col gap-3">
 								<div className="flex flex-col gap-2">
-									{[0, 1].map((row) => (
-										<div key={row} className="border-border flex items-center gap-3 rounded-xl border p-3">
-											<Skeleton className="size-8" />
-											<div className="flex flex-col gap-1.5">
-												<Skeleton className="h-3.5 w-28" />
-												<Skeleton className="h-3 w-40" />
-											</div>
-										</div>
+									{choices.map((account) => (
+										<GoogleAccountRow
+											key={account.index}
+											account={account}
+											disabled={busy}
+											onSelect={() => run(window.nixie?.auth.chooseAccount(account.index))}
+										/>
 									))}
 								</div>
-							) : accounts.length > 0 ? (
-								<div className="flex flex-col gap-3">
+								<Button
+									variant="outline"
+									disabled={busy}
+									className="self-start"
+									onClick={() => {
+										setError("");
+										setChoices(undefined);
+									}}
+								>
+									{m.signin.back}
+								</Button>
+							</div>
+						) : (
+							<>
+								{/* Windows Chrome, Edge, Brave and Vivaldi encrypt their cookies in a way only the browser
+					    itself can read, so the extension is the primary path there and sits above the disk list,
+					    which reaches only Firefox. */}
+								{platform === "win32" && (
+									<ExtensionBlock
+										sources={sources}
+										disabled={busy}
+										onLink={(installId, pairingSecret) =>
+											run(window.nixie?.auth.linkExtension(installId, pairingSecret))
+										}
+									/>
+								)}
+
+								{accounts === undefined ? (
 									<div className="flex flex-col gap-2">
-										{accounts.map((account) => (
-											<AccountRow
-												key={`${account.browser}-${account.profile}`}
-												account={account}
-												disabled={busy}
-												onSelect={() => run(window.nixie?.auth.importFromBrowser(account))}
-											/>
+										{[0, 1].map((row) => (
+											<div key={row} className="border-border flex items-center gap-3 rounded-xl border p-3">
+												<Skeleton className="size-8" />
+												<div className="flex flex-col gap-1.5">
+													<Skeleton className="h-3.5 w-28" />
+													<Skeleton className="h-3 w-40" />
+												</div>
+											</div>
 										))}
 									</div>
-									<p className="text-muted-foreground text-sm">{m.signin.accountsNote}</p>
-								</div>
-							) : (
-								<div className="border-border flex flex-col items-start gap-3 rounded-xl border border-dashed p-4">
-									<p className="text-muted-foreground text-sm">
-										{platform === "win32" ? (
-											<>
-												{m.signin.noFirefoxBefore}{" "}
-												<a
-													href="https://music.youtube.com"
-													target="_blank"
-													rel="noreferrer"
-													className="text-foreground underline underline-offset-4"
-												>
-													music.youtube.com
-												</a>{" "}
-												{m.signin.noFirefoxAfter}
-											</>
-										) : (
-											<>
-												{m.signin.noBrowserBefore}{" "}
-												<a
-													href="https://music.youtube.com"
-													target="_blank"
-													rel="noreferrer"
-													className="text-foreground underline underline-offset-4"
-												>
-													music.youtube.com
-												</a>{" "}
-												{m.signin.noBrowserAfter}
-											</>
-										)}
-									</p>
-									<Button variant="outline" size="sm" onClick={findAccounts}>
-										{m.signin.checkAgain}
-									</Button>
-								</div>
-							)}
+								) : accounts.length > 0 ? (
+									<div className="flex flex-col gap-3">
+										<div className="flex flex-col gap-2">
+											{accounts.map((account) => (
+												<AccountRow
+													key={`${account.browser}-${account.profile}`}
+													account={account}
+													disabled={busy}
+													onSelect={() => run(window.nixie?.auth.importFromBrowser(account))}
+												/>
+											))}
+										</div>
+										<p className="text-muted-foreground text-sm">{m.signin.accountsNote}</p>
+									</div>
+								) : (
+									<div className="border-border flex flex-col items-start gap-3 rounded-xl border border-dashed p-4">
+										<p className="text-muted-foreground text-sm">
+											{platform === "win32" ? (
+												<>
+													{m.signin.noFirefoxBefore}{" "}
+													<a
+														href="https://music.youtube.com"
+														target="_blank"
+														rel="noreferrer"
+														className="text-foreground underline underline-offset-4"
+													>
+														music.youtube.com
+													</a>{" "}
+													{m.signin.noFirefoxAfter}
+												</>
+											) : (
+												<>
+													{m.signin.noBrowserBefore}{" "}
+													<a
+														href="https://music.youtube.com"
+														target="_blank"
+														rel="noreferrer"
+														className="text-foreground underline underline-offset-4"
+													>
+														music.youtube.com
+													</a>{" "}
+													{m.signin.noBrowserAfter}
+												</>
+											)}
+										</p>
+										<Button variant="outline" size="sm" onClick={findAccounts}>
+											{m.signin.checkAgain}
+										</Button>
+									</div>
+								)}
 
-							{/* Elsewhere the disk read handles every browser, so the extension is the secondary path. */}
-							{platform !== "win32" && (
-								<ExtensionBlock
-									sources={sources}
-									disabled={busy}
-									onLink={(installId, pairingSecret) => run(window.nixie?.auth.linkExtension(installId, pairingSecret))}
-								/>
-							)}
-						</>
-					)}
+								{/* Elsewhere the disk read handles every browser, so the extension is the secondary path. */}
+								{platform !== "win32" && (
+									<ExtensionBlock
+										sources={sources}
+										disabled={busy}
+										onLink={(installId, pairingSecret) =>
+											run(window.nixie?.auth.linkExtension(installId, pairingSecret))
+										}
+									/>
+								)}
+							</>
+						)}
 
-					{/*
-					 * The disclaimer belongs on the screen that asks for a Google session, not only on a
-					 * settings tab reached later: this is the point at which someone decides whether to hand
-					 * their YouTube account to something they may have assumed Google wrote. It closes on the
-					 * unofficial interface rather than the trademark, since that is the part carrying real risk
-					 * to the account being linked, and it is the one thing no other screen says.
-					 */}
-					<DiagnosticReport />
-					<p className="text-muted-foreground border-border border-t pt-4 text-xs">{m.signin.disclaimer}</p>
-				</div>
+						{/*
+						 * The disclaimer belongs on the screen that asks for a Google session, not only on a
+						 * settings tab reached later: this is the point at which someone decides whether to hand
+						 * their YouTube account to something they may have assumed Google wrote. It closes on the
+						 * unofficial interface rather than the trademark, since that is the part carrying real risk
+						 * to the account being linked, and it is the one thing no other screen says.
+						 */}
+						<DiagnosticReport />
+						<p className="text-muted-foreground border-border border-t pt-4 text-xs">{m.signin.disclaimer}</p>
+					</div>
+				</OverlayScroll>
 			</main>
 		</div>
 	);
@@ -462,38 +469,40 @@ export function PremiumRequiredView({ onSignedOut }: { onSignedOut: (auth: AuthS
 			{/* No top bar here either, so this strip is what keeps the frameless window draggable. */}
 			<div className="drag-region absolute inset-x-0 top-0 z-10 h-14" />
 			<HeroPanel />
-			<main className="flex min-h-0 flex-1 items-start justify-center overflow-y-auto px-6 py-14">
-				<div className="my-auto flex w-full max-w-sm flex-col gap-6">
-					<div className="flex flex-col gap-3">
-						<img src={MARK} alt="" className="size-11 rounded-xl lg:hidden" />
-						<h1 className="text-2xl font-bold tracking-tight">{m.signin.premium.title}</h1>
-						<p className="text-muted-foreground text-sm">{m.signin.premium.why}</p>
-						<p className="text-muted-foreground text-sm">{m.signin.premium.next}</p>
+			<main className="flex min-h-0 flex-1">
+				<OverlayScroll className="min-w-0 flex-1" viewportClassName="flex items-start justify-center px-6 py-14">
+					<div className="my-auto flex w-full max-w-sm flex-col gap-6">
+						<div className="flex flex-col gap-3">
+							<img src={MARK} alt="" className="size-11 rounded-xl lg:hidden" />
+							<h1 className="text-2xl font-bold tracking-tight">{m.signin.premium.title}</h1>
+							<p className="text-muted-foreground text-sm">{m.signin.premium.why}</p>
+							<p className="text-muted-foreground text-sm">{m.signin.premium.next}</p>
+						</div>
+						<Button
+							variant="outline"
+							disabled={busy}
+							className="self-start"
+							onClick={() => {
+								setBusy(true);
+								void window.nixie?.auth
+									.signOut()
+									.then(onSignedOut)
+									.finally(() => setBusy(false));
+							}}
+						>
+							{m.signin.premium.signOut}
+						</Button>
+						<a
+							href="https://music.youtube.com"
+							target="_blank"
+							rel="noreferrer"
+							className="text-muted-foreground hover:text-foreground self-start text-sm underline underline-offset-4"
+						>
+							{m.signin.premium.openYouTubeMusic}
+						</a>
+						<DiagnosticReport />
 					</div>
-					<Button
-						variant="outline"
-						disabled={busy}
-						className="self-start"
-						onClick={() => {
-							setBusy(true);
-							void window.nixie?.auth
-								.signOut()
-								.then(onSignedOut)
-								.finally(() => setBusy(false));
-						}}
-					>
-						{m.signin.premium.signOut}
-					</Button>
-					<a
-						href="https://music.youtube.com"
-						target="_blank"
-						rel="noreferrer"
-						className="text-muted-foreground hover:text-foreground self-start text-sm underline underline-offset-4"
-					>
-						{m.signin.premium.openYouTubeMusic}
-					</a>
-					<DiagnosticReport />
-				</div>
+				</OverlayScroll>
 			</main>
 		</div>
 	);
@@ -517,42 +526,44 @@ export function DataAccessView({ onUseLink }: { onUseLink: () => void }) {
 			{/* No top bar here either, so this strip is what keeps the frameless window draggable. */}
 			<div className="drag-region absolute inset-x-0 top-0 z-10 h-14" />
 			<HeroPanel />
-			<main className="flex min-h-0 flex-1 items-start justify-center overflow-y-auto px-6 py-14">
-				<div className="my-auto flex w-full max-w-sm flex-col gap-6">
-					<div className="flex flex-col gap-3">
-						<img src={MARK} alt="" className="size-11 rounded-xl lg:hidden" />
-						<h1 className="text-2xl font-bold tracking-tight">{m.signin.dataAccess.title}</h1>
-						<p className="text-muted-foreground text-sm">{m.signin.dataAccess.why}</p>
-						<ol className="text-muted-foreground list-decimal space-y-1 pl-5 text-sm">
-							<li>{m.signin.dataAccess.stepOpen}</li>
-							<li>{m.signin.dataAccess.stepTurnOn}</li>
-							<li>{m.signin.dataAccess.stepRestart}</li>
-						</ol>
+			<main className="flex min-h-0 flex-1">
+				<OverlayScroll className="min-w-0 flex-1" viewportClassName="flex items-start justify-center px-6 py-14">
+					<div className="my-auto flex w-full max-w-sm flex-col gap-6">
+						<div className="flex flex-col gap-3">
+							<img src={MARK} alt="" className="size-11 rounded-xl lg:hidden" />
+							<h1 className="text-2xl font-bold tracking-tight">{m.signin.dataAccess.title}</h1>
+							<p className="text-muted-foreground text-sm">{m.signin.dataAccess.why}</p>
+							<ol className="text-muted-foreground list-decimal space-y-1 pl-5 text-sm">
+								<li>{m.signin.dataAccess.stepOpen}</li>
+								<li>{m.signin.dataAccess.stepTurnOn}</li>
+								<li>{m.signin.dataAccess.stepRestart}</li>
+							</ol>
+						</div>
+						<div className="flex flex-wrap gap-2">
+							<Button onClick={() => void window.nixie?.app.openPrivacySettings()}>
+								{m.signin.dataAccess.openSettings}
+							</Button>
+							<Button
+								variant="outline"
+								disabled={busy}
+								onClick={() => {
+									setBusy(true);
+									void window.nixie?.app.relaunch().finally(() => setBusy(false));
+								}}
+							>
+								{m.signin.dataAccess.restart}
+							</Button>
+						</div>
+						<p className="text-muted-foreground text-sm">
+							{m.signin.dataAccess.linkBefore}
+							<button type="button" onClick={onUseLink} className="text-foreground underline underline-offset-4">
+								{m.signin.dataAccess.useLink}
+							</button>
+							{m.signin.dataAccess.linkAfter}
+						</p>
+						<DiagnosticReport />
 					</div>
-					<div className="flex flex-wrap gap-2">
-						<Button onClick={() => void window.nixie?.app.openPrivacySettings()}>
-							{m.signin.dataAccess.openSettings}
-						</Button>
-						<Button
-							variant="outline"
-							disabled={busy}
-							onClick={() => {
-								setBusy(true);
-								void window.nixie?.app.relaunch().finally(() => setBusy(false));
-							}}
-						>
-							{m.signin.dataAccess.restart}
-						</Button>
-					</div>
-					<p className="text-muted-foreground text-sm">
-						{m.signin.dataAccess.linkBefore}
-						<button type="button" onClick={onUseLink} className="text-foreground underline underline-offset-4">
-							{m.signin.dataAccess.useLink}
-						</button>
-						{m.signin.dataAccess.linkAfter}
-					</p>
-					<DiagnosticReport />
-				</div>
+				</OverlayScroll>
 			</main>
 		</div>
 	);

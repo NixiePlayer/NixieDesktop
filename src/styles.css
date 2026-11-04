@@ -259,10 +259,11 @@ textarea:focus-visible {
 	-webkit-app-region: no-drag;
 }
 
-/* Nothing here styles a scrollbar on purpose. macOS draws overlay scrollbars natively, and Windows and
-   Linux are asked for the same thing through Chromium's own `OverlayScrollbar` feature in
-   `electron/main.ts`. A `::-webkit-scrollbar` rule would undo that: styling the pseudo-element opts the
-   page back into a classic gutter, which is the layout width and the always-on bar this is avoiding. */
+/* Nothing here styles a scrollbar on purpose. macOS draws overlay scrollbars natively; on Windows and
+   Linux the app's scrollers draw their own through `OverlayScroll`, and the rest are asked for overlay
+   bars through Chromium's `OverlayScrollbar` feature in `electron/main.ts`. A `::-webkit-scrollbar` rule
+   would undo that: styling the pseudo-element opts the page back into a classic gutter, which is the
+   layout width and the always-on bar this is avoiding. */
 
 /* Now-playing indicator: three bars whose heights encode nothing but "audio is running". */
 @keyframes equalizer {

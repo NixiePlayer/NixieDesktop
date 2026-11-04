@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { OverlayScroll } from "#/components/overlay-scroll";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "#/components/ui/dialog";
 import { messages, useMessages } from "#/lib/i18n";
 import type { BundledDocument } from "#/shared/contracts";
@@ -54,9 +55,11 @@ export function DocumentRow({
 				{/* A fixed height, not a maximum: every one of these documents runs past it, so a maximum
 				    only ever described the placeholder, and the dialog opened one line tall and jumped to
 				    full height the moment the text landed. */}
-				<pre className="text-muted-foreground h-[60vh] overflow-y-auto text-sm leading-relaxed whitespace-pre-wrap">
-					{text ?? m.settings.document.reading}
-				</pre>
+				<OverlayScroll className="h-[60vh]">
+					<pre className="text-muted-foreground text-sm leading-relaxed whitespace-pre-wrap">
+						{text ?? m.settings.document.reading}
+					</pre>
+				</OverlayScroll>
 			</DialogContent>
 		</Dialog>
 	);

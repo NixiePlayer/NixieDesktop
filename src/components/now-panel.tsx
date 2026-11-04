@@ -12,6 +12,7 @@ import type { LyricsLine, LyricsResult, LyricsWord, QueueContext } from "#/share
 import { artistNames } from "#/shared/entities";
 import { EntityContextMenu, TrackMenu } from "./entity-menu";
 import { Artwork, PlayingBars, TrackLink } from "./media";
+import { OverlayScroll } from "./overlay-scroll";
 import { Button } from "./ui/button";
 import { Skeleton } from "./ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "./ui/tabs";
@@ -48,14 +49,14 @@ export function NowPanel({
 					<X />
 				</Button>
 			</div>
-			<div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-3 pb-4">
+			<OverlayScroll viewportRef={scrollRef} className="min-h-0 flex-1" viewportClassName="px-3 pb-4">
 				{(lyricsMounted || tab === "lyrics") && (
 					<div hidden={tab !== "lyrics"}>
 						<LyricsPane active={tab === "lyrics"} scrollRef={scrollRef} />
 					</div>
 				)}
 				{tab === "queue" && <QueuePane />}
-			</div>
+			</OverlayScroll>
 		</aside>
 	);
 }

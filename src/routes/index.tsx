@@ -316,7 +316,7 @@ function HomePage() {
 			inFlight.current = false;
 			setLoading(false);
 		};
-		// The scroll container is the shell's main element, not the viewport, which also holds the top
+		// The scroll container is the shell's page scroller, not the viewport, which also holds the top
 		// bar and the player bar and so measures a margin from the wrong edges.
 		const observer = new IntersectionObserver(
 			(entries) => entries.some((entry) => entry.isIntersecting) && void load(),

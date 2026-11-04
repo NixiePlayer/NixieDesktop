@@ -41,6 +41,7 @@ import {
 import { EntityContextMenu, playRadio } from "./entity-menu";
 import { Artwork, entityRoute, PlayingBars } from "./media";
 import { NowPanel, type PanelTab } from "./now-panel";
+import { OverlayScroll } from "./overlay-scroll";
 import { PlayerBar } from "./player-bar";
 import { NewPlaylistDialog } from "./playlist-dialog";
 import { Button } from "./ui/button";
@@ -161,10 +162,12 @@ export function AppShell({ auth, onAuthChange }: { auth: AuthState; onAuthChange
 			<NavRail open={navOpen && (wide || !panel)} />
 			{/* Clip the swipe arrow to the page column, excluding the rail and Now panel. */}
 			<div className="relative min-h-0">
-				<main id="main-scrollable-area" className="h-full overflow-y-auto">
-					<div className="w-full px-6 py-6">
-						<Outlet />
-					</div>
+				<main className="h-full">
+					<OverlayScroll id="main-scrollable-area" className="h-full">
+						<div className="w-full px-6 py-6">
+							<Outlet />
+						</div>
+					</OverlayScroll>
 				</main>
 				<SwipeArrow hint={swipe} />
 			</div>
@@ -326,77 +329,76 @@ function NavRail({ open }: { open: boolean }) {
 		"flex h-10 items-center gap-4 rounded-lg px-3 text-sm transition-colors hover:bg-accent data-[status=active]:bg-accent data-[status=active]:font-medium";
 
 	return (
-		<nav
-			className={cn(
-				"flex flex-col gap-1 overflow-y-auto border-r border-border bg-sidebar p-2 transition-[width]",
-				open ? "w-56" : "w-16"
-			)}
-		>
-			{navigation.map((item) => (
-				<Link key={item.to} to={item.to} className={itemClass} title={open ? undefined : m.shell[item.label]}>
-					<item.icon className="size-5 shrink-0" />
-					{open && <span className="truncate">{m.shell[item.label]}</span>}
-				</Link>
-			))}
+		<nav className={cn("flex border-r border-border bg-sidebar transition-[width]", open ? "w-56" : "w-16")}>
+			<OverlayScroll className="min-w-0 flex-1" viewportClassName="flex flex-col gap-1 p-2">
+				{navigation.map((item) => (
+					<Link key={item.to} to={item.to} className={itemClass} title={open ? undefined : m.shell[item.label]}>
+						<item.icon className="size-5 shrink-0" />
+						{open && <span className="truncate">{m.shell[item.label]}</span>}
+					</Link>
+				))}
 
-			<hr className="border-border my-2" />
+				<hr className="border-border my-2" />
 
-			<div className={cn("flex items-center gap-1", !open && "justify-center")}>
-				{open && <span className="text-muted-foreground flex-1 px-3 text-xs font-medium">{m.common.playlists}</span>}
-				<NewPlaylistDialog />
-			</div>
+				<div className={cn("flex items-center gap-1", !open && "justify-center")}>
+					{open && <span className="text-muted-foreground flex-1 px-3 text-xs font-medium">{m.common.playlists}</span>}
+					<NewPlaylistDialog />
+				</div>
 
-			{open &&
-				playlists.map((playlist) => (
-					<EntityContextMenu
-						key={playlist.id}
-						item={playlist}
-						render={
-							<Link
-								to="/playlist/$id"
-								params={{ id: playlist.id }}
-								search={{ find: undefined }}
-								className={cn(itemClass, "h-12 gap-3")}
-							/>
-						}
-					>
-						<Artwork src={entityArtwork(playlist)} className="size-8 rounded-sm" />
-						<span className="flex min-w-0 flex-col">
-							<span className="truncate">{entityTitle(playlist, m)}</span>
-							{/* Whoever made it, or the label for the two nobody did. */}
-							<span className="text-muted-foreground flex items-center gap-1 text-xs font-normal">
-								{playlist.pinned && <Pin aria-label={m.shell.pinned} className="size-3 shrink-0 fill-current" />}
-								<span className="min-w-0 truncate">{playlist.author ?? autoPlaylist(playlist.id, m)?.author}</span>
+				{open &&
+					playlists.map((playlist) => (
+						<EntityContextMenu
+							key={playlist.id}
+							item={playlist}
+							render={
+								<Link
+									to="/playlist/$id"
+									params={{ id: playlist.id }}
+									search={{ find: undefined }}
+									className={cn(itemClass, "h-12 gap-3")}
+								/>
+							}
+						>
+							<Artwork src={entityArtwork(playlist)} className="size-8 rounded-sm" />
+							<span className="flex min-w-0 flex-col">
+								<span className="truncate">{entityTitle(playlist, m)}</span>
+								{/* Whoever made it, or the label for the two nobody did. */}
+								<span className="text-muted-foreground flex items-center gap-1 text-xs font-normal">
+									{playlist.pinned && <Pin aria-label={m.shell.pinned} className="size-3 shrink-0 fill-current" />}
+									<span className="min-w-0 truncate">{playlist.author ?? autoPlaylist(playlist.id, m)?.author}</span>
+								</span>
 							</span>
-						</span>
-						{/* Which row the queue came from, which is the queue's own context and not the track on it:
+							{/* Which row the queue came from, which is the queue's own context and not the track on it:
 						    the same song sits in several playlists, and a radio or an album can be playing a song
 						    this playlist also holds, so a track-id test would light the wrong row, or several. The
 						    context carries the id `/playlist/$id` was opened with, which is the id this row links
 						    with, so there is nothing to normalize between them. The margin is on the wrapper rather
 						    than on the bars, since `PlayingBars` takes no class and this is its only caller that
 						    needs one. */}
-						{playback.context?.type === "playlist" && playback.context.id === playlist.id && playback.currentTrack && (
-							<span className="ml-auto shrink-0 pl-2">
-								<PlayingBars paused={playback.status !== "playing"} />
-							</span>
-						)}
-					</EntityContextMenu>
-				))}
+							{playback.context?.type === "playlist" &&
+								playback.context.id === playlist.id &&
+								playback.currentTrack && (
+									<span className="ml-auto shrink-0 pl-2">
+										<PlayingBars paused={playback.status !== "playing"} />
+									</span>
+								)}
+						</EntityContextMenu>
+					))}
 
-			<Link to="/settings" className={cn(itemClass, "mt-auto")} title={open ? undefined : m.shell.settings}>
-				<span className="relative shrink-0">
-					<Settings className="size-5" />
-					{ready && (
-						<>
-							{/* What is left once the toast is dismissed: the About row is where the restart is. */}
-							<span className="bg-primary border-sidebar absolute -top-0.5 -right-0.5 size-2.5 rounded-full border-2" />
-							<span className="sr-only">{m.shell.updateReady}</span>
-						</>
-					)}
-				</span>
-				{open && <span className="truncate">{m.shell.settings}</span>}
-			</Link>
+				<Link to="/settings" className={cn(itemClass, "mt-auto")} title={open ? undefined : m.shell.settings}>
+					<span className="relative shrink-0">
+						<Settings className="size-5" />
+						{ready && (
+							<>
+								{/* What is left once the toast is dismissed: the About row is where the restart is. */}
+								<span className="bg-primary border-sidebar absolute -top-0.5 -right-0.5 size-2.5 rounded-full border-2" />
+								<span className="sr-only">{m.shell.updateReady}</span>
+							</>
+						)}
+					</span>
+					{open && <span className="truncate">{m.shell.settings}</span>}
+				</Link>
+			</OverlayScroll>
 		</nav>
 	);
 }
