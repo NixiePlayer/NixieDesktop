@@ -26,7 +26,7 @@ Small and obvious fixes need no ceremony. Send them.
 
 ## Setup
 
-See [Development](README.md#development) in the README. Short version: Node 24, pnpm
+See [Development](README.md#development) in the README. Short version: Node 26, pnpm
 12.8.1, then `pnpm install && pnpm dev`.
 
 macOS, Windows and Linux all work for development. On macOS the Xcode command line tools

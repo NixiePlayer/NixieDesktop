@@ -14,7 +14,7 @@
 	"desktopName": "Nixie.desktop",
 	"packageManager": "pnpm@12.8.1",
 	"engines": {
-		"node": "24",
+		"node": "26",
 		"pnpm": "12.8.1"
 	},
 	"imports": {
@@ -66,7 +66,7 @@
 		"@tanstack/devtools-vite": "0.8.5",
 		"@tanstack/router-cli": "1.167.46",
 		"@tanstack/router-plugin": "1.168.48",
-		"@types/node": "24.19.2",
+		"@types/node": "26.6.6",
 		"@types/react": "19.3.0",
 		"@types/react-dom": "19.3.0",
 		"@vitejs/plugin-react": "6.1.2",

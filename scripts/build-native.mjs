@@ -6,7 +6,7 @@ if (process.platform === "darwin") {
 	// Node-API is ABI-stable across Node and Electron. The Node distribution already
 	// ships these headers; no node-gyp, Electron headers or runtime dependency is needed.
 	const headers = join(dirname(realpathSync(process.execPath)), "../include/node");
-	if (!existsSync(join(headers, "node_api.h"))) throw new Error("Install Node 24 with its include/node headers.");
+	if (!existsSync(join(headers, "node_api.h"))) throw new Error("Install Node 26 with its include/node headers.");
 	const root = join(import.meta.dirname, "..");
 	mkdirSync(join(root, "dist-native"), { recursive: true });
 	execFileSync(
