@@ -1,6 +1,6 @@
 import { Link, useMatchRoute } from "@tanstack/react-router";
 import { ChevronLeft, ChevronRight, Music, Play, ThumbsDown, ThumbsUp } from "lucide-react";
-import { Fragment, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import { type CSSProperties, Fragment, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { expandPlays, formatDuration, formatTotalDuration } from "#/lib/format";
 import { useMessages } from "#/lib/i18n";
 import { nextRating, rate, useRating } from "#/lib/rating";
@@ -294,24 +294,46 @@ export function MediaCard({
 	);
 }
 
-export interface RailEdges {
-	overflow: boolean;
+interface RailEdges {
 	start: boolean;
 	end: boolean;
 }
 
-export function useHorizontalRail(itemCount: number, layoutKey = "") {
+/**
+ * A horizontal scroller with no scrollbar on any platform. While the pointer is over it, a round arrow
+ * sits on each edge that still has content past it, the way Spotify pages its shelves, and pages the
+ * rail by most of its width.
+ *
+ * `className` and `style` lay out the scrolling element itself. The rail is measured again when it
+ * resizes and when `itemCount` or `layoutKey` change, since new items widen the content without
+ * resizing the box. `compact` is for a rail a single line of chips tall.
+ */
+export function HorizontalRail({
+	title,
+	itemCount,
+	layoutKey = "",
+	compact = false,
+	className,
+	style,
+	children,
+}: {
+	title: string;
+	itemCount: number;
+	layoutKey?: string;
+	compact?: boolean;
+	className?: string;
+	style?: CSSProperties;
+	children: ReactNode;
+}) {
+	const m = useMessages();
 	const rail = useRef<HTMLDivElement>(null);
-	const [edges, setEdges] = useState<RailEdges>({ overflow: false, start: true, end: true });
+	const [edges, setEdges] = useState<RailEdges>({ start: true, end: true });
 	const updateEdges = useCallback((element: HTMLDivElement) => {
 		const next = {
-			overflow: element.scrollWidth > element.clientWidth + 1,
 			start: element.scrollLeft <= 1,
 			end: element.scrollLeft + element.clientWidth >= element.scrollWidth - 1,
 		};
-		setEdges((current) =>
-			current.overflow === next.overflow && current.start === next.start && current.end === next.end ? current : next
-		);
+		setEdges((current) => (current.start === next.start && current.end === next.end ? current : next));
 	}, []);
 
 	useEffect(() => {
@@ -323,47 +345,53 @@ export function useHorizontalRail(itemCount: number, layoutKey = "") {
 		return () => observer.disconnect();
 	}, [itemCount, layoutKey, updateEdges]);
 
-	return {
-		rail,
-		edges,
-		updateEdges,
-		scroll: (direction: -1 | 1) => {
-			if (rail.current) rail.current.scrollBy({ left: direction * rail.current.clientWidth * 0.85 });
-		},
+	const scroll = (direction: -1 | 1) => {
+		if (!rail.current) return;
+		const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+		rail.current.scrollBy({
+			left: direction * rail.current.clientWidth * 0.85,
+			behavior: reduceMotion ? "instant" : "smooth",
+		});
 	};
-}
+	// Hidden arrows let clicks through to the cards under them; one with keyboard focus shows anyway.
+	const arrow = cn(
+		"absolute inset-y-0 z-10 my-auto rounded-full bg-popover/90 text-popover-foreground shadow-lg ring-1 ring-foreground/10 backdrop-blur-sm hover:bg-accent hover:text-accent-foreground",
+		"pointer-events-none opacity-0 transition-opacity group-hover/rail:pointer-events-auto group-hover/rail:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100",
+		compact ? "size-8" : "size-10 [&_svg:not([class*='size-'])]:size-5"
+	);
 
-export function RailControls({
-	title,
-	edges,
-	onScroll,
-}: {
-	title: string;
-	edges: RailEdges;
-	onScroll: (direction: -1 | 1) => void;
-}) {
-	const m = useMessages();
-	if (!edges.overflow) return null;
 	return (
-		<div className="flex gap-1">
-			<Button
-				variant="ghost"
-				size="icon-sm"
-				aria-label={m.media.scrollBackward(title)}
-				disabled={edges.start}
-				onClick={() => onScroll(-1)}
+		<div className="group/rail relative min-w-0">
+			<div
+				ref={rail}
+				onScroll={(event) => updateEdges(event.currentTarget)}
+				className={cn("snap-x overflow-x-auto [scrollbar-width:none]", className)}
+				style={style}
 			>
-				<ChevronLeft />
-			</Button>
-			<Button
-				variant="ghost"
-				size="icon-sm"
-				aria-label={m.media.scrollForward(title)}
-				disabled={edges.end}
-				onClick={() => onScroll(1)}
-			>
-				<ChevronRight />
-			</Button>
+				{children}
+			</div>
+			{!edges.start && (
+				<Button
+					variant="ghost"
+					size="icon"
+					aria-label={m.media.scrollBackward(title)}
+					className={cn(arrow, "left-2")}
+					onClick={() => scroll(-1)}
+				>
+					<ChevronLeft />
+				</Button>
+			)}
+			{!edges.end && (
+				<Button
+					variant="ghost"
+					size="icon"
+					aria-label={m.media.scrollForward(title)}
+					className={cn(arrow, "right-2")}
+					onClick={() => scroll(1)}
+				>
+					<ChevronRight />
+				</Button>
+			)}
 		</div>
 	);
 }
@@ -417,21 +445,18 @@ export function BrowseAction({ target }: { target?: BrowseTarget }) {
 
 /**
  * The line above a shelf, a grid or a list. One component so a page whose sections are grids rather
- * than rails still names them exactly the way a rail does. `children` is the trailing slot, which is
- * where a rail puts its own controls.
+ * than rails still names them exactly the way a rail does.
  */
 export function SectionHeader({
 	title,
 	strapline,
 	artworkUrl,
 	action,
-	children,
 }: {
 	title: string;
 	strapline?: string;
 	artworkUrl?: string;
 	action?: ReactNode;
-	children?: ReactNode;
 }) {
 	return (
 		<header className="flex min-w-0 items-end gap-3">
@@ -441,7 +466,6 @@ export function SectionHeader({
 				<h2 className="truncate text-xl font-bold tracking-tight">{title}</h2>
 			</div>
 			{action}
-			{children}
 		</header>
 	);
 }
@@ -491,22 +515,20 @@ export function MediaShelf({
 	// a destination's song shelf, which is fifty rows and wants the extra one.
 	const rows = Math.min(Math.max(layout === "ranked" ? (itemsPerColumn ?? 4) : (itemsPerColumn ?? 1), 1), 5);
 	const asRows = layout === "ranked" || rows > 1;
-	const { rail, edges, updateEdges, scroll } = useHorizontalRail(items.length, `${layout}-${rows}`);
 
 	if (!items.length) return null;
 	const tracks = queue ?? toTracks(items);
 	return (
 		<section className="flex flex-col gap-4" aria-label={showHeader ? undefined : title}>
 			{showHeader && (
-				<SectionHeader title={title} strapline={strapline} artworkUrl={artworkUrl} action={headerAction}>
-					<RailControls title={title} edges={edges} onScroll={scroll} />
-				</SectionHeader>
+				<SectionHeader title={title} strapline={strapline} artworkUrl={artworkUrl} action={headerAction} />
 			)}
-			<div
-				ref={rail}
-				onScroll={(event) => updateEdges(event.currentTarget)}
+			<HorizontalRail
+				title={title}
+				itemCount={items.length}
+				layoutKey={`${layout}-${rows}`}
 				className={cn(
-					"-mx-1 -mt-1 snap-x overflow-x-auto px-1 pt-1 pb-2",
+					"-mx-1 -mt-1 scroll-px-1 px-1 pt-1 pb-2",
 					asRows ? "grid grid-flow-col gap-x-4 gap-y-1" : "flex gap-4"
 				)}
 				style={
@@ -539,7 +561,7 @@ export function MediaShelf({
 						/>
 					)
 				)}
-			</div>
+			</HorizontalRail>
 		</section>
 	);
 }

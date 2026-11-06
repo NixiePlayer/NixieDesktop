@@ -5,13 +5,12 @@ import { playCollection } from "#/components/entity-menu";
 import {
 	BrowseAction,
 	BrowseLink,
+	HorizontalRail,
 	MediaGrid,
 	MediaList,
 	MediaShelf,
-	RailControls,
 	SectionHeader,
 	ShelfSkeleton,
-	useHorizontalRail,
 } from "#/components/media";
 import { Button, buttonVariants } from "#/components/ui/button";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "#/components/ui/select";
@@ -326,23 +325,20 @@ function GenreGrid({
 
 /** The landing's mood section, the one navigation list short enough to stay a two-row rail. */
 function GenreRail({ section }: { section: Extract<ExploreSection, { type: "navigation" }> }) {
-	const { rail, edges, updateEdges, scroll } = useHorizontalRail(section.items.length, section.layout);
-
 	return (
 		<section className="flex flex-col gap-4">
-			<SectionHeader title={section.title} action={<BrowseAction target={section.more} />}>
-				<RailControls title={section.title} edges={edges} onScroll={scroll} />
-			</SectionHeader>
-			<div
-				ref={rail}
-				onScroll={(event) => updateEdges(event.currentTarget)}
-				className="-mx-1 grid snap-x grid-flow-col grid-rows-2 gap-3 overflow-x-auto px-1 pb-2"
+			<SectionHeader title={section.title} action={<BrowseAction target={section.more} />} />
+			<HorizontalRail
+				title={section.title}
+				itemCount={section.items.length}
+				layoutKey={section.layout}
+				className="-mx-1 grid scroll-px-1 grid-flow-col grid-rows-2 gap-3 px-1 pb-2"
 				style={{ gridAutoColumns: "minmax(14rem, calc((100% - 3rem) / 4))" }}
 			>
 				{section.items.map((item, index) => (
 					<GenreTile key={`${item.browseId}-${item.params ?? ""}-${index}`} target={item} />
 				))}
-			</div>
+			</HorizontalRail>
 		</section>
 	);
 }

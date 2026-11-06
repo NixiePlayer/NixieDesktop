@@ -7,10 +7,9 @@ import {
 	BrowseAction,
 	CollectionPlayButton,
 	entityRoute,
+	HorizontalRail,
 	MediaShelf,
-	RailControls,
 	TrackLink,
-	useHorizontalRail,
 } from "#/components/media";
 import { Button, buttonVariants } from "#/components/ui/button";
 import { Skeleton } from "#/components/ui/skeleton";
@@ -162,41 +161,39 @@ function QuickTile({ item, queue, context }: { item: MusicEntity; queue: Track[]
 
 function HomeChips({ filters, selected }: { filters: FeedFilter[]; selected?: string }) {
 	const m = useMessages();
-	const { rail, edges, updateEdges, scroll } = useHorizontalRail(filters.length, selected ?? "");
 	if (!filters.length) return null;
 	return (
-		<div className="flex items-center gap-2">
-			<div
-				ref={rail}
-				onScroll={(event) => updateEdges(event.currentTarget)}
-				className="-mx-1 flex min-w-0 flex-1 snap-x gap-2 overflow-x-auto px-1 py-1"
-			>
-				{filters.map((filter) => {
-					// The chip a filtered feed already answers has no token of its own, so it is the one
-					// that clears back to the unfiltered feed.
-					const active = filter.selected || (filter.token !== undefined && filter.token === selected);
-					return (
-						<Link
-							key={filter.label}
-							to="/"
-							search={{ chip: active ? undefined : filter.token }}
-							replace
-							// Every chip is a whole feed, so preloading on hover browses upstream once per
-							// chip the pointer crosses.
-							preload={false}
-							aria-current={active ? "true" : undefined}
-							className={cn(
-								buttonVariants({ variant: active ? "default" : "secondary", size: "sm" }),
-								"shrink-0 snap-start rounded-full px-4"
-							)}
-						>
-							{filter.label}
-						</Link>
-					);
-				})}
-			</div>
-			<RailControls title={m.pages.home.filters} edges={edges} onScroll={scroll} />
-		</div>
+		<HorizontalRail
+			title={m.pages.home.filters}
+			itemCount={filters.length}
+			layoutKey={selected ?? ""}
+			compact
+			className="-mx-1 flex scroll-px-1 gap-2 px-1 py-1"
+		>
+			{filters.map((filter) => {
+				// The chip a filtered feed already answers has no token of its own, so it is the one
+				// that clears back to the unfiltered feed.
+				const active = filter.selected || (filter.token !== undefined && filter.token === selected);
+				return (
+					<Link
+						key={filter.label}
+						to="/"
+						search={{ chip: active ? undefined : filter.token }}
+						replace
+						// Every chip is a whole feed, so preloading on hover browses upstream once per
+						// chip the pointer crosses.
+						preload={false}
+						aria-current={active ? "true" : undefined}
+						className={cn(
+							buttonVariants({ variant: active ? "default" : "secondary", size: "sm" }),
+							"shrink-0 snap-start rounded-full px-4"
+						)}
+					>
+						{filter.label}
+					</Link>
+				);
+			})}
+		</HorizontalRail>
 	);
 }
 
